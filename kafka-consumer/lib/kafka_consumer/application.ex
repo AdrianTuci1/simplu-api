@@ -4,7 +4,8 @@ defmodule KafkaConsumer.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      KafkaConsumer.Broadway
+      KafkaConsumer.ConversationsConsumer,
+      KafkaConsumer.ReservationsConsumer
     ]
 
     opts = [strategy: :one_for_one, name: KafkaConsumer.Supervisor]
