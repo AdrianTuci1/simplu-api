@@ -24,6 +24,10 @@ defmodule KafkaConsumer.AgentPublisher do
     publisher_topic = System.get_env("KAFKA_PUBLISHER_TOPIC", "elixir.to.agent")
     Logger.info("Starting publisher with topic: #{publisher_topic}")
 
+    # Start brod client
+    :ok = :brod.start_client(brokers, :kafka_client, [])
+    :ok = :brod.start_producer(:kafka_client, publisher_topic, [])
+
     Broadway.start_link(__MODULE__,
       name: __MODULE__,
       producer: [
@@ -64,52 +68,45 @@ defmodule KafkaConsumer.AgentPublisher do
     )
   end
 
-  def publish_message(tenant_id, message) when is_binary(tenant_id) do
-    event = case message do
-      message when is_binary(message) ->
-        %{
-          tenantId: tenant_id,
-          messageId: UUID.uuid4(),
-          type: "agent.request",
-          payload: %{
-            content: message,
-            role: "user",
-            context: %{}
-          },
-          timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
-        }
+  def publish_message(tenant_id, user_id, session_id, payload) when is_binary(tenant_id) do
+    message_id = UUID.uuid4()
+    timestamp = DateTime.utc_now() |> DateTime.to_iso8601()
 
-      %{"messageId" => message_id, "payload" => payload, "type" => type} = message ->
-        %{
-          tenantId: tenant_id,
-          messageId: message_id,
-          type: type,
-          payload: payload,
-          timestamp: message["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601()
-        }
-    end
+    # Construim mesajul pentru Kafka care include:
+    # - tenantId, userId, sessionId pentru identificare
+    # - messageId generat unic pentru fiecare mesaj
+    # - type: "user.message" pentru a indica tipul mesajului
+    # - payload: conține atât content cât și context pentru a păstra istoricul conversației
+    # - timestamp: momentul trimiterii mesajului
+    event = %{
+      tenantId: tenant_id,
+      userId: user_id,
+      sessionId: session_id,
+      messageId: message_id,
+      type: "user.message",
+      payload: payload,
+      timestamp: timestamp
+    }
 
     publisher_topic = System.get_env("KAFKA_PUBLISHER_TOPIC", "elixir.to.agent")
 
     # Broadcast to WebSocket channel
     KafkaConsumerWeb.Endpoint.broadcast("messages:#{tenant_id}", "new_message", %{
-      message_id: event.messageId,
-      content: event.payload["content"],
-      role: "user",
-      timestamp: event.timestamp
+      message_id: message_id,
+      content: payload["content"],
+      context: payload["context"],
+      userId: user_id,
+      sessionId: session_id,
+      timestamp: timestamp
     })
 
-    case BroadwayKafka.Producer.produce(
-      __MODULE__,
+    # Publish to Kafka using brod directly
+    case :brod.produce_sync(
+      :kafka_client,
       publisher_topic,
-      Jason.encode!(event),
-      key: "#{tenant_id}:#{event.messageId}",
-      headers: [
-        {"tenantId", tenant_id},
-        {"messageId", event.messageId},
-        {"role", "user"},
-        {"timestamp", DateTime.utc_now() |> DateTime.to_iso8601()}
-      ]
+      0,
+      "#{tenant_id}:#{session_id}",
+      Jason.encode!(event)
     ) do
       :ok -> {:ok, event}
       error -> {:error, error}

@@ -33,7 +33,7 @@ defmodule KafkaConsumer.MixProject do
       {:plug_cowboy, "~> 2.6"},
       {:gettext, "~> 0.20"},
       {:broadway, "~> 1.0"},
-      {:broadway_kafka, "~> 0.3"},
+      {:broadway_kafka, "~> 0.4"},
       {:jason, "~> 1.4"},
       {:uuid, "~> 1.1"},
       {:brod, "~> 3.16"},

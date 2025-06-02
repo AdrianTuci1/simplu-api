@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/co
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer, Consumer, Partitioners } from 'kafkajs';
 import { AgentService } from '../agent/agent.service';
+import { KafkaMessage } from './kafka.service';
 
 @Injectable()
 export class EventsService implements OnModuleInit {
@@ -99,27 +100,30 @@ export class EventsService implements OnModuleInit {
             this.logger.log(`Received message from ${topic}[${partition}]: ${message.value.toString()}`);
             
             // Parse the message
-            const parsedMessage = JSON.parse(message.value.toString());
+            const parsedMessage = JSON.parse(message.value.toString()) as KafkaMessage;
             this.logger.log(`Parsed message: ${JSON.stringify(parsedMessage)}`);
             
             // Process the message through the agent service
-            if (parsedMessage.type === 'agent.request') {
+            if (parsedMessage.type === 'user.message') {
               const agentResponse = await this.agentService.processMessage(
                 parsedMessage.tenantId,
+                parsedMessage.userId,
+                parsedMessage.sessionId,
                 parsedMessage.payload.content,
                 parsedMessage.payload.context
               );
 
-              const response = {
-                type: 'agent.response',
+              const response: KafkaMessage = {
+                tenantId: parsedMessage.tenantId,
+                userId: parsedMessage.userId,
+                sessionId: parsedMessage.sessionId,
                 messageId: parsedMessage.messageId,
-                timestamp: new Date().toISOString(),
+                type: 'agent.response',
                 payload: {
                   content: agentResponse,
-                  role: 'assistant',
                   context: parsedMessage.payload.context
                 },
-                tenantId: parsedMessage.tenantId
+                timestamp: new Date().toISOString()
               };
 
               this.logger.log(`Preparing to send response to ${this.publisherTopic}: ${JSON.stringify(response)}`);
@@ -133,9 +137,11 @@ export class EventsService implements OnModuleInit {
                     value: JSON.stringify(response),
                     headers: {
                       tenantId: parsedMessage.tenantId,
+                      userId: parsedMessage.userId,
+                      sessionId: parsedMessage.sessionId,
                       messageId: parsedMessage.messageId,
-                      role: 'assistant',
-                      timestamp: new Date().toISOString(),
+                      type: response.type,
+                      timestamp: response.timestamp
                     },
                   },
                 ],
@@ -158,9 +164,34 @@ export class EventsService implements OnModuleInit {
     }
   }
 
-  async publishEvent(topic: string, message: any) {
+  async publishEvent(topic: string, message: KafkaMessage | any) {
     try {
       this.logger.debug(`Publishing event to ${topic}: ${JSON.stringify(message)}`);
+      
+      // If message is already a KafkaMessage, use it directly
+      if ('type' in message && 'payload' in message && 'tenantId' in message) {
+        const result = await this.producer.send({
+          topic,
+          messages: [
+            {
+              key: `${message.tenantId}:${message.messageId}`,
+              value: JSON.stringify(message),
+              headers: {
+                tenantId: message.tenantId,
+                userId: message.userId,
+                sessionId: message.sessionId,
+                messageId: message.messageId,
+                type: message.type,
+                timestamp: message.timestamp
+              },
+            },
+          ],
+        });
+        this.logger.debug(`Publish result: ${JSON.stringify(result)}`);
+        return result;
+      }
+      
+      // For backward compatibility with old message format
       const result = await this.producer.send({
         topic,
         messages: [
@@ -177,21 +208,36 @@ export class EventsService implements OnModuleInit {
     }
   }
 
-  async publishSuggestion(tenantId: string, message: string) {
-    return this.publishEvent('agent.suggestions', {
+  async publishSuggestion(tenantId: string, userId: string, sessionId: string, message: string) {
+    const suggestionMessage: KafkaMessage = {
       tenantId,
-      message,
-      timestamp: new Date().toISOString(),
-    });
+      userId,
+      sessionId,
+      messageId: `suggestion-${Date.now()}`,
+      type: 'agent.response',
+      payload: {
+        content: message,
+        context: {}
+      },
+      timestamp: new Date().toISOString()
+    };
+    return this.publishEvent('agent.suggestions', suggestionMessage);
   }
 
-  async publishAction(tenantId: string, action: string, details: any) {
-    return this.publishEvent('agent.actions', {
+  async publishAction(tenantId: string, userId: string, sessionId: string, action: string, details: any) {
+    const actionMessage: KafkaMessage = {
       tenantId,
-      action,
-      details,
-      timestamp: new Date().toISOString(),
-    });
+      userId,
+      sessionId,
+      messageId: `action-${Date.now()}`,
+      type: 'agent.response',
+      payload: {
+        content: action,
+        context: details
+      },
+      timestamp: new Date().toISOString()
+    };
+    return this.publishEvent('agent.actions', actionMessage);
   }
 
   async onModuleDestroy() {

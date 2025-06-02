@@ -54,8 +54,20 @@ export class PolicyService {
       },
     };
 
+    // Policy for test-00001 tenant
+    const test00001Policy: Policy = {
+      tenantId: 'test-00001',
+      actions: [Action.READ, Action.WRITE, Action.SUGGEST],
+      resources: [Resource.CONVERSATIONS],
+      conditions: {
+        maxSuggestionsPerDay: 1000,
+        allowedModels: ['deepseek/deepseek-r1-0528:free'],
+      },
+    };
+
     this.policies.set('default', [defaultPolicy]);
     this.policies.set('test-tenant', [testTenantPolicy]);
+    this.policies.set('test-00001', [test00001Policy]);
   }
 
   async can(tenantId: string, action: Action, resource: Resource): Promise<boolean> {

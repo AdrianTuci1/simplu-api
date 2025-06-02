@@ -2,14 +2,22 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer, Consumer, Partitioners } from 'kafkajs';
 
-export type MessageRole = 'user' | 'assistant' | 'system';
-
-export interface ConversationMessage {
-  conversationId: string;
-  messageId: string;
-  userId: string;
+export interface MessagePayload {
   content: string;
-  metadata?: Record<string, any>;
+  context: {
+    lastAgentMessage?: string;
+    metadata?: Record<string, any>;
+  };
+}
+
+export interface KafkaMessage {
+  tenantId: string;
+  userId: string;
+  sessionId: string;
+  messageId: string;
+  type: 'user.message' | 'agent.response';
+  payload: MessagePayload;
+  timestamp: string;
 }
 
 @Injectable()
@@ -97,7 +105,7 @@ export class KafkaService implements OnModuleInit {
 
   private async handleConversationMessage(message: any) {
     try {
-      const event = JSON.parse(message.value.toString());
+      const event = JSON.parse(message.value.toString()) as KafkaMessage;
       this.logger.debug(`Processing conversation message: ${JSON.stringify(event)}`);
       
       // Skip if we've already processed this message
@@ -107,34 +115,27 @@ export class KafkaService implements OnModuleInit {
       }
       
       // Handle messages from Elixir
-      if (event.type === 'agent.request') {
-        this.logger.log('Received request message from Elixir');
+      if (event.type === 'user.message') {
+        this.logger.log('Received user message from Elixir');
         
         // Mark message as processed before sending response
         this.processedMessageIds.add(event.messageId);
         
-        // Generate a new message ID for the response
-        const responseMessageId = `resp-${event.messageId}`;
-        
-        const response = {
+        const response: KafkaMessage = {
+          tenantId: event.tenantId,
+          userId: event.userId,
+          sessionId: event.sessionId,
+          messageId: event.messageId,
           type: 'agent.response',
-          messageId: responseMessageId,
           payload: {
             content: "I've processed your request", // Simplified response
-            role: 'assistant',
             context: event.payload.context
           },
-          tenantId: event.tenantId,
-          originalMessageId: event.messageId // Keep track of the original message
+          timestamp: new Date().toISOString()
         };
 
         // Publish response to agent.to.elixir topic
-        await this.publishConversation(
-          event.tenantId,
-          responseMessageId,
-          JSON.stringify(response),
-          'assistant'
-        );
+        await this.publishConversation(response);
         
         this.logger.log('Response published successfully');
         return;
@@ -147,35 +148,32 @@ export class KafkaService implements OnModuleInit {
     }
   }
 
-  async publishConversation(
-    tenantId: string,
-    messageId: string,
-    content: string,
-    role: MessageRole,
-  ) {
+  async publishConversation(message: KafkaMessage) {
     try {
       const topic = this.configService.get<string>('KAFKA_PUBLISHER_TOPIC');
       if (!topic) {
         throw new Error('KAFKA_PUBLISHER_TOPIC is not defined');
       }
 
-      const message = {
-        key: messageId,
-        value: content,
+      const kafkaMessage = {
+        key: `${message.tenantId}:${message.messageId}`,
+        value: JSON.stringify(message),
         headers: {
-          tenantId,
-          messageId,
-          role,
-          source: this.publisherClientId,
+          tenantId: message.tenantId,
+          userId: message.userId,
+          sessionId: message.sessionId,
+          messageId: message.messageId,
+          type: message.type,
+          timestamp: message.timestamp
         },
       };
 
       await this.producer.send({
         topic,
-        messages: [message],
+        messages: [kafkaMessage],
       });
 
-      this.logger.debug(`Published message to ${topic}: ${JSON.stringify(message)}`);
+      this.logger.debug(`Published message to ${topic}: ${JSON.stringify(kafkaMessage)}`);
     } catch (error) {
       this.logger.error('Error publishing conversation', error);
       throw error;

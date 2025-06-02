@@ -3,12 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConversationsService } from './conversations.service';
 import { ConversationsController } from './conversations.controller';
 import { Message } from './entities/message.entity';
+import { Session } from './entities/session.entity';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message]),
+    TypeOrmModule.forFeature([Message, Session]),
     ClientsModule.registerAsync([
       {
         name: 'KAFKA_SERVICE',

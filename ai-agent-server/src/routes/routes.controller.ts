@@ -1,22 +1,30 @@
-import { Controller, Post, Body, Param, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, Headers, UnauthorizedException } from '@nestjs/common';
 import { RoutesService } from './routes.service';
 
-@Controller('api')
+
+@Controller('routes')
 export class RoutesController {
   constructor(private readonly routesService: RoutesService) {}
 
-  @Post(':tenantId/chat')
-  async chat(
-    @Param('tenantId') tenantId: string,
-    @Body('message') message: string,
+  @Post('process')
+  async processRequest(
+    @Body() body: { message: string; context?: any },
+    @Headers('x-tenant-id') tenantId: string,
+    @Headers('x-user-id') userId: string,
   ) {
-    try {
-      return await this.routesService.processRequest(tenantId, message);
-    } catch (error) {
-      if (error.message.includes('Unauthorized')) {
-        throw new UnauthorizedException(error.message);
-      }
-      throw error;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID is required');
     }
+
+    if (!userId) {
+      throw new UnauthorizedException('User ID is required');
+    }
+
+    return await this.routesService.processRequest(
+      tenantId,
+      userId,
+      body.message,
+      body.context
+    );
   }
 } 

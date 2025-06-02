@@ -8,22 +8,9 @@ import { EventsService } from '../events/events.service';
 import { PolicyService, Action, Resource } from '../policy/policy.service';
 import { AgentConfigService, DecisionLevel } from './config/agent.config';
 import { v4 as uuidv4 } from 'uuid';
+import { KafkaMessage } from '../events/kafka.service';
 
-export enum KafkaEventType {
-  AGENT_RESPONSE = 'agent.response',
-  AGENT_DECISION = 'agent.decision',
-  AGENT_SUGGESTION = 'agent.suggestion',
-  AGENT_CONSULTATION = 'agent.consultation'
-}
-
-export interface KafkaEvent {
-  tenantId: string;
-  messageId: string;
-  type: KafkaEventType;
-  payload: any;
-  timestamp: string;
-  metadata?: Record<string, any>;
-}
+export type MessageType = 'user.message' | 'agent.response';
 
 @Injectable()
 export class AgentService {
@@ -58,11 +45,20 @@ export class AgentService {
     });
   }
 
-  private async publishKafkaEvent(event: KafkaEvent) {
-    await this.eventsService.publishEvent('agent.events', event);
+  private async publishKafkaEvent(tenantId: string, userId: string, sessionId: string, type: MessageType, payload: any) {
+    const message: KafkaMessage = {
+      tenantId,
+      userId,
+      sessionId,
+      messageId: uuidv4(),
+      type,
+      payload,
+      timestamp: new Date().toISOString()
+    };
+    await this.eventsService.publishEvent('agent.events', message);
   }
 
-  async processMessage(tenantId: string, message: string, context?: any) {
+  async processMessage(tenantId: string, userId: string, sessionId: string, message: string, context?: any) {
     try {
       // Check if tenant can read and write conversations
       const canRead = await this.policyService.can(tenantId, Action.READ, Resource.CONVERSATIONS);
@@ -78,20 +74,17 @@ export class AgentService {
         throw new UnauthorizedException(`Tenant ${tenantId} has exceeded rate limits`);
       }
 
-      const messageId = uuidv4();
-      
       // Publish user message to Kafka
-      await this.publishKafkaEvent({
+      await this.publishKafkaEvent(
         tenantId,
-        messageId,
-        type: KafkaEventType.AGENT_RESPONSE,
-        payload: {
+        userId,
+        sessionId,
+        'user.message',
+        {
           content: message,
-          role: 'user',
           context
-        },
-        timestamp: new Date().toISOString()
-      });
+        }
+      );
 
       // Get decision level for this interaction
       const decisionLevel = await this.agentConfigService.getDecisionLevel(
@@ -140,31 +133,24 @@ export class AgentService {
         ? `[${decisionLevel.toUpperCase()}] ${response}`
         : response;
 
-      // Determine event type based on decision level
-      let eventType = KafkaEventType.AGENT_RESPONSE;
-      if (decisionLevel === DecisionLevel.SUGGESTION) {
-        eventType = KafkaEventType.AGENT_SUGGESTION;
-      } else if (decisionLevel === DecisionLevel.CONSULTATION) {
-        eventType = KafkaEventType.AGENT_CONSULTATION;
-      }
-
-      // Publish assistant response to Kafka with appropriate event type
-      await this.publishKafkaEvent({
+      // Publish assistant response to Kafka
+      await this.publishKafkaEvent(
         tenantId,
-        messageId: uuidv4(),
-        type: eventType,
-        payload: {
+        userId,
+        sessionId,
+        'agent.response',
+        {
           content: finalResponse,
-          role: 'assistant',
-          decisionLevel,
-          context,
-          metadata: {
-            template: responseTemplate?.id,
-            requiresApproval: decisionLevel !== DecisionLevel.AUTOMATIC
+          context: {
+            ...context,
+            decisionLevel,
+            metadata: {
+              template: responseTemplate?.id,
+              requiresApproval: decisionLevel !== DecisionLevel.AUTOMATIC
+            }
           }
-        },
-        timestamp: new Date().toISOString()
-      });
+        }
+      );
 
       this.logger.log(`Processed message for tenant ${tenantId}`);
       return finalResponse;
@@ -174,7 +160,7 @@ export class AgentService {
     }
   }
 
-  async processMessageFromPayload(message: any): Promise<string> {
+  async processMessageFromPayload(message: KafkaMessage): Promise<string> {
     try {
       const { content, context } = message.payload;
       

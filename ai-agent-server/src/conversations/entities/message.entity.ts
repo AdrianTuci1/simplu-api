@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { Session } from './session.entity';
 
 @Entity('messages')
 export class Message {
@@ -15,6 +16,13 @@ export class Message {
 
   @Column('text')
   content: string;
+
+  @ManyToOne(() => Session, session => session.messages)
+  @JoinColumn({ name: 'sessionId' })
+  session: Session;
+
+  @Column()
+  sessionId: string;
 
   @CreateDateColumn()
   timestamp: Date;
