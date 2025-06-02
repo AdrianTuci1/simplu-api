@@ -26,6 +26,12 @@ defmodule KafkaConsumer.MixProject do
 
   defp deps do
     [
+      {:phoenix, "~> 1.7.10"},
+      {:phoenix_live_view, "~> 0.20.1"},
+      {:phoenix_html, "~> 3.3"},
+      {:phoenix_live_reload, "~> 1.4", only: :dev},
+      {:plug_cowboy, "~> 2.6"},
+      {:gettext, "~> 0.20"},
       {:broadway, "~> 1.0"},
       {:broadway_kafka, "~> 0.3"},
       {:jason, "~> 1.4"},

@@ -47,18 +47,21 @@ COPY --from=build /app/_build/prod/rel/kafka_consumer ./
 # Set Kafka environment variables
 ENV KAFKA_GROUP_ID="kafka-consumer-group"
 ENV KAFKA_CLIENT_ID="kafka-consumer"
-ENV KAFKA_BROKERS="kafka:9092"
+ENV KAFKA_BROKERS="kafka:29092"
+
+# Expose Phoenix port
+EXPOSE 4000
 
 # Create wait script
 RUN echo '#!/bin/sh\n\
 echo "Waiting for Kafka to be ready..."\n\
-while ! nc -z kafka 9092; do\n\
+while ! nc -z kafka 29092; do\n\
   echo "Waiting for Kafka port..."\n\
   sleep 2\n\
 done\n\
 echo "Kafka port is available, waiting for Kafka to be fully ready..."\n\
 sleep 30\n\
-echo "Starting Kafka consumer..."\n\
+echo "Starting Phoenix server and Kafka consumer..."\n\
 exec bin/kafka_consumer start' > /app/start.sh && \
 chmod +x /app/start.sh
 

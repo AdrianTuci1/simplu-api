@@ -43,6 +43,8 @@ defmodule KafkaConsumer.ReservationsConsumer do
       {:ok, data} ->
         # Process reservation message
         Logger.info("Processing reservation: #{inspect(data)}")
+        # Broadcast to WebSocket channel
+        KafkaConsumerWeb.Endpoint.broadcast("reservations:lobby", "new_reservation", data)
         Message.put_data(message, Jason.encode!(data))
       {:error, reason} ->
         Logger.error("Failed to decode reservation message: #{inspect(reason)}")

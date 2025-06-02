@@ -1,7 +1,6 @@
 defmodule KafkaConsumer.AgentPublisher do
   use Broadway
 
-  alias Broadway.Message
   require Logger
 
   def child_spec(opts) do
@@ -79,6 +78,14 @@ defmodule KafkaConsumer.AgentPublisher do
     }
 
     publisher_topic = System.get_env("KAFKA_PUBLISHER_TOPIC", "elixir.to.agent")
+
+    # Broadcast to WebSocket channel
+    KafkaConsumerWeb.Endpoint.broadcast("messages:#{tenant_id}", "new_message", %{
+      message_id: event.messageId,
+      content: message,
+      role: "user",
+      timestamp: event.timestamp
+    })
 
     case BroadwayKafka.Producer.produce(
       __MODULE__,

@@ -63,24 +63,22 @@ defmodule KafkaConsumer.ConversationsConsumer do
 
         # Process based on message type
         case data do
-          %{"type" => "agent.response", "payload" => payload, "messageId" => message_id} ->
+          %{"type" => "agent.response", "payload" => payload, "messageId" => message_id, "tenantId" => tenant_id} ->
             Logger.info("Processing agent response for message #{message_id}")
 
-            # Here you can add your business logic for handling the agent response
-            # For example, you might want to:
-            # 1. Update a conversation in the database
-            # 2. Send a notification
-            # 3. Trigger another process
-            # 4. etc.
-
-            # For now, we'll just log the response content
-            Logger.info("Agent response content: #{inspect(payload["content"])}")
+            # Broadcast to WebSocket channel
+            KafkaConsumerWeb.Endpoint.broadcast("messages:#{tenant_id}", "new_message", %{
+              message_id: message_id,
+              content: payload["content"],
+              role: "agent",
+              timestamp: data["timestamp"]
+            })
 
             # Mark the message as successful
             Message.put_data(message, Jason.encode!(data))
 
           _ ->
-            Logger.warn("Unknown message type: #{inspect(data["type"])}")
+            Logger.warning("Unknown message type: #{inspect(data["type"])}")
             Message.failed(message, "Unknown message type")
         end
 

@@ -134,7 +134,7 @@ publish_test_message() {
                 message = Jason.encode!(%{
                   "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
                   "type" => "agent.request",
-                  "messageId" => "saaaao-psso-48839",
+                  "messageId" => "saaaao-psso-48839-am",
                   "payload" => %{
                     "context" => %{
                       "type" => "test_message"

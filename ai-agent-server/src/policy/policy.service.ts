@@ -39,7 +39,7 @@ export class PolicyService {
       resources: [Resource.CONVERSATIONS],
       conditions: {
         maxSuggestionsPerDay: 100,
-        allowedModels: ['deepseek-coder-33b-instruct'],
+        allowedModels: ['deepseek/deepseek-r1-0528:free'],
       },
     };
 
@@ -50,7 +50,7 @@ export class PolicyService {
       resources: [Resource.CONVERSATIONS],
       conditions: {
         maxSuggestionsPerDay: 1000,
-        allowedModels: ['deepseek-coder-33b-instruct'],
+        allowedModels: ['deepseek/deepseek-r1-0528:free'],
       },
     };
 

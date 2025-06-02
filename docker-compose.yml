@@ -31,6 +31,8 @@ services:
     build:
       context: ./elixir
       dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
     environment:
       - KAFKA_BROKERS=kafka:29092
       - KAFKA_CLIENT_ID=elixir-consumer
@@ -39,6 +41,7 @@ services:
       - KAFKA_PUBLISHER_GROUP_ID=elixir-publisher-group
       - KAFKA_CONSUMER_TOPIC=agent.to.elixir
       - KAFKA_PUBLISHER_TOPIC=elixir.to.agent
+      - EXS_SECRET=${EXS_SECRET}
     depends_on:
       kafka:
         condition: service_started

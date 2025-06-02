@@ -1,7 +1,6 @@
 defmodule KafkaConsumer.Broadway do
   use Broadway
 
-  alias Broadway.Message
   require Logger
 
   def start_link(_opts) do
@@ -72,7 +71,7 @@ defmodule KafkaConsumer.Broadway do
           %{"type" => "reservation.status_updated", "data" => data} ->
             Logger.info("Reservation status updated: #{inspect(data)}")
           _ ->
-            Logger.warn("Unknown event type")
+            Logger.warning("Unknown event type")
         end
       {:error, reason} ->
         Logger.error("Failed to decode message: #{inspect(reason)}")

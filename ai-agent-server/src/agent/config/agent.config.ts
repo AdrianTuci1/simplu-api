@@ -61,9 +61,7 @@ export class AgentConfigService {
           id: 'test_response',
           name: 'Test Message Response',
           template: `Hey there! 👋 I'm your friendly AI assistant, and I'm super excited to chat with you! 
-          
 I see you're testing our communication system - that's awesome! I'm here to help and make your experience as smooth as possible. 
-
 What would you like to explore or discuss? I'm ready to assist with anything from simple questions to complex tasks. Just let me know what's on your mind! 😊`,
           context: ['test_message'],
           conditions: {

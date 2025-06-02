@@ -8,6 +8,22 @@ config :logger,
   format: "$time [$level] $message\n",
   backends: [:console]
 
+# Phoenix configuration
+config :kafka_consumer, KafkaConsumerWeb.Endpoint,
+  url: [host: "0.0.0.0"],
+  http: [port: 4000],
+  server: true,
+  secret_key_base: System.get_env("EXS_SECRET", "temporary-secret-key-for-development-only"),
+  live_view: [
+    signing_salt: System.get_env("EXS_SECRET", "temporary-signing-salt")
+  ],
+  pubsub_server: KafkaConsumer.PubSub,
+  code_reloader: true
+
+# Configure Phoenix LiveView
+config :phoenix_live_view,
+  signing_salt: System.get_env("EXS_SECRET", "temporary-signing-salt")
+
 brokers =
   System.get_env("KAFKA_BROKERS", "kafka:29092")
   |> String.split(",")
