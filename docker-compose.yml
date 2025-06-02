@@ -1,7 +1,7 @@
 services:
   app:
     build:
-      context: .
+      context: ./app
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
@@ -27,17 +27,54 @@ services:
     networks:
       - app-network
 
-  kafka-consumer:
+  elixir:
     build:
-      context: ./kafka-consumer
+      context: ./elixir
       dockerfile: Dockerfile
     environment:
       - KAFKA_BROKERS=kafka:29092
       - KAFKA_CLIENT_ID=elixir-consumer
       - KAFKA_GROUP_ID=elixir-consumer-group
+      - KAFKA_PUBLISHER_CLIENT_ID=elixir-publisher
+      - KAFKA_PUBLISHER_GROUP_ID=elixir-publisher-group
+      - KAFKA_CONSUMER_TOPIC=agent.to.elixir
+      - KAFKA_PUBLISHER_TOPIC=elixir.to.agent
     depends_on:
       kafka:
         condition: service_started
+    networks:
+      - app-network
+
+  ai-agent-server:
+    build:
+      context: ./ai-agent-server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=simplu
+      - KAFKA_BROKERS=kafka:29092
+      - KAFKA_CLIENT_ID=ai-agent-consumer
+      - KAFKA_GROUP_ID=ai-agent-consumer-group
+      - KAFKA_PUBLISHER_CLIENT_ID=ai-agent-publisher
+      - KAFKA_PUBLISHER_GROUP_ID=ai-agent-publisher-group
+      - KAFKA_CONSUMER_TOPIC=elixir.to.agent
+      - KAFKA_PUBLISHER_TOPIC=agent.to.elixir
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - app-network
 
