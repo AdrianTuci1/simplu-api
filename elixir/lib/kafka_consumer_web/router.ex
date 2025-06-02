@@ -12,6 +12,10 @@ defmodule KafkaConsumerWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug CORSPlug,
+      origin: ["http://localhost:5173", "http://localhost:4000"],
+      max_age: 86400,
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   end
 
   scope "/api", KafkaConsumerWeb do

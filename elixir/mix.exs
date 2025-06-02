@@ -36,7 +36,8 @@ defmodule KafkaConsumer.MixProject do
       {:broadway_kafka, "~> 0.3"},
       {:jason, "~> 1.4"},
       {:uuid, "~> 1.1"},
-      {:brod, "~> 3.16"}
+      {:brod, "~> 3.16"},
+      {:cors_plug, "~> 3.0"}
     ]
   end
 end

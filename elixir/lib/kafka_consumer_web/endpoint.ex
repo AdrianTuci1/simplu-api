@@ -11,8 +11,12 @@ defmodule KafkaConsumerWeb.Endpoint do
     same_site: "Lax"
   ]
 
-  socket "/socket", KafkaConsumerWeb.UserSocket, websocket: true
-  socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]]
+  socket "/socket", KafkaConsumerWeb.UserSocket,
+    websocket: [check_origin: ["http://localhost:5173"]],
+    longpoll: false
+
+  socket "/live", Phoenix.LiveView.Socket,
+    websocket: [connect_info: [session: @session_options], check_origin: ["http://localhost:5173"]]
 
   # Serve at "/" the static files from "priv/static" directory.
   plug Plug.Static,
@@ -40,5 +44,6 @@ defmodule KafkaConsumerWeb.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+  plug CORSPlug
   plug KafkaConsumerWeb.Router
 end

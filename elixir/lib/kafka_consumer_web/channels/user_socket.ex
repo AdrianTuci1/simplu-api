@@ -31,4 +31,8 @@ defmodule KafkaConsumerWeb.UserSocket do
   # Returning `nil` makes this socket anonymous.
   @impl true
   def id(_socket), do: nil
+
+  def transport_options do
+    [check_origin: false]
+  end
 end

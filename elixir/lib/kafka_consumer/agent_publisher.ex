@@ -64,25 +64,37 @@ defmodule KafkaConsumer.AgentPublisher do
     )
   end
 
-  def publish_message(tenant_id, message) when is_binary(tenant_id) and is_binary(message) do
-    event = %{
-      tenantId: tenant_id,
-      messageId: UUID.uuid4(),
-      type: "agent.request",
-      payload: %{
-        content: message,
-        role: "user",
-        context: %{}
-      },
-      timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
-    }
+  def publish_message(tenant_id, message) when is_binary(tenant_id) do
+    event = case message do
+      message when is_binary(message) ->
+        %{
+          tenantId: tenant_id,
+          messageId: UUID.uuid4(),
+          type: "agent.request",
+          payload: %{
+            content: message,
+            role: "user",
+            context: %{}
+          },
+          timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
+        }
+
+      %{"messageId" => message_id, "payload" => payload, "type" => type} = message ->
+        %{
+          tenantId: tenant_id,
+          messageId: message_id,
+          type: type,
+          payload: payload,
+          timestamp: message["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601()
+        }
+    end
 
     publisher_topic = System.get_env("KAFKA_PUBLISHER_TOPIC", "elixir.to.agent")
 
     # Broadcast to WebSocket channel
     KafkaConsumerWeb.Endpoint.broadcast("messages:#{tenant_id}", "new_message", %{
       message_id: event.messageId,
-      content: message,
+      content: event.payload["content"],
       role: "user",
       timestamp: event.timestamp
     })
