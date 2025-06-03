@@ -102,7 +102,7 @@ export class EventsService implements OnModuleInit {
             this.logger.log(`Parsed message: ${JSON.stringify(parsedMessage)}`);
             
             if (parsedMessage.type === 'user.message') {
-              // Save user message to database only when received
+              // Save user message to database (this will handle session creation if needed)
               await this.conversationsService.createMessage(
                 parsedMessage.tenantId,
                 parsedMessage.userId,

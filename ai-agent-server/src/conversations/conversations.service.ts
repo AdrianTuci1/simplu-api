@@ -26,23 +26,37 @@ export class ConversationsService {
     await this.kafkaClient.connect();
   }
 
-  async createMessage(tenantId: string, userId: string, messageId: string, content: string, sessionId?: string) {
-    // If no sessionId is provided, create a new session
-    if (!sessionId) {
-      const session = this.sessionRepository.create({
-        tenantId,
-        userId,
-        isActive: true,
-      });
-      const savedSession = await this.sessionRepository.save(session);
-      sessionId = savedSession.id;
+  async getOrCreateSession(tenantId: string, userId: string, sessionId?: string): Promise<Session> {
+    // If sessionId is provided, try to get the session
+    if (sessionId) {
+      const existingSession = await this.getSession(tenantId, sessionId);
+      if (existingSession) {
+        return existingSession;
+      }
+      this.logger.log(`Session ${sessionId} not found, creating new session with provided ID`);
     }
+
+    // Create new session with provided sessionId or generate new one
+    const session = this.sessionRepository.create({
+      id: sessionId, // Use provided sessionId if available
+      tenantId,
+      userId,
+      isActive: true,
+    });
+    const savedSession = await this.sessionRepository.save(session);
+    this.logger.log(`Created new session: ${savedSession.id}`);
+    return savedSession;
+  }
+
+  async createMessage(tenantId: string, userId: string, messageId: string, content: string, sessionId?: string) {
+    // Get or create session
+    const session = await this.getOrCreateSession(tenantId, userId, sessionId);
 
     const message = this.messageRepository.create({
       tenantId,
       messageId,
       content,
-      sessionId,
+      sessionId: session.id,
     });
     const savedMessage = await this.messageRepository.save(message);
 
@@ -51,7 +65,7 @@ export class ConversationsService {
       type: 'message.created',
       tenantId,
       userId,
-      sessionId,
+      sessionId: session.id,
       messageId,
       content,
       timestamp: new Date().toISOString(),
@@ -162,5 +176,14 @@ export class ConversationsService {
       default:
         this.logger.warn(`Unknown event type: ${event.type}`);
     }
+  }
+
+  async createSession(tenantId: string, userId: string) {
+    const session = this.sessionRepository.create({
+      tenantId,
+      userId,
+      isActive: true,
+    });
+    return this.sessionRepository.save(session);
   }
 } 
