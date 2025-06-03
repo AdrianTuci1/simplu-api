@@ -1,29 +1,27 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 
 @Controller('conversations')
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
-  @Post(':tenantId/messages')
-  async createMessage(
+  @Get(':tenantId/users/:userId')
+  async getSessions(
     @Param('tenantId') tenantId: string,
-    @Body('messageId') messageId: string,
-    @Body('content') content: string,
-  ) {
-    return this.conversationsService.createMessage(tenantId, messageId, content);
-  }
-
-  @Get(':tenantId/messages')
-  async getMessages(
-    @Param('tenantId') tenantId: string,
+    @Param('userId') userId: string,
     @Query('limit') limit?: number,
+    @Query('before') before?: string
   ) {
-    return this.conversationsService.getMessages(tenantId, limit);
+    return this.conversationsService.getSessions(tenantId, userId, limit);
   }
 
-  @Get('messages/:messageId')
-  async getMessageByMessageId(@Param('messageId') messageId: string) {
-    return this.conversationsService.getMessageByMessageId(messageId);
+  @Get(':tenantId/sessions/:sessionId/messages')
+  async getSessionMessages(
+    @Param('tenantId') tenantId: string,
+    @Param('sessionId') sessionId: string,
+    @Query('limit') limit?: number,
+    @Query('before') before?: string
+  ) {
+    return this.conversationsService.getSessionMessages(tenantId, sessionId, limit, before);
   }
 } 

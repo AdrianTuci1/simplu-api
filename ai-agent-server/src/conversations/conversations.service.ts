@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { Message } from './entities/message.entity';
 import { Session } from './entities/session.entity';
 import { Inject } from '@nestjs/common';
@@ -60,12 +60,65 @@ export class ConversationsService {
     return savedMessage;
   }
 
-  async getMessages(tenantId: string, sessionId?: string, limit = 10) {
+  // Session Management
+  async getSessions(tenantId: string, userId: string, limit = 10) {
+    return this.sessionRepository.find({
+      where: {
+        tenantId,
+        userId,
+      },
+      order: {
+        updatedAt: 'DESC',
+      },
+      take: limit,
+      relations: ['messages'],
+    });
+  }
+
+  async getSession(tenantId: string, sessionId: string) {
+    return this.sessionRepository.findOne({
+      where: {
+        id: sessionId,
+        tenantId,
+      },
+      relations: ['messages'],
+    });
+  }
+
+  async closeSession(sessionId: string) {
+    const session = await this.sessionRepository.findOne({
+      where: { id: sessionId },
+    });
+
+    if (session) {
+      session.isActive = false;
+      await this.sessionRepository.save(session);
+    }
+    return session;
+  }
+
+  // Message Management
+  async getSessionMessages(tenantId: string, sessionId: string, limit = 20, before?: string) {
+    const query = this.messageRepository.createQueryBuilder('message')
+      .where('message.tenantId = :tenantId', { tenantId })
+      .andWhere('message.sessionId = :sessionId', { sessionId });
+
+    if (before) {
+      query.andWhere('message.timestamp < :before', { before });
+    }
+
+    return query
+      .orderBy('message.timestamp', 'DESC')
+      .take(limit)
+      .getMany();
+  }
+
+  async getMessages(tenantId: string, limit = 20, before?: string) {
     const query = this.messageRepository.createQueryBuilder('message')
       .where('message.tenantId = :tenantId', { tenantId });
 
-    if (sessionId) {
-      query.andWhere('message.sessionId = :sessionId', { sessionId });
+    if (before) {
+      query.andWhere('message.timestamp < :before', { before });
     }
 
     return query
@@ -91,17 +144,6 @@ export class ConversationsService {
         updatedAt: 'DESC',
       },
     });
-  }
-
-  async closeSession(sessionId: string) {
-    const session = await this.sessionRepository.findOne({
-      where: { id: sessionId },
-    });
-
-    if (session) {
-      session.isActive = false;
-      await this.sessionRepository.save(session);
-    }
   }
 
   async handleConversationEvent(event: any) {

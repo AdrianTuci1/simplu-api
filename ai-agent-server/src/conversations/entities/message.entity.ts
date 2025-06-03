@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Session } from './session.entity';
 
 @Entity('messages')
@@ -7,22 +7,23 @@ export class Message {
   id: string;
 
   @Column()
-  @Index()
   messageId: string;
 
   @Column()
-  @Index()
   tenantId: string;
+
+  @Column()
+  sessionId: string;
 
   @Column('text')
   content: string;
 
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, any>;
+
   @ManyToOne(() => Session, session => session.messages)
   @JoinColumn({ name: 'sessionId' })
   session: Session;
-
-  @Column()
-  sessionId: string;
 
   @CreateDateColumn()
   timestamp: Date;

@@ -58,6 +58,29 @@ export class AgentService {
     await this.eventsService.publishEvent('agent.events', message);
   }
 
+  private async determineTemplateType(message: string): Promise<string> {
+    const prompt = PromptTemplate.fromTemplate(`
+      Analyze the following message and determine the most appropriate template type.
+      Choose from: greeting, question, complaint, request, feedback, or general.
+      
+      Message: {message}
+      
+      Respond with just one word from the options above.
+    `);
+
+    const chain = RunnableSequence.from([
+      prompt,
+      this.model,
+      new StringOutputParser(),
+    ]);
+
+    const templateType = await chain.invoke({
+      message,
+    });
+
+    return templateType.trim().toLowerCase();
+  }
+
   async processMessage(tenantId: string, userId: string, sessionId: string, message: string, context?: any) {
     try {
       // Check if tenant can read and write conversations
@@ -93,10 +116,13 @@ export class AgentService {
         Resource.CONVERSATIONS
       );
 
-      // Get appropriate response template based on context
+      // Determine template type based on message content
+      const templateType = await this.determineTemplateType(message);
+
+      // Get appropriate response template based on determined type
       const responseTemplate = await this.agentConfigService.getResponseTemplate(
         tenantId,
-        context?.type || 'general'
+        templateType
       );
 
       // Construim prompt-ul pentru model folosind template-ul

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer, Consumer, Partitioners } from 'kafkajs';
 import { AgentService } from '../agent/agent.service';
 import { KafkaMessage } from './kafka.service';
+import { ConversationsService } from '../conversations/conversations.service';
 
 @Injectable()
 export class EventsService implements OnModuleInit {
@@ -18,7 +19,8 @@ export class EventsService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     @Inject(forwardRef(() => AgentService))
-    private agentService: AgentService
+    private agentService: AgentService,
+    private conversationsService: ConversationsService
   ) {
     const brokers = this.configService.get<string>('KAFKA_BROKERS') || 'localhost:9092';
     const clientId = this.configService.get<string>('KAFKA_CLIENT_ID') || 'ai-agent-server';
@@ -78,19 +80,16 @@ export class EventsService implements OnModuleInit {
     try {
       this.logger.log('Initializing Kafka service...');
       
-      // Connect producer and consumer
       await this.producer.connect();
       await this.consumer.connect();
       this.logger.log('Connected to Kafka');
 
-      // Subscribe to consumer topic
       await this.consumer.subscribe({ 
         topic: this.consumerTopic,
         fromBeginning: true 
       });
       this.logger.log(`Subscribed to ${this.consumerTopic} topic`);
 
-      // Start consuming messages
       await this.consumer.run({
         autoCommit: true,
         autoCommitInterval: 5000,
@@ -99,12 +98,19 @@ export class EventsService implements OnModuleInit {
           try {
             this.logger.log(`Received message from ${topic}[${partition}]: ${message.value.toString()}`);
             
-            // Parse the message
             const parsedMessage = JSON.parse(message.value.toString()) as KafkaMessage;
             this.logger.log(`Parsed message: ${JSON.stringify(parsedMessage)}`);
             
-            // Process the message through the agent service
             if (parsedMessage.type === 'user.message') {
+              // Save user message to database only when received
+              await this.conversationsService.createMessage(
+                parsedMessage.tenantId,
+                parsedMessage.userId,
+                parsedMessage.messageId,
+                parsedMessage.payload.content,
+                parsedMessage.sessionId
+              );
+
               const agentResponse = await this.agentService.processMessage(
                 parsedMessage.tenantId,
                 parsedMessage.userId,
@@ -113,11 +119,21 @@ export class EventsService implements OnModuleInit {
                 parsedMessage.payload.context
               );
 
+              // Save agent response to database
+              const responseMessageId = `response-${Date.now()}`;
+              await this.conversationsService.createMessage(
+                parsedMessage.tenantId,
+                parsedMessage.userId,
+                responseMessageId,
+                agentResponse,
+                parsedMessage.sessionId
+              );
+
               const response: KafkaMessage = {
                 tenantId: parsedMessage.tenantId,
                 userId: parsedMessage.userId,
                 sessionId: parsedMessage.sessionId,
-                messageId: parsedMessage.messageId,
+                messageId: responseMessageId,
                 type: 'agent.response',
                 payload: {
                   content: agentResponse,
@@ -128,7 +144,6 @@ export class EventsService implements OnModuleInit {
 
               this.logger.log(`Preparing to send response to ${this.publisherTopic}: ${JSON.stringify(response)}`);
 
-              // Publish response to publisher topic
               await this.producer.send({
                 topic: this.publisherTopic,
                 messages: [
@@ -139,7 +154,7 @@ export class EventsService implements OnModuleInit {
                       tenantId: parsedMessage.tenantId,
                       userId: parsedMessage.userId,
                       sessionId: parsedMessage.sessionId,
-                      messageId: parsedMessage.messageId,
+                      messageId: responseMessageId,
                       type: response.type,
                       timestamp: response.timestamp
                     },

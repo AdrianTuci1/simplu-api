@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { Message } from './message.entity';
 
 @Entity('sessions')
@@ -7,15 +7,16 @@ export class Session {
   id: string;
 
   @Column()
-  @Index()
   tenantId: string;
 
   @Column()
-  @Index()
   userId: string;
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, any>;
 
   @OneToMany(() => Message, message => message.session)
   messages: Message[];
