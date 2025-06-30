@@ -3,6 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Tenant } from '../../tenants/entities/tenant.entity';
 import { User } from '../../auth/entities/user.entity';
 import { Reservation } from '../../reservations/entities/reservation.entity';
+import { Appointment } from '../../timeline/entities/appointment.entity';
 
 @Entity('employees')
 export class Employee {
@@ -41,6 +42,10 @@ export class Employee {
   @ApiProperty({ description: 'The reservations associated with this employee', type: () => [Reservation] })
   @OneToMany(() => Reservation, reservation => reservation.employee, { lazy: true })
   reservations: Promise<Reservation[]>;
+
+  @ApiProperty({ description: 'The appointments associated with this employee', type: () => [Appointment] })
+  @OneToMany(() => Appointment, appointment => appointment.employee, { lazy: true })
+  appointments: Promise<Appointment[]>;
 
   @ApiProperty({ description: 'The associated user account', type: () => User })
   @OneToOne(() => User, user => user.employee, { lazy: true })

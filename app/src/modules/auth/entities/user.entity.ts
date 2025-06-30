@@ -1,7 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany, JoinTable, OneToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany, JoinTable, OneToOne, OneToMany } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Employee } from '../../employees/entities/employee.entity';
+import { History } from '../../history/entities/history.entity';
+import { Report } from '../../reports/entities/report.entity';
+import { Role } from '../../roles/entities/role.entity';
+import { UserData } from '../../user-data/entities/user-data.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -55,6 +59,27 @@ export class User {
   @ApiProperty({ description: 'The associated employee profile', type: () => Employee })
   @OneToOne(() => Employee, employee => employee.user)
   employee: Employee;
+
+  @ApiProperty({ description: 'The history entries associated with this user', type: () => [History] })
+  @OneToMany(() => History, history => history.user)
+  history: Promise<History[]>;
+
+  @ApiProperty({ description: 'The reports associated with this user', type: () => [Report] })
+  @OneToMany(() => Report, report => report.user)
+  reports: Promise<Report[]>;
+
+  @ApiProperty({ description: 'The roles associated with this user', type: () => [Role] })
+  @ManyToMany(() => Role, role => role.users)
+  @JoinTable({
+    name: 'user_roles',
+    joinColumn: { name: 'user_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
+  })
+  roles: Promise<Role[]>;
+
+  @ApiProperty({ description: 'The user data associated with this user', type: () => [UserData] })
+  @OneToMany(() => UserData, userData => userData.user)
+  userData: Promise<UserData[]>;
 
   @ApiProperty({ description: 'The creation date of the user' })
   @CreateDateColumn()

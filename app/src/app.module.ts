@@ -13,6 +13,14 @@ import { ServicesModule } from './modules/services/services.module';
 import { PublicSiteModule } from './modules/public-site/public-site.module';
 import { KafkaModule } from './modules/kafka/kafka.module';
 import { RedisModule } from './modules/redis/redis.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
+import { TimelineModule } from './modules/timeline/timeline.module';
+import { PackagesModule } from './modules/packages/packages.module';
+import { HistoryModule } from './modules/history/history.module';
+import { WorkflowsModule } from './modules/workflows/workflows.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { RolesModule } from './modules/roles/roles.module';
+import { UserDataModule } from './modules/user-data/user-data.module';
 
 class CustomNamingStrategy extends DefaultNamingStrategy {
   tableName(targetName: string, userSpecifiedName: string | undefined): string {
@@ -52,6 +60,14 @@ class CustomNamingStrategy extends DefaultNamingStrategy {
     StockModule,
     ServicesModule,
     PublicSiteModule,
+    InvoicesModule,
+    TimelineModule,
+    PackagesModule,
+    HistoryModule,
+    WorkflowsModule,
+    ReportsModule,
+    RolesModule,
+    UserDataModule,
   ],
 })
 export class AppModule {}

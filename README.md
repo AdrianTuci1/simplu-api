@@ -1,86 +1,86 @@
-# Arhitectură Backend Multi-Tenant pentru Asistent Virtual (Business AI Agent)
+# Multi-Tenant Backend Architecture for Business AI Agent
 
-Acest document descrie arhitectura de backend containerizată pentru o aplicație multi-tenant, care include un agent de asistență AI dedicat pentru diverse tipuri de afaceri (ex: clinici dentare, săli de fitness, hoteluri).
+This document outlines the backend architecture based on the provided diagram, focusing exclusively on the Dockerized container components. This architecture supports a multi-tenant application, featuring an AI assistant agent designed for various business types (e.g., dental clinics, gyms, hotels).
 
-## Prezentare Generală a Arhitecturii Backend
+## Backend Architecture Overview
 
-Arhitectura backend este construită pe o serie de servicii interconectate, majoritatea rulate în containere Docker, pentru a asigura scalabilitate, izolare și o gestionare eficientă a resurselor. Componentele cheie includ:
+The backend architecture is built upon a series of interconnected services, predominantly running in Docker containers, to ensure scalability, isolation, and efficient resource management. Key components include:
 
-* **API Layer (Scalable):** Punctul de intrare pentru majoritatea interacțiunilor cu backend-ul.
-* **WebSocket Layer:** Gestionează conexiunile persistente pentru comunicarea în timp real.
-* **Events (Kafka Bus):** Un sistem de mesagerie distribuită pentru comunicarea asincronă între servicii.
-* **AI Agent (Scalable):** Componenta inteligentă care procesează cererile și interacționează cu API-uri externe.
-* **DB Layer:** Straturile de persistență pentru datele aplicației și sesiuni.
-* **Auth (SSO):** Serviciul de autentificare.
+* **API Layer (Scalable):** The primary entry point for most backend interactions.
+* **WebSocket Layer:** Manages persistent connections for real-time communication.
+* **Events (Kafka Bus):** A distributed messaging system for asynchronous communication between services.
+* **AI Agent (Scalable):** The intelligent component that processes requests and interacts with external APIs.
+* **DB Layer:** The persistence layers for application data and sessions.
+* **Auth (SSO):** The authentication service.
 
-## Componente Dockerizate
+## Dockerized Components
 
-Următoarele componente de backend sunt proiectate pentru a rula în containere Docker, facilitând implementarea și scalarea.
+The following backend components are designed to run within Docker containers, facilitating deployment and scaling.
 
 ### 1. API Server (Node.js)
 
-* **Descriere:** Serviciul principal de API, responsabil pentru gestionarea cererilor HTTP de la frontend și coordonarea operațiunilor cu alte servicii backend. Construit cu Node.js pentru performanță și scalabilitate.
-* **Tehnologie:** Node.js
-* **Conexiuni:** Interacționează cu WebSocket Layer, Kafka Bus, Auth, și DB Layer.
+* **Description:** The main API service, responsible for handling HTTP requests from the frontend and coordinating operations with other backend services. Built with Node.js for performance and scalability.
+* **Technology:** Node.js
+* **Connections:** Interacts with the WebSocket Layer, Kafka Bus, Auth, and DB Layer.
 
 ### 2. Phoenix (Elixir) WebSocket Server
 
-* **Descriere:** Un server dedicat pentru gestionarea conexiunilor WebSocket, oferind comunicare bidirecțională în timp real. Utilizarea Elixir/Phoenix asigură o toleranță la erori ridicată și scalabilitate excelentă pentru conexiuni concurente.
-* **Tehnologie:** Elixir, Phoenix
-* **Conexiuni:** Primește cereri de la API Layer și poate trimite evenimente către clienții conectați.
+* **Description:** A dedicated server for managing WebSocket connections, providing real-time, bidirectional communication. The use of Elixir/Phoenix ensures high fault tolerance and excellent scalability for concurrent connections.
+* **Technology:** Elixir, Phoenix
+* **Connections:** Receives requests from the API Layer and can send events to connected clients.
 
 ### 3. Kafka Bus (Events)
 
-* **Descriere:** Un bus de mesaje distribuit, utilizat pentru a facilita comunicarea asincronă și decoupled între diverse servicii (microservicii). Asigură durabilitatea mesajelor și permite scalarea independentă a producătorilor și consumatorilor de evenimente.
-* **Tehnologie:** Apache Kafka
-* **Conexiuni:** Serviciile API Server, WebSocket Server și LangGraph AI Agent publică și/sau consumă evenimente de pe Kafka Bus.
+* **Description:** A distributed message bus used to facilitate asynchronous and decoupled communication between various services (microservices). It ensures message durability and allows for independent scaling of producers and consumers of events.
+* **Technology:** Apache Kafka
+* **Connections:** API Server, WebSocket Server, and LangGraph AI Agent services publish and/or consume events from the Kafka Bus.
 
 ### 4. LangGraph AI Agent
 
-* **Descriere:** Agentul inteligent de asistență pentru afaceri. Acest serviciu procesează cererile complexe, utilizează modele de limbaj și logică de business pentru a oferi răspunsuri și acțiuni specifice fiecărui tip de afacere (clinici dentare, săli de fitness, hoteluri). Interacționează cu API-uri externe pentru a prelua informații sau a executa acțiuni.
-* **Tehnologie:** LangGraph (sau similar), Python (probabil)
-* **Conexiuni:** Consumă evenimente de pe Kafka Bus, interacționează cu PostgreSQL (pentru date specifice fiecărui tenant), și comunică cu External APIs (Meta Graph API, Twilio, Booking.com / Email Ingest).
+* **Description:** The intelligent business assistance agent. This service processes complex requests, utilizes language models, and applies business logic to provide tailored responses and actions for each business type (dental clinics, gyms, hotels). It interacts with external APIs to retrieve information or execute actions.
+* **Technology:** LangGraph (or similar), Python (likely)
+* **Connections:** Consumes events from the Kafka Bus, interacts with PostgreSQL (for tenant-specific data), and communicates with External APIs (Meta Graph API, Twilio, Booking.com / Email Ingest).
 
 ### 5. auth.simptu.io (SSO)
 
-* **Descriere:** Un serviciu dedicat de autentificare Single Sign-On (SSO). Acesta gestionează procesele de autentificare și autorizare, asigurând securitatea accesului la resursele backend.
-* **Tehnologie:** Nespecificată (dar este un serviciu autonom de autentificare)
-* **Conexiuni:** API Server și alte servicii care necesită autentificare interacționează cu acest serviciu.
+* **Description:** A dedicated Single Sign-On (SSO) authentication service. It manages authentication and authorization processes, ensuring secure access to backend resources.
+* **Technology:** Unspecified (but functions as a standalone authentication service)
+* **Connections:** The API Server and other services requiring authentication interact with this service.
 
 ### 6. PostgreSQL (multi-tenant, encrypted per tenant)
 
-* **Descriere:** Baza de date relațională principală, concepută pentru a suporta arhitectura multi-tenant. Datele fiecărui tenant sunt criptate separat pentru a asigura izolare și securitate. Stochează datele operaționale ale aplicației.
-* **Tehnologie:** PostgreSQL
-* **Conexiuni:** Majoritatea serviciilor de backend (API Server, LangGraph AI Agent, Auth) interacționează cu această bază de date.
+* **Description:** The primary relational database, designed to support the multi-tenant architecture. Each tenant's data is separately encrypted to ensure isolation and security. It stores the application's operational data.
+* **Technology:** PostgreSQL
+* **Connections:** Most backend services (API Server, LangGraph AI Agent, Auth) interact with this database.
 
 ### 7. Redis (cache + sessions)
 
-* **Descriere:** O bază de date in-memory utilizată pentru caching rapid și stocarea sesiunilor utilizatorilor. Contribuie la performanța generală a sistemului prin reducerea latenței accesului la date frecvent solicitate.
-* **Tehnologie:** Redis
-* **Conexiuni:** API Server și probabil alte servicii (ex: WebSocket Server) interacționează cu Redis pentru cache și sesiuni.
+* **Description:** An in-memory database used for fast caching and user session storage. It contributes to the overall system performance by reducing latency for frequently accessed data.
+* **Technology:** Redis
+* **Connections:** The API Server and likely other services (e.g., WebSocket Server) interact with Redis for caching and sessions.
 
-### 8. External APIs (Integrare)
+### 8. External APIs (Integration)
 
-* **Descriere:** Deși nu sunt containere rulate în cadrul sistemului, aceste API-uri externe sunt integrate de LangGraph AI Agent pentru a extinde funcționalitatea și a oferi servicii specifice:
-    * **Meta Graph API:** Pentru interacțiuni cu platformele Meta (Facebook, Instagram).
-    * **Twilio (SMS / Voice):** Pentru funcționalități de comunicare (mesaje SMS, apeluri vocale).
-    * **Booking.com / Email Ingest:** Pentru integrarea cu platforme de rezervări sau procesarea email-urilor.
-* **Tehnologie:** API-uri terțe
-* **Conexiuni:** LangGraph AI Agent inițiază cereri către aceste API-uri.
+* **Description:** While not containers run within the system, these external APIs are integrated by the LangGraph AI Agent to extend functionality and provide specific services:
+    * **Meta Graph API:** For interactions with Meta platforms (Facebook, Instagram).
+    * **Twilio (SMS / Voice):** For communication functionalities (SMS messages, voice calls).
+    * **Booking.com / Email Ingest:** For integration with booking platforms or email processing.
+* **Technology:** Third-party APIs
+* **Connections:** The LangGraph AI Agent initiates requests to these APIs.
 
-## Arhitectură Multi-Tenant
+## Multi-Tenant Architecture
 
-Sistemul este proiectat să suporte multiple clinici, săli de fitness sau hoteluri ca **"tenanți"** independenți, toți rulând pe aceeași infrastructură backend partajată. Izolarea datelor și securitatea sunt asigurate prin:
+The system is designed to support multiple clinics, gyms, or hotels as independent **"tenants,"** all running on the same shared backend infrastructure. Data isolation and security are ensured through:
 
-* **Criptare per Tenant:** Datele fiecărui tenant în PostgreSQL sunt criptate individual.
-* **Login Separat:** Sistemul de autentificare (auth.simptu.io) gestionează accesul specific fiecărui tenant.
-* **Logică de Business:** AI Agent-ul și API Server-ul conțin logica necesară pentru a distinge și a procesa cererile în contextul tenantului corespunzător.
+* **Per-Tenant Encryption:** Each tenant's data within PostgreSQL is individually encrypted.
+* **Separate Login:** The authentication system (auth.simptu.io) manages access specific to each tenant.
+* **Business Logic:** The AI Agent and API Server contain the necessary logic to distinguish and process requests within the context of the corresponding tenant.
 
-## Implementare și Rulare (Docker Compose / Kubernetes)
+## Deployment and Running (Docker Compose / Kubernetes)
 
-Această arhitectură este ideală pentru a fi implementată folosind:
+This architecture is ideal for deployment using:
 
-* **Docker Compose:** Pentru medii de dezvoltare locală sau mici implementări, `docker-compose.yml` ar defini toate serviciile și dependințele acestora.
-* **Kubernetes:** Pentru producție, un orchestrator de containere precum Kubernetes ar gestiona scalarea, disponibilitatea și implementarea complexă a acestor servicii.
+* **Docker Compose:** For local development environments or small-scale deployments, a `docker-compose.yml` file would define all services and their dependencies.
+* **Kubernetes:** For production, a container orchestrator like Kubernetes would manage the complex scaling, availability, and deployment of these services.
 
 ---
