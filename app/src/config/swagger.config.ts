@@ -13,4 +13,4 @@ export const swaggerConfig = new DocumentBuilder()
   .addTag('stock', 'Stock management endpoints')
   .addTag('services', 'Service management endpoints')
   .addTag('public', 'Public endpoints')
-  .build(); 
+  .build();

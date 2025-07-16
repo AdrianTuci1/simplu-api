@@ -6,4 +6,4 @@ export const Tenant = createParamDecorator(
     const request = ctx.switchToHttp().getRequest<Request>();
     return request.headers['x-tenant-id'];
   },
-); 
+);

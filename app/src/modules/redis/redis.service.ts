@@ -55,14 +55,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.get(`tenant:${tenantId}:${key}`);
   }
 
-  async setTenantCache(tenantId: string, key: string, value: string, ttl?: number): Promise<void> {
+  async setTenantCache(
+    tenantId: string,
+    key: string,
+    value: string,
+    ttl?: number,
+  ): Promise<void> {
     await this.set(`tenant:${tenantId}:${key}`, value, ttl);
   }
 
-  async invalidateTenantCache(tenantId: string, pattern: string): Promise<void> {
+  async invalidateTenantCache(
+    tenantId: string,
+    pattern: string,
+  ): Promise<void> {
     const keys = await this.redis.keys(`tenant:${tenantId}:${pattern}`);
     if (keys.length > 0) {
       await this.redis.del(...keys);
     }
   }
-} 
+}

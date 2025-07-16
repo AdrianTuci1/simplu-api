@@ -8,7 +8,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 
   constructor(private configService: ConfigService) {
     const kafkaConfig = this.configService.get('kafka');
-    
+
     const kafka = new Kafka({
       clientId: kafkaConfig.clientId,
       brokers: kafkaConfig.brokers,
@@ -40,4 +40,4 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 
     return this.producer.send(message);
   }
-} 
+}

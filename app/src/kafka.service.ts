@@ -13,11 +13,17 @@ export class KafkaService implements OnModuleInit {
 
     this.consumer = this.kafka.consumer({ groupId: 'simplu-api-group' });
     await this.consumer.connect();
-    await this.consumer.subscribe({ topic: 'agent.recommendation', fromBeginning: true });
+    await this.consumer.subscribe({
+      topic: 'agent.recommendation',
+      fromBeginning: true,
+    });
 
     await this.consumer.run({
       eachMessage: async ({ topic, message }) => {
-        console.log(`📩 [Kafka] Mesaj primit pe ${topic}:`, message?.value?.toString());
+        console.log(
+          `📩 [Kafka] Mesaj primit pe ${topic}:`,
+          message?.value?.toString(),
+        );
       },
     });
   }

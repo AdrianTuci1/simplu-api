@@ -1,16 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany, JoinTable, OneToOne, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
-import { Tenant } from '../../tenants/entities/tenant.entity';
-import { Employee } from '../../employees/entities/employee.entity';
-import { History } from '../../history/entities/history.entity';
-import { Report } from '../../reports/entities/report.entity';
-import { Role } from '../../roles/entities/role.entity';
-import { UserData } from '../../user-data/entities/user-data.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
-  EMPLOYEE = 'employee',
-  CLIENT = 'client',
+  MANAGER = 'manager',
+  STAFF = 'staff',
 }
 
 @Entity('users')
@@ -23,23 +23,23 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @ApiProperty({ description: 'The hashed password of the user' })
+  @ApiProperty({ description: 'The password hash of the user' })
   @Column()
   password: string;
 
-  @ApiProperty({ description: 'The first name of the user' })
+  @ApiProperty({ description: 'The first name of the user', required: false })
   @Column({ nullable: true })
-  firstName: string;
+  firstName?: string;
 
-  @ApiProperty({ description: 'The last name of the user' })
+  @ApiProperty({ description: 'The last name of the user', required: false })
   @Column({ nullable: true })
-  lastName: string;
+  lastName?: string;
 
   @ApiProperty({ description: 'The role of the user', enum: UserRole })
   @Column({
     type: 'enum',
     enum: UserRole,
-    default: UserRole.CLIENT,
+    default: UserRole.STAFF,
   })
   role: UserRole;
 
@@ -47,39 +47,23 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
-  @ApiProperty({ description: 'The tenants this user belongs to', type: () => [Tenant] })
-  @ManyToMany(() => Tenant, tenant => tenant.users)
-  @JoinTable({
-    name: 'user_tenants',
-    joinColumn: { name: 'user_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'tenant_id', referencedColumnName: 'id' },
+  @ApiProperty({
+    description: 'The business ID the user belongs to',
+    required: false,
   })
-  tenants: Tenant[];
+  @Column({ nullable: true })
+  businessId?: string;
 
-  @ApiProperty({ description: 'The associated employee profile', type: () => Employee })
-  @OneToOne(() => Employee, employee => employee.user)
-  employee: Employee;
-
-  @ApiProperty({ description: 'The history entries associated with this user', type: () => [History] })
-  @OneToMany(() => History, history => history.user)
-  history: Promise<History[]>;
-
-  @ApiProperty({ description: 'The reports associated with this user', type: () => [Report] })
-  @OneToMany(() => Report, report => report.user)
-  reports: Promise<Report[]>;
-
-  @ApiProperty({ description: 'The roles associated with this user', type: () => [Role] })
-  @ManyToMany(() => Role, role => role.users)
-  @JoinTable({
-    name: 'user_roles',
-    joinColumn: { name: 'user_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
+  @ApiProperty({
+    description: 'The location ID the user belongs to',
+    required: false,
   })
-  roles: Promise<Role[]>;
+  @Column({ nullable: true })
+  locationId?: string;
 
-  @ApiProperty({ description: 'The user data associated with this user', type: () => [UserData] })
-  @OneToMany(() => UserData, userData => userData.user)
-  userData: Promise<UserData[]>;
+  @ApiProperty({ description: 'Additional user settings', required: false })
+  @Column('jsonb', { nullable: true })
+  settings?: Record<string, any>;
 
   @ApiProperty({ description: 'The creation date of the user' })
   @CreateDateColumn()
@@ -88,4 +72,4 @@ export class User {
   @ApiProperty({ description: 'The last update date of the user' })
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}
