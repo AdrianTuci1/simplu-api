@@ -1,14 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { 
-  BusinessTypeResourceData, 
-  RoleData, 
-  BaseResource,
-  TypedResource,
-  GetResourceDataType 
-} from '../models/business-types';
+  BusinessResourceDataMap, 
+  BusinessType 
+} from '../models/unified-data-types';
+import { RoleData } from '../models/common/role-models';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
-
-export type BusinessType = keyof BusinessTypeResourceData;
 
 @Injectable()
 export class ResourceModelService {
@@ -18,11 +14,11 @@ export class ResourceModelService {
    */
   getResourceStructure<
     TBusinessType extends BusinessType,
-    TResourceName extends keyof BusinessTypeResourceData[TBusinessType]
+    TResourceName extends keyof BusinessResourceDataMap[TBusinessType]
   >(
     businessType: TBusinessType,
     resourceName: TResourceName,
-  ): Partial<BusinessTypeResourceData[TBusinessType][TResourceName]> {
+  ): Partial<BusinessResourceDataMap[TBusinessType][TResourceName]> {
     // Return the structure/template for the resource type
     return this.getDefaultResourceData(businessType, resourceName as string);
   }
@@ -32,12 +28,12 @@ export class ResourceModelService {
    */
   validateResourceData<
     TBusinessType extends BusinessType,
-    TResourceName extends keyof BusinessTypeResourceData[TBusinessType]
+    TResourceName extends keyof BusinessResourceDataMap[TBusinessType]
   >(
     businessType: TBusinessType,
     resourceName: TResourceName,
     data: any,
-  ): data is BusinessTypeResourceData[TBusinessType][TResourceName] {
+  ): data is BusinessResourceDataMap[TBusinessType][TResourceName] {
     try {
       const requiredFields = this.getRequiredFields(businessType, resourceName as string);
       

@@ -284,7 +284,7 @@ export class AuthService {
   private getMockUser(token: string): CognitoUser {
     // Extract some info from token for variety in testing
     const tokenHash = token.length % 4;
-    const businessTypes = ['dental', 'gym', 'hotel', 'sales'];
+    const businessTypes = ['dental', 'gym', 'hotel'];
     const businessType = businessTypes[tokenHash];
     
     return {
@@ -299,8 +299,7 @@ export class AuthService {
         'write:resources',
         'read:reports',
         businessType === 'dental' ? 'manage:appointments' : 
-        businessType === 'gym' ? 'manage:memberships' :
-        businessType === 'hotel' ? 'manage:reservations' : 'manage:sales',
+        businessType === 'gym' ? 'manage:memberships' : 'manage:reservations',
       ],
       isActive: true,
     };

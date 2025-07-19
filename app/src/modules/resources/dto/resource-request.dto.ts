@@ -166,7 +166,7 @@ export class HotelRoomsFilters {
   floor?: number;
 }
 
-// Sales Business Filters
+// Sales Resource Filters (Common Resource)
 export class SalesProductsFilters {
   @ApiProperty({ description: 'Search term', required: false })
   @IsOptional()

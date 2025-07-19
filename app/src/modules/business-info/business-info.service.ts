@@ -5,7 +5,7 @@ import { dynamoDBService } from '../../config/dynamodb.config';
 export interface BusinessInfo {
   businessId: string;
   businessName: string;
-  businessType: 'dental' | 'gym' | 'hotel' | 'sales';
+  businessType: 'dental' | 'gym' | 'hotel';
   locations: LocationInfo[];
   settings: BusinessSettings;
   permissions: string[];
@@ -95,8 +95,8 @@ export class BusinessInfoService {
    * Mock data fallback for development when DynamoDB is not available
    */
   private getMockBusinessInfo(businessId: string): BusinessInfo {
-    const businessTypes = ['dental', 'gym', 'hotel', 'sales'] as const;
-    const businessType = businessTypes[parseInt(businessId.slice(-1)) % 4];
+    const businessTypes = ['dental', 'gym', 'hotel'] as const;
+    const businessType = businessTypes[parseInt(businessId.slice(-1)) % 3];
 
     return {
       businessId,
@@ -143,8 +143,7 @@ export class BusinessInfoService {
         'read:reports',
         'manage:settings',
         businessType === 'dental' ? 'manage:appointments' : 
-        businessType === 'gym' ? 'manage:memberships' :
-        businessType === 'hotel' ? 'manage:reservations' : 'manage:sales',
+        businessType === 'gym' ? 'manage:memberships' : 'manage:reservations',
       ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -1,12 +1,10 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
-import { BusinessTypeResourceData, RoleData } from '../models/business-types';
+import { BusinessType } from '../models/unified-data-types';
+import { RoleData } from '../models/common/role-models';
 import { ResourceModelService } from './resource-model.service';
 
 // Resource actions that can be performed
 export type ResourceAction = 'create' | 'read' | 'update' | 'delete' | 'list';
-
-// Business type definitions
-export type BusinessType = keyof BusinessTypeResourceData;
 
 // User context for permission checking
 export interface UserContext {
@@ -18,8 +16,8 @@ export interface UserContext {
 
 @Injectable()
 export class ResourcePermissionsService {
-  
-  constructor(private readonly resourceModelService: ResourceModelService) {}
+
+  constructor(private readonly resourceModelService: ResourceModelService) { }
 
   // Cache for role data to avoid repeated database calls
   private roleCache: Map<string, RoleData[]> = new Map();
@@ -125,7 +123,7 @@ export class ResourcePermissionsService {
   async getHighestRole(user: UserContext, businessType: BusinessType): Promise<RoleData | null> {
     try {
       const roles = await this.getCachedRoles(user.businessId, user.locationId || '', businessType);
-      
+
       let highestRole: RoleData | null = null;
       let highestHierarchy = -1;
 
@@ -154,10 +152,10 @@ export class ResourcePermissionsService {
   ): Promise<RoleData[]> {
     const cacheKey = `${businessId}-${locationId}-${businessType}`;
     const now = Date.now();
-    
+
     // Check if cache is valid
     if (
-      this.roleCache.has(cacheKey) && 
+      this.roleCache.has(cacheKey) &&
       this.cacheExpiry.has(cacheKey) &&
       this.cacheExpiry.get(cacheKey)! > now
     ) {
@@ -166,11 +164,11 @@ export class ResourcePermissionsService {
 
     // Fetch fresh data
     const roles = await this.resourceModelService.getRoles(businessId, locationId, businessType);
-    
+
     // Update cache
     this.roleCache.set(cacheKey, roles);
     this.cacheExpiry.set(cacheKey, now + this.CACHE_TTL);
-    
+
     return roles;
   }
 

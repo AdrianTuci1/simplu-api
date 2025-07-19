@@ -6,7 +6,8 @@ import {
   ErrorInfo,
 } from './dto/standard-response.dto';
 import { citrusShardingService } from '../../config/citrus-sharding.config';
-import { ResourceModelService, BusinessType } from './services/resource-model.service';
+import { ResourceModelService } from './services/resource-model.service';
+import { BusinessType } from './models/unified-data-types';
 import { ResourcePermissionsService, UserContext, ResourceAction } from './services/resource-permissions.service';
 
 interface ResourceRequestParams {
@@ -178,6 +179,46 @@ export class ResourcesService {
           break;
         case 'reports':
           result = await this.getReportsResources(
+            businessId,
+            locationId,
+            filters,
+            page,
+            limit,
+            shardConnection,
+          );
+          break;
+        case 'workflows':
+          result = await this.getWorkflowsResources(
+            businessId,
+            locationId,
+            filters,
+            page,
+            limit,
+            shardConnection,
+          );
+          break;
+        case 'permissions':
+          result = await this.getPermissionsResources(
+            businessId,
+            locationId,
+            filters,
+            page,
+            limit,
+            shardConnection,
+          );
+          break;
+        case 'userData':
+          result = await this.getUserDataResources(
+            businessId,
+            locationId,
+            filters,
+            page,
+            limit,
+            shardConnection,
+          );
+          break;
+        case 'history':
+          result = await this.getHistoryResources(
             businessId,
             locationId,
             filters,
@@ -753,6 +794,104 @@ export class ResourcesService {
       },
     ];
     return { items: mockReports, total: mockReports.length };
+  }
+
+  private async getWorkflowsResources(
+    businessId: string,
+    locationId: string,
+    filters: any,
+    page: number,
+    limit: number,
+    shardConnection: any,
+  ) {
+    const mockWorkflows = [
+      {
+        id: '1',
+        name: 'Patient Follow-up',
+        description: 'Automated follow-up workflow for patients',
+        status: 'active',
+        steps: [
+          { type: 'email', delay: '1d', template: 'follow-up' },
+          { type: 'sms', delay: '3d', template: 'reminder' }
+        ],
+        createdBy: 'admin-1',
+        createdAt: '2024-01-15T10:00:00Z',
+      },
+    ];
+    return { items: mockWorkflows, total: mockWorkflows.length };
+  }
+
+  private async getPermissionsResources(
+    businessId: string,
+    locationId: string,
+    filters: any,
+    page: number,
+    limit: number,
+    shardConnection: any,
+  ) {
+    const mockPermissions = [
+      {
+        id: '1',
+        name: 'manage_clients',
+        displayName: 'Manage Clients',
+        description: 'Permission to create, read, update, and delete clients',
+        resourceName: 'clients',
+        actions: ['create', 'read', 'update', 'delete', 'list'],
+        active: true,
+        isSystemPermission: true,
+      },
+    ];
+    return { items: mockPermissions, total: mockPermissions.length };
+  }
+
+  private async getUserDataResources(
+    businessId: string,
+    locationId: string,
+    filters: any,
+    page: number,
+    limit: number,
+    shardConnection: any,
+  ) {
+    const mockUserData = [
+      {
+        id: '1',
+        userId: 'user-1',
+        firstName: 'Admin',
+        lastName: 'User',
+        email: 'admin@example.com',
+        roles: ['admin'],
+        permissions: ['manage_all'],
+        status: 'active',
+        lastLogin: '2024-01-15T09:00:00Z',
+        createdAt: '2024-01-01T00:00:00Z',
+      },
+    ];
+    return { items: mockUserData, total: mockUserData.length };
+  }
+
+  private async getHistoryResources(
+    businessId: string,
+    locationId: string,
+    filters: any,
+    page: number,
+    limit: number,
+    shardConnection: any,
+  ) {
+    const mockHistory = [
+      {
+        id: '1',
+        type: 'action',
+        action: 'create_client',
+        userId: 'user-1',
+        entityType: 'clients',
+        entityId: 'client-1',
+        entityName: 'John Doe',
+        description: 'Created new client: John Doe',
+        timestamp: '2024-01-15T10:00:00Z',
+        status: 'success',
+      },
+    ];
+    return { items: mockHistory, total: mockHistory.length };
   }
 
   // Mock CREATE implementations

@@ -51,9 +51,9 @@ export class BusinessInfo {
 
   @ApiProperty({
     description: 'Business type',
-    enum: ['dental', 'gym', 'hotel', 'sales'],
+    enum: ['dental', 'gym', 'hotel'],
   })
-  type: 'dental' | 'gym' | 'hotel' | 'sales';
+  type: 'dental' | 'gym' | 'hotel';
 
   @ApiProperty({ description: 'Business locations', type: [LocationInfo] })
   locations: LocationInfo[];
