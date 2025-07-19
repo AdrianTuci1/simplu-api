@@ -11,6 +11,7 @@ import {
   GymMembershipData,
   GymClassData,
   GymEquipmentData,
+  GymStaffData,
   GymTimelineData
 } from './gym';
 
@@ -19,6 +20,7 @@ import {
   HotelReservationData,
   HotelRoomData,
   HotelServiceData,
+  HotelStaffData,
   HotelTimelineData
 } from './hotel';
 
@@ -53,12 +55,14 @@ export type ResourceDataType =
   | GymMembershipData
   | GymClassData
   | GymEquipmentData
+  | GymStaffData
   | GymTimelineData
   // Hotel business data types
   | HotelGuestData
   | HotelReservationData
   | HotelRoomData
   | HotelServiceData
+  | HotelStaffData
   | HotelTimelineData
   // Common data types
   | StockItemData
@@ -96,6 +100,7 @@ export type BusinessResourceDataMap = {
     packages: GymMembershipData;
     classes: GymClassData;
     equipment: GymEquipmentData;
+    staff: GymStaffData;
     stocks: StockItemData;
     invoices: InvoiceData;
     activities: ActivityData;
@@ -112,6 +117,7 @@ export type BusinessResourceDataMap = {
     clients: HotelGuestData;
     rooms: HotelRoomData;
     services: HotelServiceData;
+    staff: HotelStaffData;
     stocks: StockItemData;
     invoices: InvoiceData;
     activities: ActivityData;
@@ -151,8 +157,8 @@ export function isValidResourceForBusiness(
 ): boolean {
   const businessResourceMap: Record<BusinessType, string[]> = {
     dental: ['timeline', 'clients', 'services', 'staff', 'stocks', 'invoices', 'activities', 'reports', 'roles', 'sales', 'workflows', 'permissions', 'userData', 'history'],
-    gym: ['timeline', 'members', 'packages', 'classes', 'equipment', 'stocks', 'invoices', 'activities', 'reports', 'roles', 'sales', 'workflows', 'permissions', 'userData', 'history'],
-    hotel: ['timeline', 'clients', 'rooms', 'services', 'stocks', 'invoices', 'activities', 'reports', 'roles', 'sales', 'workflows', 'permissions', 'userData', 'history'],
+    gym: ['timeline', 'members', 'packages', 'classes', 'equipment', 'staff', 'stocks', 'invoices', 'activities', 'reports', 'roles', 'sales', 'workflows', 'permissions', 'userData', 'history'],
+    hotel: ['timeline', 'clients', 'rooms', 'services', 'staff', 'stocks', 'invoices', 'activities', 'reports', 'roles', 'sales', 'workflows', 'permissions', 'userData', 'history'],
   };
 
   return businessResourceMap[businessType]?.includes(resourceType) || false;
@@ -175,6 +181,6 @@ export const COMMON_RESOURCE_TYPES = [
 // Business-specific resource types
 export const BUSINESS_SPECIFIC_RESOURCES = {
   dental: ['timeline', 'clients', 'services', 'staff'],
-  gym: ['timeline', 'members', 'packages', 'classes', 'equipment'],
-  hotel: ['timeline', 'clients', 'rooms', 'services'],
+  gym: ['timeline', 'members', 'packages', 'classes', 'equipment', 'staff'],
+  hotel: ['timeline', 'clients', 'rooms', 'services', 'staff'],
 } as const;

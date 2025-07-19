@@ -1,17 +1,68 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsOptional, IsDateString, IsArray, IsEnum, ValidateNested } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsDateString, IsArray, IsEnum, ValidateNested, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AddressData, EmergencyContactData } from '../common/shared-interfaces';
 
+// Simplified class data for member upcoming classes
+export class GymClassSummary {
+  @ApiProperty({ description: 'Class ID' })
+  @IsString()
+  id: string;
+
+  @ApiProperty({ description: 'Class name' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ description: 'Class date and time' })
+  @IsString()
+  date: string;
+
+  @ApiProperty({ description: 'Instructor name' })
+  @IsString()
+  instructorName: string;
+
+  @ApiProperty({ description: 'Duration in minutes' })
+  @IsNumber()
+  duration: number;
+
+  @ApiProperty({ description: 'Class category' })
+  @IsString()
+  category: string;
+}
+
+// Simplified membership data for member
+export class MembershipSummary {
+  @ApiProperty({ description: 'Membership name' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ description: 'Membership type' })
+  @IsString()
+  type: string;
+
+  @ApiProperty({ description: 'Start date' })
+  @IsString()
+  startDate: string;
+
+  @ApiProperty({ description: 'End date' })
+  @IsString()
+  endDate: string;
+
+  @ApiProperty({ description: 'Status' })
+  @IsString()
+  status: string;
+
+  @ApiProperty({ description: 'Monthly fee', required: false })
+  @IsOptional()
+  @IsNumber()
+  monthlyFee?: number;
+}
+
 // Gym member data model
 export class GymMemberData {
-  @ApiProperty({ description: 'Member first name' })
+  @ApiProperty({ description: 'Member name' })
   @IsString()
-  firstName: string;
-
-  @ApiProperty({ description: 'Member last name' })
-  @IsString()
-  lastName: string;
+  name: string;
 
   @ApiProperty({ description: 'Member email' })
   @IsEmail()
@@ -21,10 +72,16 @@ export class GymMemberData {
   @IsString()
   phone: string;
 
-  @ApiProperty({ description: 'Date of birth', required: false })
-  @IsOptional()
-  @IsDateString()
-  dateOfBirth?: string;
+  @ApiProperty({ description: 'Birth year' })
+  @IsNumber()
+  birthYear: number;
+
+  @ApiProperty({ 
+    description: 'Gender',
+    enum: ['male', 'female', 'other', 'prefer-not-to-say']
+  })
+  @IsEnum(['male', 'female', 'other', 'prefer-not-to-say'])
+  gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
 
   @ApiProperty({ description: 'Member address', required: false })
   @IsOptional()
@@ -76,6 +133,25 @@ export class GymMemberData {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({ description: 'Member tags for categorization', required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiProperty({ description: 'Upcoming classes', required: false })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GymClassSummary)
+  upcomingClasses?: GymClassSummary[];
+
+  @ApiProperty({ description: 'Current membership details', required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MembershipSummary)
+  membership?: MembershipSummary;
 
   @ApiProperty({ description: 'Preferred trainer ID', required: false })
   @IsOptional()

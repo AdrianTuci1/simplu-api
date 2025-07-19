@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsEmail, IsArray } from 'class-validator';
 
-// Simplified dental staff data model
-export class DentalStaffData {
+// Simplified hotel staff data model
+export class HotelStaffData {
   @ApiProperty({ description: 'Staff full name' })
   @IsString()
   name: string;

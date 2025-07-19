@@ -6,19 +6,57 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # Application Configuration
       - NODE_ENV=development
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_USERNAME=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_NAME=simplu
+      - PORT=3000
+      
+      # JWT Authentication
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - JWT_EXPIRES_IN=1d
+      
+      # External AWS Cognito Configuration
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      
+      # External AWS DynamoDB Configuration (Business Info)
+      - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
+      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+      
+      # External Citrus Sharding Service Configuration
+      - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
+      - CITRUS_API_KEY=${CITRUS_API_KEY}
+      - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
+      - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
+      
+      # Kafka Configuration
       - KAFKA_BROKERS=kafka:29092
       - KAFKA_CLIENT_ID=simplu-api
       - KAFKA_GROUP_ID=simplu-api-group
+      
+      # Redis Configuration
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      
+      # Logging and Monitoring
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENABLE_REQUEST_LOGGING=${ENABLE_REQUEST_LOGGING:-true}
+      - HEALTH_CHECK_ENABLED=${HEALTH_CHECK_ENABLED:-true}
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      
+      # Security Configuration
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-1000}
+      
+      # Development Configuration
+      - SEED_DATA_ENABLED=${SEED_DATA_ENABLED:-false}
     depends_on:
-      postgres:
+      # External services that must be available
+      citrus:
         condition: service_healthy
       kafka:
         condition: service_started
@@ -56,11 +94,6 @@ services:
       - "3001:3000"
     environment:
       - NODE_ENV=development
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_USERNAME=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_NAME=simplu
       - KAFKA_BROKERS=kafka:29092
       - KAFKA_CLIENT_ID=ai-agent-consumer
       - KAFKA_GROUP_ID=ai-agent-consumer-group
@@ -72,8 +105,6 @@ services:
       - REDIS_PORT=6379
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     depends_on:
-      postgres:
-        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -81,19 +112,79 @@ services:
     networks:
       - app-network
 
+  # External Citrus Sharding Service
+  citrus:
+    image: citrus/sharding-service:latest  # Replace with actual Citrus image
+    ports:
+      - "8080:8080"
+    environment:
+      # Citrus Configuration
+      - CITRUS_ENV=development
+      - CITRUS_LOG_LEVEL=${CITRUS_LOG_LEVEL:-info}
+      
+      # Database Configuration for Citrus-managed shards
+      - CITRUS_DB_HOST=${CITRUS_DB_HOST:-postgres}
+      - CITRUS_DB_PORT=${CITRUS_DB_PORT:-5432}
+      - CITRUS_DB_USERNAME=${CITRUS_DB_USERNAME:-postgres}
+      - CITRUS_DB_PASSWORD=${CITRUS_DB_PASSWORD:-postgres}
+      - CITRUS_DB_NAME=${CITRUS_DB_NAME:-citrus}
+      
+      # Sharding Configuration
+      - CITRUS_MAX_BUSINESSES_PER_SHARD=${CITRUS_MAX_BUSINESSES_PER_SHARD:-3}
+      - CITRUS_SHARD_CREATION_ENABLED=${CITRUS_SHARD_CREATION_ENABLED:-true}
+      - CITRUS_AUTO_SCALING_ENABLED=${CITRUS_AUTO_SCALING_ENABLED:-true}
+      
+      # API Configuration
+      - CITRUS_API_KEY=${CITRUS_API_KEY}
+      - CITRUS_CORS_ORIGINS=${CITRUS_CORS_ORIGINS:-http://localhost:3000}
+      
+      # Health Check Configuration
+      - CITRUS_HEALTH_CHECK_INTERVAL=${CITRUS_HEALTH_CHECK_INTERVAL:-30}
+      - CITRUS_SHARD_MONITORING_ENABLED=${CITRUS_SHARD_MONITORING_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
+  # PostgreSQL for Citrus-managed shards (Citrus will create and manage individual shard databases)
   postgres:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: simplu
+      POSTGRES_DB: citrus
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Mount initialization scripts for Citrus
+      - ./citrus-init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # Local DynamoDB for development (optional - can use AWS DynamoDB in production)
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8000:8000"
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "./data"]
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/shell"]
+      interval: 10s
       timeout: 5s
       retries: 5
     networks:
@@ -145,7 +236,7 @@ services:
     depends_on:
       - kafka
     ports:
-      - "8080:8080"
+      - "8081:8080"  # Changed port to avoid conflict with Citrus
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
@@ -153,9 +244,23 @@ services:
     networks:
       - app-network
 
+  # Citrus Management UI (optional)
+  citrus-ui:
+    image: citrus/management-ui:latest  # Replace with actual Citrus UI image
+    ports:
+      - "8082:80"
+    environment:
+      - CITRUS_API_URL=http://citrus:8080
+      - CITRUS_API_KEY=${CITRUS_API_KEY}
+    depends_on:
+      - citrus
+    networks:
+      - app-network
+
 volumes:
   postgres_data:
   redis_data:
+  dynamodb_data:
 
 networks:
   app-network:

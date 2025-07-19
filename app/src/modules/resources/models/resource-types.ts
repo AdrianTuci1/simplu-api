@@ -29,6 +29,7 @@ export type GymResourceType =
   | 'packages'
   | 'classes'
   | 'equipment'
+  | 'staff'
   | CommonResourceType;
 
 // Hotel-specific resource types
@@ -37,6 +38,7 @@ export type HotelResourceType =
   | 'clients' 
   | 'rooms'
   | 'services'
+  | 'staff'
   | CommonResourceType;
 
 // Union of all resource types

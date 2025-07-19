@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsOptional, IsDateString, IsArray, IsEnum, ValidateNested, IsNumber } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsArray, IsEnum, ValidateNested, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AddressData, EmergencyContactData } from '../common/shared-interfaces';
 
@@ -24,15 +24,42 @@ export class InsuranceInfoData {
   coveragePercentage?: number;
 }
 
+// Simplified appointment data for patient history
+export class DentalAppointmentSummary {
+  @ApiProperty({ description: 'Appointment ID' })
+  @IsString()
+  id: string;
+
+  @ApiProperty({ description: 'Appointment date and time' })
+  @IsString()
+  appointmentDate: string;
+
+  @ApiProperty({ description: 'Dentist name' })
+  @IsString()
+  dentistName: string;
+
+  @ApiProperty({ description: 'Treatment performed' })
+  @IsString()
+  treatment: string;
+
+  @ApiProperty({
+    description: 'Appointment status',
+    enum: ['completed', 'cancelled', 'no-show']
+  })
+  @IsEnum(['completed', 'cancelled', 'no-show'])
+  status: 'completed' | 'cancelled' | 'no-show';
+
+  @ApiProperty({ description: 'Cost of appointment', required: false })
+  @IsOptional()
+  @IsNumber()
+  cost?: number;
+}
+
 // Dental patient data model
 export class DentalPatientData {
-  @ApiProperty({ description: 'Patient first name' })
+  @ApiProperty({ description: 'Patient name' })
   @IsString()
-  firstName: string;
-
-  @ApiProperty({ description: 'Patient last name' })
-  @IsString()
-  lastName: string;
+  name: string;
 
   @ApiProperty({ description: 'Patient email' })
   @IsEmail()
@@ -42,10 +69,16 @@ export class DentalPatientData {
   @IsString()
   phone: string;
 
-  @ApiProperty({ description: 'Date of birth', required: false })
-  @IsOptional()
-  @IsDateString()
-  dateOfBirth?: string;
+  @ApiProperty({ description: 'Birth year' })
+  @IsNumber()
+  birthYear: number;
+
+  @ApiProperty({
+    description: 'Gender',
+    enum: ['male', 'female', 'other', 'prefer-not-to-say']
+  })
+  @IsEnum(['male', 'female', 'other', 'prefer-not-to-say'])
+  gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
 
   @ApiProperty({ description: 'Patient address', required: false })
   @IsOptional()
@@ -80,6 +113,21 @@ export class DentalPatientData {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({ description: 'Patient tags for categorization', required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+
+
+  @ApiProperty({ description: 'Last 10 appointments', required: false })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DentalAppointmentSummary)
+  lastAppointments?: DentalAppointmentSummary[];
 
   @ApiProperty({ description: 'Patient status', enum: ['active', 'inactive', 'archived'] })
   @IsEnum(['active', 'inactive', 'archived'])

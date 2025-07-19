@@ -3,6 +3,38 @@ import { IsString, IsEmail, IsOptional, IsDateString, IsArray, IsEnum, IsBoolean
 import { Type } from 'class-transformer';
 import { AddressData } from '../common/shared-interfaces';
 
+// Simplified reservation data for guest history
+export class HotelReservationSummary {
+  @ApiProperty({ description: 'Reservation ID' })
+  @IsString()
+  id: string;
+
+  @ApiProperty({ description: 'Check-in date' })
+  @IsString()
+  checkInDate: string;
+
+  @ApiProperty({ description: 'Check-out date' })
+  @IsString()
+  checkOutDate: string;
+
+  @ApiProperty({ description: 'Room numbers' })
+  @IsArray()
+  @IsString({ each: true })
+  roomNumbers: string[];
+
+  @ApiProperty({ description: 'Number of nights' })
+  @IsNumber()
+  numberOfNights: number;
+
+  @ApiProperty({ description: 'Total amount' })
+  @IsNumber()
+  totalAmount: number;
+
+  @ApiProperty({ description: 'Reservation status' })
+  @IsString()
+  status: string;
+}
+
 // ID document interface
 export class IdDocumentData {
   @ApiProperty({ 
@@ -22,67 +54,13 @@ export class IdDocumentData {
   expiryDate?: string;
 }
 
-// Loyalty program interface
-export class LoyaltyProgramData {
-  @ApiProperty({ description: 'Loyalty program number' })
-  @IsString()
-  number: string;
 
-  @ApiProperty({ 
-    description: 'Loyalty tier',
-    enum: ['bronze', 'silver', 'gold', 'platinum']
-  })
-  @IsEnum(['bronze', 'silver', 'gold', 'platinum'])
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
-
-  @ApiProperty({ description: 'Loyalty points' })
-  @IsNumber()
-  points: number;
-}
-
-// Guest preferences interface
-export class GuestPreferencesData {
-  @ApiProperty({ description: 'Preferred room type', required: false })
-  @IsOptional()
-  @IsString()
-  roomType?: string;
-
-  @ApiProperty({ description: 'Preferred bed type', required: false })
-  @IsOptional()
-  @IsString()
-  bedType?: string;
-
-  @ApiProperty({ description: 'Preferred floor', required: false })
-  @IsOptional()
-  @IsString()
-  floor?: string;
-
-  @ApiProperty({ description: 'Smoking preference' })
-  @IsBoolean()
-  smoking: boolean;
-
-  @ApiProperty({ description: 'Dietary preferences', required: false })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  diet?: string[];
-
-  @ApiProperty({ description: 'Special requests', required: false })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  specialRequests?: string[];
-}
 
 // Hotel guest data model
 export class HotelGuestData {
-  @ApiProperty({ description: 'Guest first name' })
+  @ApiProperty({ description: 'Guest name' })
   @IsString()
-  firstName: string;
-
-  @ApiProperty({ description: 'Guest last name' })
-  @IsString()
-  lastName: string;
+  name: string;
 
   @ApiProperty({ description: 'Guest email' })
   @IsEmail()
@@ -92,10 +70,16 @@ export class HotelGuestData {
   @IsString()
   phone: string;
 
-  @ApiProperty({ description: 'Date of birth', required: false })
-  @IsOptional()
-  @IsDateString()
-  dateOfBirth?: string;
+  @ApiProperty({ description: 'Birth year' })
+  @IsNumber()
+  birthYear: number;
+
+  @ApiProperty({ 
+    description: 'Gender',
+    enum: ['male', 'female', 'other', 'prefer-not-to-say']
+  })
+  @IsEnum(['male', 'female', 'other', 'prefer-not-to-say'])
+  gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
 
   @ApiProperty({ description: 'Nationality', required: false })
   @IsOptional()
@@ -112,22 +96,25 @@ export class HotelGuestData {
   @Type(() => IdDocumentData)
   idDocument: IdDocumentData;
 
-  @ApiProperty({ description: 'Loyalty program information', required: false })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => LoyaltyProgramData)
-  loyaltyProgram?: LoyaltyProgramData;
 
-  @ApiProperty({ description: 'Guest preferences', required: false })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => GuestPreferencesData)
-  preferences?: GuestPreferencesData;
 
   @ApiProperty({ description: 'Additional notes', required: false })
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({ description: 'Guest tags for categorization', required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiProperty({ description: 'Guest reservations (can have multiple rooms)', required: false })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HotelReservationSummary)
+  reservations?: HotelReservationSummary[];
 
   @ApiProperty({ 
     description: 'Guest status',

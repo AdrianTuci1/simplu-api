@@ -6,6 +6,23 @@ import { ResourcesService } from './resources.service';
 import { ResourceModelService } from './services/resource-model.service';
 import { ResourcePermissionsService } from './services/resource-permissions.service';
 
+// Core services
+import { 
+  BusinessTypeService, 
+  ResourceValidatorService, 
+  ResourceStructureService 
+} from './services/core';
+
+// Role services
+import { 
+  RoleManagerService, 
+  RolePermissionService, 
+  BusinessRoleService 
+} from './services/roles';
+
+// Data services
+import { ResourceDataService } from './services/data';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([]),
@@ -13,14 +30,35 @@ import { ResourcePermissionsService } from './services/resource-permissions.serv
   ],
   controllers: [ResourcesController],
   providers: [
+    // Main services
     ResourcesService,
     ResourceModelService,
     ResourcePermissionsService,
+    
+    // Core services
+    BusinessTypeService,
+    ResourceValidatorService,
+    ResourceStructureService,
+    
+    // Role services
+    RoleManagerService,
+    RolePermissionService,
+    BusinessRoleService,
+    
+    // Data services
+    ResourceDataService,
   ],
   exports: [
     ResourcesService,
     ResourceModelService,
     ResourcePermissionsService,
+    BusinessTypeService,
+    ResourceValidatorService,
+    ResourceStructureService,
+    RoleManagerService,
+    RolePermissionService,
+    BusinessRoleService,
+    ResourceDataService,
   ],
 })
 export class ResourcesModule {}
