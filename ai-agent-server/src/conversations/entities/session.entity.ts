@@ -13,6 +13,9 @@ export class Session {
   @Column()
   userId: string;
 
+  @Column({ nullable: true })
+  locationId?: string;
+
   @Column({ default: true })
   isActive: boolean;
 

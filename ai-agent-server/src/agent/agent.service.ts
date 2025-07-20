@@ -7,6 +7,10 @@ import { PromptTemplate } from '@langchain/core/prompts';
 import { EventsService } from '../events/events.service';
 import { PolicyService, Action, Resource } from '../policy/policy.service';
 import { AgentConfigService, DecisionLevel } from './config/agent.config';
+import { DecisionEngineService } from '../actions/decision-engine.service';
+import { ActionExecutorService } from '../actions/action-executor.service';
+import { TokenService } from '../token/token.service';
+import { ConversationsService } from '../conversations/conversations.service';
 import { v4 as uuidv4 } from 'uuid';
 import { KafkaMessage } from '../events/kafka.service';
 
@@ -22,6 +26,10 @@ export class AgentService {
     private eventsService: EventsService,
     private policyService: PolicyService,
     private agentConfigService: AgentConfigService,
+    private decisionEngine: DecisionEngineService,
+    private actionExecutor: ActionExecutorService,
+    private tokenService: TokenService,
+    private conversationsService: ConversationsService,
   ) {
     this.initializeModel();
   }
@@ -97,6 +105,42 @@ export class AgentService {
         throw new UnauthorizedException(`Tenant ${tenantId} has exceeded rate limits`);
       }
 
+      // Get conversation history
+      const conversationHistory = await this.getConversationHistory(tenantId, sessionId);
+
+      // Create action context
+      const actionContext = {
+        tenantId,
+        userId,
+        locationId: context?.locationId,
+        sessionId,
+        userPermissions: context?.userPermissions || [],
+        businessContext: context?.businessContext,
+        conversationHistory,
+      };
+
+      // Use decision engine to analyze message and decide on actions
+      const decisionResult = await this.decisionEngine.analyzeMessageAndDecide(
+        message,
+        actionContext,
+        conversationHistory
+      );
+
+      // Execute actions if any
+      let actionResults = [];
+      if (decisionResult.actions.length > 0) {
+        // Set context for each action
+        const actionsWithContext = decisionResult.actions.map(action => ({
+          ...action,
+          context: actionContext,
+        }));
+
+        actionResults = await this.actionExecutor.executeMultipleActions(actionsWithContext);
+      }
+
+      // Generate response based on decision level and action results
+      const response = await this.generateResponse(message, decisionResult, actionResults, context);
+
       // Publish user message to Kafka
       await this.publishKafkaEvent(
         tenantId,
@@ -105,59 +149,10 @@ export class AgentService {
         'user.message',
         {
           content: message,
-          context
+          context,
+          decisionResult,
         }
       );
-
-      // Get decision level for this interaction
-      const decisionLevel = await this.agentConfigService.getDecisionLevel(
-        tenantId,
-        Action.WRITE,
-        Resource.CONVERSATIONS
-      );
-
-      // Determine template type based on message content
-      const templateType = await this.determineTemplateType(message);
-
-      // Get appropriate response template based on determined type
-      const responseTemplate = await this.agentConfigService.getResponseTemplate(
-        tenantId,
-        templateType
-      );
-
-      // Construim prompt-ul pentru model folosind template-ul
-      const prompt = PromptTemplate.fromTemplate(
-        `You are an AI assistant for tenant {tenantId}. 
-        
-        Context: {context}
-        User message: {message}
-        
-        Please respond in a friendly and engaging way, similar to this example:
-        {template}
-        
-        Your response should be natural and conversational, while maintaining professionalism.
-        If the decision level is 'consultation', make sure to ask for human input before making important decisions.
-        
-        Now, please provide your response to the user's message:`
-      );
-
-      const chain = RunnableSequence.from([
-        prompt,
-        this.model,
-        new StringOutputParser(),
-      ]);
-
-      const response = await chain.invoke({
-        tenantId,
-        message,
-        context: context ? JSON.stringify(context) : 'No context provided',
-        template: responseTemplate?.template || 'No specific template',
-      });
-
-      // If decision level is suggestion or consultation, mark the response accordingly
-      const finalResponse = decisionLevel !== DecisionLevel.AUTOMATIC
-        ? `[${decisionLevel.toUpperCase()}] ${response}`
-        : response;
 
       // Publish assistant response to Kafka
       await this.publishKafkaEvent(
@@ -166,20 +161,28 @@ export class AgentService {
         sessionId,
         'agent.response',
         {
-          content: finalResponse,
+          content: response,
           context: {
             ...context,
-            decisionLevel,
+            decisionLevel: decisionResult.decisionLevel,
+            actionResults,
             metadata: {
-              template: responseTemplate?.id,
-              requiresApproval: decisionLevel !== DecisionLevel.AUTOMATIC
+              reasoning: decisionResult.reasoning,
+              confidence: decisionResult.confidence,
+              requiresApproval: decisionResult.requiresHumanInput,
             }
           }
         }
       );
 
-      this.logger.log(`Processed message for tenant ${tenantId}`);
-      return finalResponse;
+      this.logger.log(`Processed message for tenant ${tenantId} with ${actionResults.length} actions executed`);
+      return {
+        response,
+        decisionLevel: decisionResult.decisionLevel,
+        actions: actionResults,
+        reasoning: decisionResult.reasoning,
+        confidence: decisionResult.confidence,
+      };
     } catch (error) {
       this.logger.error(`Error processing message: ${error.message}`);
       throw error;
@@ -217,5 +220,61 @@ export class AgentService {
       this.logger.error(`Error processing message: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  private async getConversationHistory(tenantId: string, sessionId: string): Promise<any[]> {
+    try {
+      const messages = await this.conversationsService.getSessionMessages(tenantId, sessionId, 10);
+      return messages.map(msg => ({
+        role: msg.metadata?.role || 'user',
+        content: msg.content,
+        timestamp: msg.timestamp,
+      }));
+    } catch (error) {
+      this.logger.warn(`Could not retrieve conversation history: ${error.message}`);
+      return [];
+    }
+  }
+
+  private async generateResponse(
+    message: string,
+    decisionResult: any,
+    actionResults: any[],
+    context?: any
+  ): Promise<string> {
+    const prompt = PromptTemplate.fromTemplate(`
+      You are an AI assistant for a business automation system. Generate a natural response based on the following information:
+
+      User Message: {message}
+      Decision Level: {decisionLevel}
+      Reasoning: {reasoning}
+      Actions Executed: {actionResults}
+      Context: {context}
+
+      Instructions:
+      1. If actions were executed successfully, mention what was done
+      2. If approval is required, clearly state what needs approval
+      3. If consultation is needed, ask for more information
+      4. Keep the response conversational and helpful
+      5. If no actions were taken, provide a general helpful response
+
+      Response:
+    `);
+
+    const chain = RunnableSequence.from([
+      prompt,
+      this.model,
+      new StringOutputParser(),
+    ]);
+
+    const response = await chain.invoke({
+      message,
+      decisionLevel: decisionResult.decisionLevel,
+      reasoning: decisionResult.reasoning,
+      actionResults: JSON.stringify(actionResults),
+      context: context ? JSON.stringify(context) : 'No additional context',
+    });
+
+    return response;
   }
 } 

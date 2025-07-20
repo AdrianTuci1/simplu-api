@@ -1,20 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
-import { Message } from './entities/message.entity';
-import { Session } from './entities/session.entity';
 import { Inject } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
+import { DynamoDBService, ConversationMessage, ConversationSession } from './dynamodb.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class ConversationsService {
   private readonly logger = new Logger(ConversationsService.name);
 
   constructor(
-    @InjectRepository(Message)
-    private messageRepository: Repository<Message>,
-    @InjectRepository(Session)
-    private sessionRepository: Repository<Session>,
+    private dynamoDBService: DynamoDBService,
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
   ) {}
 
@@ -26,7 +21,7 @@ export class ConversationsService {
     await this.kafkaClient.connect();
   }
 
-  async getOrCreateSession(tenantId: string, userId: string, sessionId?: string): Promise<Session> {
+  async getOrCreateSession(tenantId: string, userId: string, sessionId?: string, locationId?: string): Promise<ConversationSession> {
     // If sessionId is provided, try to get the session
     if (sessionId) {
       const existingSession = await this.getSession(tenantId, sessionId);
@@ -37,28 +32,31 @@ export class ConversationsService {
     }
 
     // Create new session with provided sessionId or generate new one
-    const session = this.sessionRepository.create({
-      id: sessionId, // Use provided sessionId if available
+    const sessionIdToUse = sessionId || uuidv4();
+    const session = await this.dynamoDBService.createSession({
+      id: sessionIdToUse,
       tenantId,
       userId,
+      locationId,
       isActive: true,
     });
-    const savedSession = await this.sessionRepository.save(session);
-    this.logger.log(`Created new session: ${savedSession.id}`);
-    return savedSession;
+
+    this.logger.log(`Created new session: ${session.id}`);
+    return session;
   }
 
-  async createMessage(tenantId: string, userId: string, messageId: string, content: string, sessionId?: string) {
+  async createMessage(tenantId: string, userId: string, messageId: string, content: string, sessionId?: string, role: 'user' | 'agent' = 'user') {
     // Get or create session
     const session = await this.getOrCreateSession(tenantId, userId, sessionId);
 
-    const message = this.messageRepository.create({
+    const message = await this.dynamoDBService.createMessage({
+      id: messageId,
       tenantId,
-      messageId,
-      content,
       sessionId: session.id,
+      userId,
+      content,
+      role,
     });
-    const savedMessage = await this.messageRepository.save(message);
 
     // Publish to Kafka
     await this.kafkaClient.emit('conversation-events', {
@@ -71,93 +69,38 @@ export class ConversationsService {
       timestamp: new Date().toISOString(),
     });
 
-    return savedMessage;
+    return message;
   }
 
   // Session Management
-  async getSessions(tenantId: string, userId: string, limit = 10) {
-    return this.sessionRepository.find({
-      where: {
-        tenantId,
-        userId,
-      },
-      order: {
-        updatedAt: 'DESC',
-      },
-      take: limit,
-      relations: ['messages'],
-    });
+  async getSessions(tenantId: string, userId: string, limit = 10): Promise<ConversationSession[]> {
+    return this.dynamoDBService.getSessions(tenantId, userId, limit);
   }
 
-  async getSession(tenantId: string, sessionId: string) {
-    return this.sessionRepository.findOne({
-      where: {
-        id: sessionId,
-        tenantId,
-      },
-      relations: ['messages'],
-    });
+  async getSession(tenantId: string, sessionId: string): Promise<ConversationSession | null> {
+    return this.dynamoDBService.getSession(tenantId, sessionId);
   }
 
-  async closeSession(sessionId: string) {
-    const session = await this.sessionRepository.findOne({
-      where: { id: sessionId },
-    });
-
-    if (session) {
-      session.isActive = false;
-      await this.sessionRepository.save(session);
-    }
-    return session;
+  async closeSession(tenantId: string, sessionId: string): Promise<void> {
+    await this.dynamoDBService.updateSession(tenantId, sessionId, { isActive: false });
   }
 
   // Message Management
-  async getSessionMessages(tenantId: string, sessionId: string, limit = 20, before?: string) {
-    const query = this.messageRepository.createQueryBuilder('message')
-      .where('message.tenantId = :tenantId', { tenantId })
-      .andWhere('message.sessionId = :sessionId', { sessionId });
-
-    if (before) {
-      query.andWhere('message.timestamp < :before', { before });
-    }
-
-    return query
-      .orderBy('message.timestamp', 'DESC')
-      .take(limit)
-      .getMany();
+  async getSessionMessages(tenantId: string, sessionId: string, limit = 20, before?: string): Promise<ConversationMessage[]> {
+    return this.dynamoDBService.getSessionMessages(tenantId, sessionId, limit, before);
   }
 
-  async getMessages(tenantId: string, limit = 20, before?: string) {
-    const query = this.messageRepository.createQueryBuilder('message')
-      .where('message.tenantId = :tenantId', { tenantId });
-
-    if (before) {
-      query.andWhere('message.timestamp < :before', { before });
-    }
-
-    return query
-      .orderBy('message.timestamp', 'DESC')
-      .take(limit)
-      .getMany();
+  async getMessages(tenantId: string, limit = 20, before?: string): Promise<ConversationMessage[]> {
+    return this.dynamoDBService.getMessages(tenantId, limit, before);
   }
 
-  async getMessageByMessageId(messageId: string) {
-    return this.messageRepository.findOne({
-      where: { messageId },
-    });
+  async getMessageByMessageId(messageId: string): Promise<ConversationMessage | null> {
+    return this.dynamoDBService.getMessage(messageId);
   }
 
-  async getActiveSession(tenantId: string, userId: string) {
-    return this.sessionRepository.findOne({
-      where: {
-        tenantId,
-        userId,
-        isActive: true,
-      },
-      order: {
-        updatedAt: 'DESC',
-      },
-    });
+  async getActiveSession(tenantId: string, userId: string): Promise<ConversationSession | null> {
+    const sessions = await this.dynamoDBService.getSessions(tenantId, userId, 1);
+    return sessions.find(session => session.isActive) || null;
   }
 
   async handleConversationEvent(event: any) {
@@ -178,12 +121,13 @@ export class ConversationsService {
     }
   }
 
-  async createSession(tenantId: string, userId: string) {
-    const session = this.sessionRepository.create({
+  async createSession(tenantId: string, userId: string, locationId?: string): Promise<ConversationSession> {
+    return this.dynamoDBService.createSession({
+      id: uuidv4(),
       tenantId,
       userId,
+      locationId,
       isActive: true,
     });
-    return this.sessionRepository.save(session);
   }
 } 

@@ -23,6 +23,8 @@
     "migration:revert": "npm run typeorm -- migration:revert -d src/config/typeorm.config.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0",
     "@langchain/core": "^0.3.57",
     "@nestjs/axios": "^4.0.0",
     "@nestjs/common": "^10.0.0",
@@ -33,7 +35,7 @@
     "@nestjs/typeorm": "^10.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
-    "imap": "^0.8.19",
+    "imap": "^0.8.17",
     "kafkajs": "^2.2.4",
     "lang-graph": "^1.4.8",
     "langchain": "^0.3.27",

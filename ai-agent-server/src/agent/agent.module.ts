@@ -5,6 +5,9 @@ import { AgentController } from './agent.controller';
 import { PolicyModule } from '../policy/policy.module';
 import { AgentConfigModule } from './config/agent.config.module';
 import { EventsModule } from '../events/events.module';
+import { ActionsModule } from '../actions/actions.module';
+import { TokenModule } from '../token/token.module';
+import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
   imports: [
@@ -12,6 +15,9 @@ import { EventsModule } from '../events/events.module';
     PolicyModule,
     AgentConfigModule,
     forwardRef(() => EventsModule),
+    ActionsModule,
+    TokenModule,
+    ConversationsModule,
   ],
   controllers: [AgentController],
   providers: [AgentService],
