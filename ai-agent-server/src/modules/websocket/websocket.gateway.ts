@@ -11,6 +11,7 @@ import { Server, Socket } from 'ws';
 import { MessageDto, AgentResponse } from '@/shared/interfaces/message.interface';
 import { SessionService } from '../session/session.service';
 import { ElixirHttpService } from './elixir-http.service';
+import { AgentService } from '../agent/agent.service';
 
 @NestWebSocketGateway({
   cors: true,
@@ -26,7 +27,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   constructor(
     private readonly sessionService: SessionService,
-    private readonly elixirHttpService: ElixirHttpService
+    private readonly elixirHttpService: ElixirHttpService,
+    private readonly agentService: AgentService
   ) {}
 
   async handleConnection(client: Socket) {
@@ -103,14 +105,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         }
       });
       
-      // Procesare mesaj prin agent (va fi implementat în etapa următoare)
-      const response: AgentResponse = {
-        responseId: this.generateResponseId(),
-        message: `Răspuns temporar pentru: ${data.message}`,
-        actions: [],
-        timestamp: timestamp,
-        sessionId: data.sessionId || this.generateSessionId(data)
-      };
+      // Procesare mesaj prin agent
+      const response = await this.agentService.processMessage(data);
       
       // Salvare răspuns în baza de date
       await this.sessionService.saveMessage({

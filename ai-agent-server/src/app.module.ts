@@ -1,9 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { HttpModule } from '@nestjs/axios';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { WebSocketModule } from './modules/websocket/websocket.module';
 import { SessionModule } from './modules/session/session.module';
+import { BusinessInfoModule } from './modules/business-info/business-info.module';
+import { RagModule } from './modules/rag/rag.module';
+import { AgentModule } from './modules/agent/agent.module';
+import { ResourcesModule } from './modules/resources/resources.module';
+import { ExternalApisModule } from './modules/external-apis/external-apis.module';
+import { CredentialsModule } from './modules/external-apis/credentials/credentials.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -13,8 +20,15 @@ import configuration from './config/configuration';
       load: [configuration],
       envFilePath: '.env',
     }),
+    HttpModule,
     WebSocketModule,
     SessionModule,
+    BusinessInfoModule,
+    RagModule,
+    AgentModule,
+    ResourcesModule,
+    ExternalApisModule,
+    CredentialsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
