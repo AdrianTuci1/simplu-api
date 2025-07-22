@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Phoenix WebSocket Test Client</title>
+</head>
+<body>
+    <h1>AI Agent Phoenix WebSocket Test</h1>
+    
+    <div>
+        <label>Business ID:</label>
+        <input type="text" id="businessId" value="test-business">
+    </div>
+    
+    <div>
+        <label>Location ID:</label>
+        <input type="text" id="locationId" value="test-location">
+    </div>
+    
+    <div>
+        <label>User ID:</label>
+        <input type="text" id="userId" value="test-user">
+    </div>
+    
+    <div>
+        <label>Message:</label>
+        <input type="text" id="message" value="Salut! Vreau să fac o rezervare">
+        <button onclick="sendMessage()">Send AI Message</button>
+    </div>
+    
+    <div>
+        <p><strong>Notă:</strong> Acest test este pentru AI Agent Server. Pentru comunicarea cu agentul prin Elixir, conectează-te la ws://localhost:4000/socket/websocket</p>
+    </div>
+    
+    <div id="responses"></div>
+
+    <script>
+        const socket = new WebSocket('ws://localhost:3001/socket/websocket');
+        let refCounter = 1;
+        
+        socket.onopen = () => {
+            console.log('Connected to WebSocket');
+            document.getElementById('responses').innerHTML += '<p>Connected!</p>';
+            
+            // Join Phoenix channel
+            const businessId = document.getElementById('businessId').value;
+            const joinMessage = {
+                event: 'phx_join',
+                topic: `messages:${businessId}`,
+                payload: { 
+                    businessId: businessId, 
+                    userId: document.getElementById('userId').value 
+                },
+                ref: refCounter++
+            };
+            
+            socket.send(JSON.stringify(joinMessage));
+        };
+        
+        socket.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            console.log('Received message:', message);
+            
+            if (message.event === 'new_message') {
+                document.getElementById('responses').innerHTML += 
+                    `<p><strong>AI Response:</strong> ${message.payload.message}</p>`;
+            } else if (message.event === 'transfer_requested') {
+                document.getElementById('responses').innerHTML += 
+                    `<p style="color: #ff6b6b;"><strong>Transfer Request:</strong> ${message.payload.message}</p>`;
+            } else if (message.event === 'phx_reply') {
+                document.getElementById('responses').innerHTML += 
+                    `<p><strong>Channel joined:</strong> ${message.topic}</p>`;
+            } else if (message.event === 'error') {
+                document.getElementById('responses').innerHTML += 
+                    `<p style="color: red;"><strong>Error:</strong> ${message.payload.message}</p>`;
+            }
+        };
+        
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            document.getElementById('responses').innerHTML += 
+                `<p style="color: red;"><strong>Error:</strong> WebSocket error occurred</p>`;
+        };
+        
+        socket.onclose = () => {
+            console.log('WebSocket closed');
+            document.getElementById('responses').innerHTML += 
+                `<p><strong>Disconnected</strong></p>`;
+        };
+        
+        function sendMessage() {
+            const businessId = document.getElementById('businessId').value;
+            const message = {
+                event: 'new_message',
+                topic: `messages:${businessId}`,
+                payload: {
+                    businessId: businessId,
+                    locationId: document.getElementById('locationId').value,
+                    userId: document.getElementById('userId').value,
+                    message: document.getElementById('message').value
+                }
+            };
+            
+            socket.send(JSON.stringify(message));
+            document.getElementById('responses').innerHTML += 
+                `<p><strong>Sent AI Message:</strong> ${message.payload.message}</p>`;
+        }
+        
+
+    </script>
+</body>
+</html> 

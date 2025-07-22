@@ -15,9 +15,9 @@ async function bootstrap() {
   app.enableCors();
 
   // Start the server
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`AI Agent Server is running on: http://localhost:${port}`);
 }
 
 bootstrap(); 

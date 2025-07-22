@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  management-server:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME:-businesses}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_DENTAL_PRICE_ID=${STRIPE_DENTAL_PRICE_ID}
+      - STRIPE_GYM_PRICE_ID=${STRIPE_GYM_PRICE_ID}
+      - STRIPE_HOTEL_PRICE_ID=${STRIPE_HOTEL_PRICE_ID}
+      - BASE_DOMAIN=${BASE_DOMAIN:-example.com}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - dynamodb-local
+    networks:
+      - management-network
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+    networks:
+      - management-network
+
+volumes:
+  dynamodb_data:
+
+networks:
+  management-network:
+    driver: bridge 
