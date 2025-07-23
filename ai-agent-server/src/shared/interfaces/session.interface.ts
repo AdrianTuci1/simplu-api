@@ -3,7 +3,7 @@ export interface Session {
   businessId: string;          // Sort Key
   locationId: string;
   userId: string;
-  status: 'active' | 'closed' | 'resolved';
+  status: 'active' | 'closed' | 'resolved' | 'abandoned';
   createdAt: string;
   updatedAt: string;
   lastMessageAt: string;

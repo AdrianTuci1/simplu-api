@@ -18,7 +18,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "populate-rag": "node scripts/populate-rag.js"
+    "populate-rag": "node scripts/populate-rag.js",
+    "test:cron": "ts-node src/modules/cron/scripts/test-cron.ts",
+    "test:cron:job": "ts-node src/modules/cron/scripts/test-cron.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",

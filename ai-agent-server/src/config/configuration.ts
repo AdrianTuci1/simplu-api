@@ -1,3 +1,5 @@
+import { cronConfig } from './cron.config';
+
 export default () => ({
   port: parseInt(process.env.PORT, 10) || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -56,4 +58,43 @@ export default () => ({
   logging: {
     level: process.env.LOG_LEVEL || 'info',
   },
+  
+  // Webhooks Configuration
+  webhooks: {
+    meta: {
+      verifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || 'default_verify_token',
+      signatureHeader: 'x-hub-signature-256',
+      signatureAlgorithm: 'sha256',
+      challengeTimeout: 5000,
+    },
+    twilio: {
+      validateRequest: true,
+      timeout: 10000,
+    },
+    general: {
+      maxPayloadSize: '10mb',
+      rateLimit: {
+        windowMs: 15 * 60 * 1000,
+        max: 100,
+      },
+      timeout: 30000,
+      retryAttempts: 3,
+      retryDelay: 1000,
+    },
+    security: {
+      validateSignature: true,
+      requireBusinessId: true,
+      allowedSources: ['meta', 'twilio'],
+      blockUnknownSources: true,
+    },
+    processing: {
+      enableAutonomousActions: true,
+      enableAutoResponse: true,
+      maxProcessingTime: 25000,
+      enableFallback: true,
+    },
+  },
+  
+  // Cron Jobs Configuration
+  cron: cronConfig,
 }); 

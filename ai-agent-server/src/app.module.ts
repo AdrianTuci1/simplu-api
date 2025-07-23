@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
 import { AppController } from './app.controller';
@@ -11,6 +11,9 @@ import { AgentModule } from './modules/agent/agent.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { ExternalApisModule } from './modules/external-apis/external-apis.module';
 import { CredentialsModule } from './modules/external-apis/credentials/credentials.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { CronModule } from './modules/cron/cron.module';
+import { WebhookSecurityMiddleware } from './modules/webhooks/middleware/webhook-security.middleware';
 import configuration from './config/configuration';
 
 @Module({
@@ -29,8 +32,19 @@ import configuration from './config/configuration';
     ResourcesModule,
     ExternalApisModule,
     CredentialsModule,
+    WebhooksModule,
+    CronModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {} 
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(WebhookSecurityMiddleware)
+      .forRoutes(
+        { path: 'webhooks/meta/:businessId', method: RequestMethod.POST },
+        { path: 'webhooks/twilio/:businessId', method: RequestMethod.POST }
+      );
+  }
+} 
