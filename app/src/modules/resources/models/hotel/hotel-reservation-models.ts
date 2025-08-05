@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsNumber, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsNumber,
+  IsEnum,
+} from 'class-validator';
 
 // Hotel reservation data model
 export class HotelReservationData {
@@ -35,16 +42,16 @@ export class HotelReservationData {
   @IsNumber()
   totalAmount: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Reservation status',
-    enum: ['confirmed', 'checked-in', 'checked-out', 'cancelled', 'no-show']
+    enum: ['confirmed', 'checked-in', 'checked-out', 'cancelled', 'no-show'],
   })
   @IsEnum(['confirmed', 'checked-in', 'checked-out', 'cancelled', 'no-show'])
   status: 'confirmed' | 'checked-in' | 'checked-out' | 'cancelled' | 'no-show';
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Payment status',
-    enum: ['pending', 'partial', 'paid', 'refunded']
+    enum: ['pending', 'partial', 'paid', 'refunded'],
   })
   @IsEnum(['pending', 'partial', 'paid', 'refunded'])
   paymentStatus: 'pending' | 'partial' | 'paid' | 'refunded';
@@ -55,12 +62,32 @@ export class HotelReservationData {
   @IsString({ each: true })
   specialRequests?: string[];
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Booking source',
-    enum: ['direct', 'online', 'phone', 'walk-in', 'travel-agent', 'booking-platform']
+    enum: [
+      'direct',
+      'online',
+      'phone',
+      'walk-in',
+      'travel-agent',
+      'booking-platform',
+    ],
   })
-  @IsEnum(['direct', 'online', 'phone', 'walk-in', 'travel-agent', 'booking-platform'])
-  source: 'direct' | 'online' | 'phone' | 'walk-in' | 'travel-agent' | 'booking-platform';
+  @IsEnum([
+    'direct',
+    'online',
+    'phone',
+    'walk-in',
+    'travel-agent',
+    'booking-platform',
+  ])
+  source:
+    | 'direct'
+    | 'online'
+    | 'phone'
+    | 'walk-in'
+    | 'travel-agent'
+    | 'booking-platform';
 
   @ApiProperty({ description: 'Confirmation number' })
   @IsString()

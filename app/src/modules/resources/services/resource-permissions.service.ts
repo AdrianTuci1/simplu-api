@@ -16,8 +16,7 @@ export interface UserContext {
 
 @Injectable()
 export class ResourcePermissionsService {
-
-  constructor(private readonly resourceModelService: ResourceModelService) { }
+  constructor(private readonly resourceModelService: ResourceModelService) {}
 
   // Cache for role data to avoid repeated database calls
   private roleCache: Map<string, RoleData[]> = new Map();
@@ -96,7 +95,10 @@ export class ResourcePermissionsService {
   /**
    * Get all permissions for a user
    */
-  async getUserPermissions(user: UserContext, businessType: BusinessType): Promise<Record<string, ResourceAction[]>> {
+  async getUserPermissions(
+    user: UserContext,
+    businessType: BusinessType,
+  ): Promise<Record<string, ResourceAction[]>> {
     const userRole = await this.getHighestRole(user, businessType);
     return userRole?.permissions || {};
   }
@@ -120,15 +122,22 @@ export class ResourcePermissionsService {
   /**
    * Get user's highest role (by hierarchy) from dynamic role data
    */
-  async getHighestRole(user: UserContext, businessType: BusinessType): Promise<RoleData | null> {
+  async getHighestRole(
+    user: UserContext,
+    businessType: BusinessType,
+  ): Promise<RoleData | null> {
     try {
-      const roles = await this.getCachedRoles(user.businessId, user.locationId || '', businessType);
+      const roles = await this.getCachedRoles(
+        user.businessId,
+        user.locationId || '',
+        businessType,
+      );
 
       let highestRole: RoleData | null = null;
       let highestHierarchy = -1;
 
       for (const roleName of user.roles) {
-        const role = roles.find(r => r.name === roleName && r.active);
+        const role = roles.find((r) => r.name === roleName && r.active);
         if (role && role.hierarchy > highestHierarchy) {
           highestRole = role;
           highestHierarchy = role.hierarchy;
@@ -163,7 +172,11 @@ export class ResourcePermissionsService {
     }
 
     // Fetch fresh data
-    const roles = await this.resourceModelService.getRoles(businessId, locationId, businessType);
+    const roles = await this.resourceModelService.getRoles(
+      businessId,
+      locationId,
+      businessType,
+    );
 
     // Update cache
     this.roleCache.set(cacheKey, roles);
@@ -175,7 +188,11 @@ export class ResourcePermissionsService {
   /**
    * Clear role cache for a specific business (call when roles are updated)
    */
-  clearRoleCache(businessId: string, locationId: string, businessType: BusinessType): void {
+  clearRoleCache(
+    businessId: string,
+    locationId: string,
+    businessType: BusinessType,
+  ): void {
     const cacheKey = `${businessId}-${locationId}-${businessType}`;
     this.roleCache.delete(cacheKey);
     this.cacheExpiry.delete(cacheKey);
@@ -195,13 +212,12 @@ export class ResourcePermissionsService {
     // Example: Staff can only modify their own records
     if (resourceName === 'staff' && action !== 'read' && action !== 'list') {
       const userRole = await this.getHighestRole(user, businessType);
-      if (userRole && userRole.hierarchy < 80) { // Below manager level
+      if (userRole && userRole.hierarchy < 80) {
+        // Below manager level
         // Check if trying to modify own record
         return resourceId === user.userId;
       }
     }
-
-
 
     return true;
   }
@@ -228,7 +244,11 @@ export class ResourcePermissionsService {
     locationId: string,
     businessType: BusinessType,
   ): Promise<Record<string, number>> {
-    const roles = await this.getCachedRoles(businessId, locationId, businessType);
+    const roles = await this.getCachedRoles(
+      businessId,
+      locationId,
+      businessType,
+    );
     return roles.reduce(
       (acc, role) => {
         acc[role.name] = role.hierarchy;
@@ -293,4 +313,4 @@ export class ResourcePermissionsService {
       roleName,
     );
   }
-} 
+}

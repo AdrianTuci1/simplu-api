@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsEnum,
+} from 'class-validator';
 
 // Report data model
 export class ReportData {
@@ -7,9 +13,9 @@ export class ReportData {
   @IsString()
   name: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Report type',
-    enum: ['daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom']
+    enum: ['daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'],
   })
   @IsEnum(['daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'])
   type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom';
@@ -40,16 +46,16 @@ export class ReportData {
   @IsOptional()
   data?: Record<string, any>;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Report format',
-    enum: ['json', 'pdf', 'excel', 'csv']
+    enum: ['json', 'pdf', 'excel', 'csv'],
   })
   @IsEnum(['json', 'pdf', 'excel', 'csv'])
   format: 'json' | 'pdf' | 'excel' | 'csv';
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Report status',
-    enum: ['pending', 'generating', 'completed', 'failed']
+    enum: ['pending', 'generating', 'completed', 'failed'],
   })
   @IsEnum(['pending', 'generating', 'completed', 'failed'])
   status: 'pending' | 'generating' | 'completed' | 'failed';

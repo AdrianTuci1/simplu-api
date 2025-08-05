@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../../redis/redis.service';
 import { AuthEnvelope, Step1AuthResponse } from '../dto/auth-step1.dto';
@@ -80,7 +84,10 @@ export class AuthEnvelopeService {
     envelopeId: string,
     authCode: string,
   ): Promise<AuthEnvelope | null> {
-    const envelope = await this.validateAndRetrieveEnvelope(envelopeId, authCode);
+    const envelope = await this.validateAndRetrieveEnvelope(
+      envelopeId,
+      authCode,
+    );
 
     if (envelope) {
       // Remove envelope after successful validation
@@ -173,4 +180,4 @@ export class AuthEnvelopeService {
     // additional cleanup logic here if needed
     console.log('Cleaning up expired auth envelopes...');
   }
-} 
+}

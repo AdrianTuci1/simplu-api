@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsNumber, IsEnum, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsNumber,
+  IsEnum,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { InvoiceItemData } from './invoice-models';
 
@@ -38,16 +46,16 @@ export class SalesTransactionData {
   @IsNumber()
   total: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Payment method',
-    enum: ['cash', 'card', 'transfer', 'check']
+    enum: ['cash', 'card', 'transfer', 'check'],
   })
   @IsEnum(['cash', 'card', 'transfer', 'check'])
   paymentMethod: 'cash' | 'card' | 'transfer' | 'check';
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Transaction status',
-    enum: ['completed', 'pending', 'cancelled', 'refunded']
+    enum: ['completed', 'pending', 'cancelled', 'refunded'],
   })
   @IsEnum(['completed', 'pending', 'cancelled', 'refunded'])
   status: 'completed' | 'pending' | 'cancelled' | 'refunded';

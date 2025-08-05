@@ -1,8 +1,14 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { GetUserCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
+import {
+  GetUserCommand,
+  AdminGetUserCommand,
+} from '@aws-sdk/client-cognito-identity-provider';
 import { cognitoService } from '../../config/cognito.config';
 import { AuthEnvelopeService } from './services/auth-envelope.service';
-import { BusinessInfoService, LocationInfo } from '../business-info/business-info.service';
+import {
+  BusinessInfoService,
+  LocationInfo,
+} from '../business-info/business-info.service';
 import { Step1AuthResponse } from './dto/auth-step1.dto';
 import { Step2AuthResponse, UserBusinessData } from './dto/auth-step2.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -45,7 +51,7 @@ export class AuthService {
       // In production, you would verify the JWT token signature and decode it
       // For now, we'll simulate token validation
       const userInfo = await this.getUserFromToken(accessToken);
-      
+
       if (!userInfo) {
         throw new UnauthorizedException('Invalid access token');
       }
@@ -68,18 +74,21 @@ export class AuthService {
       });
 
       const result = await this.cognitoClient.send(command);
-      
+
       if (!result.UserAttributes) {
         return null;
       }
 
       // Extract user attributes
-      const attributes = result.UserAttributes.reduce((acc, attr) => {
-        if (attr.Name && attr.Value) {
-          acc[attr.Name] = attr.Value;
-        }
-        return acc;
-      }, {} as Record<string, string>);
+      const attributes = result.UserAttributes.reduce(
+        (acc, attr) => {
+          if (attr.Name && attr.Value) {
+            acc[attr.Name] = attr.Value;
+          }
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
 
       return {
         userId: attributes.sub || username,
@@ -88,7 +97,8 @@ export class AuthService {
         businessId: attributes['custom:business_id'],
         locationId: attributes['custom:location_id'],
         roles: this.parseJsonAttribute(attributes['custom:roles']) || ['user'],
-        permissions: this.parseJsonAttribute(attributes['custom:permissions']) || [],
+        permissions:
+          this.parseJsonAttribute(attributes['custom:permissions']) || [],
         isActive: result.Enabled || false,
       };
     } catch (error) {
@@ -100,14 +110,23 @@ export class AuthService {
   /**
    * Validates user permissions for a specific action
    */
-  async validatePermission(user: CognitoUser, permission: string): Promise<boolean> {
-    return user.permissions.includes(permission) || user.roles.includes('admin');
+  async validatePermission(
+    user: CognitoUser,
+    permission: string,
+  ): Promise<boolean> {
+    return (
+      user.permissions.includes(permission) || user.roles.includes('admin')
+    );
   }
 
   /**
    * Validates that user has access to specific business and location
    */
-  async validateBusinessAccess(user: CognitoUser, businessId: string, locationId?: string): Promise<boolean> {
+  async validateBusinessAccess(
+    user: CognitoUser,
+    businessId: string,
+    locationId?: string,
+  ): Promise<boolean> {
     // Admin users can access all businesses
     if (user.roles.includes('admin') || user.roles.includes('super_admin')) {
       return true;
@@ -138,10 +157,8 @@ export class AuthService {
     const user = await this.validateAccessToken(accessToken);
 
     // Create authorization envelope
-    const { envelope, redirectUrl } = await this.authEnvelopeService.createAuthEnvelope(
-      user,
-      clientId,
-    );
+    const { envelope, redirectUrl } =
+      await this.authEnvelopeService.createAuthEnvelope(user, clientId);
 
     return {
       success: true,
@@ -168,7 +185,9 @@ export class AuthService {
     );
 
     if (!envelope) {
-      throw new UnauthorizedException('Invalid or expired authorization envelope');
+      throw new UnauthorizedException(
+        'Invalid or expired authorization envelope',
+      );
     }
 
     // Get user information
@@ -191,7 +210,8 @@ export class AuthService {
     }
 
     // Get business information
-    const businessInfo = await this.businessInfoService.getBusinessInfo(businessId);
+    const businessInfo =
+      await this.businessInfoService.getBusinessInfo(businessId);
     if (!businessInfo) {
       throw new UnauthorizedException('Business not found');
     }
@@ -215,14 +235,15 @@ export class AuthService {
         businessName: businessInfo.businessName,
         businessType: businessInfo.businessType,
       },
-      location: locationInfo && locationInfo !== null
-        ? {
-            locationId: locationInfo.locationId,
-            name: locationInfo.name,
-            address: locationInfo.address,
-            timezone: locationInfo.timezone,
-          }
-        : undefined,
+      location:
+        locationInfo && locationInfo !== null
+          ? {
+              locationId: locationInfo.locationId,
+              name: locationInfo.name,
+              address: locationInfo.address,
+              timezone: locationInfo.timezone,
+            }
+          : undefined,
     };
 
     // Generate JWT token with business context
@@ -236,8 +257,6 @@ export class AuthService {
       expiresAt,
     };
   }
-
-
 
   /**
    * Generates a JWT token with business context
@@ -262,14 +281,16 @@ export class AuthService {
    * Extracts user information from access token (simplified implementation)
    * In production, this would properly decode and validate the JWT
    */
-  private async getUserFromToken(accessToken: string): Promise<CognitoUser | null> {
+  private async getUserFromToken(
+    accessToken: string,
+  ): Promise<CognitoUser | null> {
     try {
       // In a real implementation, you would:
       // 1. Verify the JWT signature using Cognito's public keys
       // 2. Check token expiration
       // 3. Extract the 'username' claim from the token
       // 4. Use that username to fetch full user details
-      
+
       // For now, return mock user data for development
       return this.getMockUser(accessToken);
     } catch (error) {
@@ -286,7 +307,7 @@ export class AuthService {
     const tokenHash = token.length % 4;
     const businessTypes = ['dental', 'gym', 'hotel'];
     const businessType = businessTypes[tokenHash];
-    
+
     return {
       userId: `user-${tokenHash}`,
       username: `testuser${tokenHash}`,
@@ -298,8 +319,11 @@ export class AuthService {
         'read:resources',
         'write:resources',
         'read:reports',
-        businessType === 'dental' ? 'manage:appointments' : 
-        businessType === 'gym' ? 'manage:memberships' : 'manage:reservations',
+        businessType === 'dental'
+          ? 'manage:appointments'
+          : businessType === 'gym'
+            ? 'manage:memberships'
+            : 'manage:reservations',
       ],
       isActive: true,
     };
@@ -310,11 +334,11 @@ export class AuthService {
    */
   private parseJsonAttribute(value: string | undefined): any {
     if (!value) return null;
-    
+
     try {
       return JSON.parse(value);
     } catch {
-      return value.split(',').map(item => item.trim());
+      return value.split(',').map((item) => item.trim());
     }
   }
 }

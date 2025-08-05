@@ -1,10 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsNumber, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsNumber,
+  IsEnum,
+} from 'class-validator';
 import { BaseTimelineData } from '../common/shared-interfaces';
 
 // Dental timeline data (appointments view)
 export class DentalTimelineData extends BaseTimelineData {
-  @ApiProperty({ description: 'Entry type', enum: ['appointment', 'treatment', 'consultation'] })
+  @ApiProperty({
+    description: 'Entry type',
+    enum: ['appointment', 'treatment', 'consultation'],
+  })
   @IsEnum(['appointment', 'treatment', 'consultation'])
   type: 'appointment' | 'treatment' | 'consultation';
 
@@ -28,7 +37,30 @@ export class DentalTimelineData extends BaseTimelineData {
   @IsString()
   treatmentName?: string;
 
-  @ApiProperty({ description: 'Status', enum: ['scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show'] })
-  @IsEnum(['scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show'])
-  status: 'scheduled' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled' | 'no-show';
+  @ApiProperty({
+    description: 'Status',
+    enum: [
+      'scheduled',
+      'confirmed',
+      'in-progress',
+      'completed',
+      'cancelled',
+      'no-show',
+    ],
+  })
+  @IsEnum([
+    'scheduled',
+    'confirmed',
+    'in-progress',
+    'completed',
+    'cancelled',
+    'no-show',
+  ])
+  status:
+    | 'scheduled'
+    | 'confirmed'
+    | 'in-progress'
+    | 'completed'
+    | 'cancelled'
+    | 'no-show';
 }

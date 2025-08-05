@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsEnum, IsEmail } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsEnum,
+  IsEmail,
+} from 'class-validator';
 
 // User data model
 export class UserData {
@@ -42,9 +49,9 @@ export class UserData {
   @IsOptional()
   settings?: Record<string, any>;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'User status',
-    enum: ['active', 'inactive', 'suspended']
+    enum: ['active', 'inactive', 'suspended'],
   })
   @IsEnum(['active', 'inactive', 'suspended'])
   status: 'active' | 'inactive' | 'suspended';

@@ -52,7 +52,7 @@ export class BusinessInfoService {
       });
 
       const result = await this.dynamoClient.send(command);
-      
+
       if (!result.Item) {
         return null;
       }
@@ -60,20 +60,26 @@ export class BusinessInfoService {
       return result.Item as BusinessInfo;
     } catch (error) {
       console.error(`Error fetching business info for ${businessId}:`, error);
-      
+
       // Return mock data as fallback for development
       return this.getMockBusinessInfo(businessId);
     }
   }
 
-  async getLocationInfo(businessId: string, locationId: string): Promise<LocationInfo | null> {
+  async getLocationInfo(
+    businessId: string,
+    locationId: string,
+  ): Promise<LocationInfo | null> {
     const businessInfo = await this.getBusinessInfo(businessId);
-    
+
     if (!businessInfo) {
       return null;
     }
 
-    return businessInfo.locations.find(loc => loc.locationId === locationId) || null;
+    return (
+      businessInfo.locations.find((loc) => loc.locationId === locationId) ||
+      null
+    );
   }
 
   async getBusinessLocations(businessId: string): Promise<LocationInfo[]> {
@@ -81,7 +87,9 @@ export class BusinessInfoService {
     return businessInfo?.locations || [];
   }
 
-  async getBusinessSettings(businessId: string): Promise<BusinessSettings | null> {
+  async getBusinessSettings(
+    businessId: string,
+  ): Promise<BusinessSettings | null> {
     const businessInfo = await this.getBusinessInfo(businessId);
     return businessInfo?.settings || null;
   }
@@ -142,8 +150,11 @@ export class BusinessInfoService {
         'write:resources',
         'read:reports',
         'manage:settings',
-        businessType === 'dental' ? 'manage:appointments' : 
-        businessType === 'gym' ? 'manage:memberships' : 'manage:reservations',
+        businessType === 'dental'
+          ? 'manage:appointments'
+          : businessType === 'gym'
+            ? 'manage:memberships'
+            : 'manage:reservations',
       ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

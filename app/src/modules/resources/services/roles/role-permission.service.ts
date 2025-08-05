@@ -6,20 +6,29 @@ type Permission = 'create' | 'read' | 'update' | 'delete' | 'list';
 
 @Injectable()
 export class RolePermissionService {
-  
   constructor(private readonly businessTypeService: BusinessTypeService) {}
 
   /**
    * Get permissions for a business type and role level
    */
-  getBusinessTypePermissions(businessType: BusinessType, roleLevel: string): Record<string, Permission[]> {
-    const resourceNames = this.businessTypeService.getResourceNames(businessType);
+  getBusinessTypePermissions(
+    businessType: BusinessType,
+    roleLevel: string,
+  ): Record<string, Permission[]> {
+    const resourceNames =
+      this.businessTypeService.getResourceNames(businessType);
     const permissions: Record<string, Permission[]> = {};
 
     for (const resourceName of resourceNames) {
       switch (roleLevel) {
         case 'admin':
-          permissions[resourceName] = ['create', 'read', 'update', 'delete', 'list'];
+          permissions[resourceName] = [
+            'create',
+            'read',
+            'update',
+            'delete',
+            'list',
+          ];
           if (resourceName === 'roles') {
             permissions[resourceName] = ['create', 'read', 'update', 'list']; // Can't delete system roles
           }
@@ -51,13 +60,28 @@ export class RolePermissionService {
   getSuperAdminPermissions(): Record<string, Permission[]> {
     const allResources = [
       // Common resources
-      'stocks', 'invoices', 'activities', 'reports', 'roles', 'sales', 'workflows', 'permissions', 'userData', 'history',
+      'stocks',
+      'invoices',
+      'activities',
+      'reports',
+      'roles',
+      'sales',
+      'workflows',
+      'permissions',
+      'userData',
+      'history',
       // Dental resources
-      'clients', 'services', 'staff', 'timeline',
-      // Gym resources  
-      'members', 'packages', 'classes', 'equipment',
+      'clients',
+      'services',
+      'staff',
+      'timeline',
+      // Gym resources
+      'members',
+      'packages',
+      'classes',
+      'equipment',
       // Hotel resources
-      'rooms'
+      'rooms',
     ];
 
     const permissions: Record<string, Permission[]> = {};
@@ -74,7 +98,7 @@ export class RolePermissionService {
   hasPermission(
     rolePermissions: Record<string, Permission[]>,
     resourceName: string,
-    action: Permission
+    action: Permission,
   ): boolean {
     const resourcePermissions = rolePermissions[resourceName];
     return resourcePermissions ? resourcePermissions.includes(action) : false;

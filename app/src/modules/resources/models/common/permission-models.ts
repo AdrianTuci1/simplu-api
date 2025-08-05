@@ -28,11 +28,16 @@ export class PermissionData {
   @IsBoolean()
   active: boolean;
 
-  @ApiProperty({ description: 'System permission (cannot be deleted/modified)' })
+  @ApiProperty({
+    description: 'System permission (cannot be deleted/modified)',
+  })
   @IsBoolean()
   isSystemPermission: boolean;
 
-  @ApiProperty({ description: 'Business type specific permission', required: false })
+  @ApiProperty({
+    description: 'Business type specific permission',
+    required: false,
+  })
   @IsOptional()
   @IsBoolean()
   businessTypeSpecific?: boolean;

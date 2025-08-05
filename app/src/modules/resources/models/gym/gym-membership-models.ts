@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray, IsNumber, IsEnum, IsBoolean, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsNumber,
+  IsEnum,
+  IsBoolean,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Access hours interface
@@ -53,7 +61,7 @@ export class GymMembershipData {
 
   @ApiProperty({
     description: 'Contract type',
-    enum: ['monthly', 'annual', 'lifetime', 'daily']
+    enum: ['monthly', 'annual', 'lifetime', 'daily'],
   })
   @IsEnum(['monthly', 'annual', 'lifetime', 'daily'])
   contractType: 'monthly' | 'annual' | 'lifetime' | 'daily';

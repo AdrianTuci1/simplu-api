@@ -28,7 +28,7 @@ import { ResourceRequest } from './dto/resource-request.dto';
 @Controller('resources')
 @UseGuards(CognitoAuthGuard)
 export class ResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) { }
+  constructor(private readonly resourcesService: ResourcesService) {}
 
   @Get(':businessId-:locationId')
   @ApiOperation({ summary: 'Get resources by business and location' })

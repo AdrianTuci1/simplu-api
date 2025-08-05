@@ -39,25 +39,33 @@ export class CitrusShardingService {
    * Gets the shard connection details for a specific business+location combination
    * The shard is determined by businessId+locationId and managed by Citrus
    */
-  async getShardForBusiness(businessId: string, locationId: string): Promise<ShardConnection> {
+  async getShardForBusiness(
+    businessId: string,
+    locationId: string,
+  ): Promise<ShardConnection> {
     this.validateShardParams(businessId, locationId);
 
     const shardKey = `${businessId}-${locationId}`;
-    
+
     try {
-      const response = await fetch(`${this.config.baseUrl}/api/shard/${encodeURIComponent(shardKey)}`, {
-        headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await fetch(
+        `${this.config.baseUrl}/api/shard/${encodeURIComponent(shardKey)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
 
       if (!response.ok) {
-        throw new Error(`Citrus server responded with status: ${response.status}`);
+        throw new Error(
+          `Citrus server responded with status: ${response.status}`,
+        );
       }
 
       const shardData: CitrusShardResponse = await response.json();
-      
+
       return {
         shardId: shardData.shardId,
         connectionString: shardData.connectionString,
@@ -68,7 +76,9 @@ export class CitrusShardingService {
       };
     } catch (error) {
       console.error(`Failed to get shard for ${shardKey}:`, error);
-      throw new Error(`Unable to determine shard for business ${businessId} location ${locationId}`);
+      throw new Error(
+        `Unable to determine shard for business ${businessId} location ${locationId}`,
+      );
     }
   }
 
@@ -76,34 +86,42 @@ export class CitrusShardingService {
    * Registers a new business+location combination with the Citrus sharding system
    * Citrus will automatically assign the appropriate shard based on its own logic
    */
-  async registerBusinessLocation(businessId: string, locationId: string, businessType?: string): Promise<ShardConnection> {
+  async registerBusinessLocation(
+    businessId: string,
+    locationId: string,
+    businessType?: string,
+  ): Promise<ShardConnection> {
     this.validateShardParams(businessId, locationId);
 
     const shardKey = `${businessId}-${locationId}`;
-    
+
     try {
       const response = await fetch(`${this.config.baseUrl}/api/register`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           businessId,
           locationId,
           businessType,
-          shardKey
-        })
+          shardKey,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(`Citrus server responded with status: ${response.status}`);
+        throw new Error(
+          `Citrus server responded with status: ${response.status}`,
+        );
       }
 
       const shardData: CitrusShardResponse = await response.json();
-      
-      console.log(`Successfully registered business-location ${shardKey} with Citrus server, assigned to shard ${shardData.shardId}`);
-      
+
+      console.log(
+        `Successfully registered business-location ${shardKey} with Citrus server, assigned to shard ${shardData.shardId}`,
+      );
+
       return {
         shardId: shardData.shardId,
         connectionString: shardData.connectionString,
@@ -114,7 +132,9 @@ export class CitrusShardingService {
       };
     } catch (error) {
       console.error(`Failed to register ${shardKey}:`, error);
-      throw new Error(`Unable to register business ${businessId} location ${locationId}`);
+      throw new Error(
+        `Unable to register business ${businessId} location ${locationId}`,
+      );
     }
   }
 
@@ -125,18 +145,20 @@ export class CitrusShardingService {
     try {
       const response = await fetch(`${this.config.baseUrl}/api/shards/health`, {
         headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
       });
 
       if (!response.ok) {
-        throw new Error(`Citrus server responded with status: ${response.status}`);
+        throw new Error(
+          `Citrus server responded with status: ${response.status}`,
+        );
       }
 
       const shardsData: CitrusShardResponse[] = await response.json();
-      
-      return shardsData.map(shard => ({
+
+      return shardsData.map((shard) => ({
         shardId: shard.shardId,
         connectionString: shard.connectionString,
         isActive: shard.isActive,
@@ -153,21 +175,25 @@ export class CitrusShardingService {
   /**
    * Gets shard usage statistics from Citrus
    */
-  async getShardUsageStats(): Promise<Array<{ 
-    shardId: string; 
-    businessCount: number; 
-    maxBusinesses: number; 
-    usagePercentage: number;
-    isActive: boolean;
-  }>> {
+  async getShardUsageStats(): Promise<
+    Array<{
+      shardId: string;
+      businessCount: number;
+      maxBusinesses: number;
+      usagePercentage: number;
+      isActive: boolean;
+    }>
+  > {
     try {
       const shards = await this.getShardsHealthStatus();
-      
-      return shards.map(shard => ({
+
+      return shards.map((shard) => ({
         shardId: shard.shardId,
         businessCount: shard.businessCount ?? 0,
         maxBusinesses: shard.maxBusinesses ?? 3,
-        usagePercentage: shard.maxBusinesses ? (shard.businessCount ?? 0) / shard.maxBusinesses * 100 : 0,
+        usagePercentage: shard.maxBusinesses
+          ? ((shard.businessCount ?? 0) / shard.maxBusinesses) * 100
+          : 0,
         isActive: shard.isActive,
       }));
     } catch (error) {
@@ -182,12 +208,15 @@ export class CitrusShardingService {
    */
   async canAddBusinessToShard(shardId: string): Promise<boolean> {
     try {
-      const response = await fetch(`${this.config.baseUrl}/api/shard/${shardId}/capacity`, {
-        headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await fetch(
+        `${this.config.baseUrl}/api/shard/${shardId}/capacity`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
 
       if (!response.ok) {
         return false;
@@ -221,4 +250,4 @@ export class CitrusShardingService {
   }
 }
 
-export const citrusShardingService = new CitrusShardingService(); 
+export const citrusShardingService = new CitrusShardingService();

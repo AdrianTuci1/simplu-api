@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsOptional, IsDateString, IsArray, IsEnum, ValidateNested, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsEnum,
+  ValidateNested,
+  IsNumber,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { AddressData, EmergencyContactData } from '../common/shared-interfaces';
 
@@ -76,9 +85,9 @@ export class GymMemberData {
   @IsNumber()
   birthYear: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Gender',
-    enum: ['male', 'female', 'other', 'prefer-not-to-say']
+    enum: ['male', 'female', 'other', 'prefer-not-to-say'],
   })
   @IsEnum(['male', 'female', 'other', 'prefer-not-to-say'])
   gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
@@ -91,7 +100,7 @@ export class GymMemberData {
 
   @ApiProperty({
     description: 'Membership type',
-    enum: ['basic', 'premium', 'vip', 'student', 'senior']
+    enum: ['basic', 'premium', 'vip', 'student', 'senior'],
   })
   @IsEnum(['basic', 'premium', 'vip', 'student', 'senior'])
   membershipType: 'basic' | 'premium' | 'vip' | 'student' | 'senior';
@@ -106,7 +115,7 @@ export class GymMemberData {
 
   @ApiProperty({
     description: 'Membership status',
-    enum: ['active', 'suspended', 'expired', 'cancelled']
+    enum: ['active', 'suspended', 'expired', 'cancelled'],
   })
   @IsEnum(['active', 'suspended', 'expired', 'cancelled'])
   status: 'active' | 'suspended' | 'expired' | 'cancelled';
@@ -134,7 +143,10 @@ export class GymMemberData {
   @IsString()
   notes?: string;
 
-  @ApiProperty({ description: 'Member tags for categorization', required: false })
+  @ApiProperty({
+    description: 'Member tags for categorization',
+    required: false,
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

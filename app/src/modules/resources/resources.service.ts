@@ -7,7 +7,10 @@ import {
 } from './dto/standard-response.dto';
 import { ResourceModelService } from './services/resource-model.service';
 import { BusinessType } from './models/unified-data-types';
-import { ResourcePermissionsService, UserContext } from './services/resource-permissions.service';
+import {
+  ResourcePermissionsService,
+  UserContext,
+} from './services/resource-permissions.service';
 import { BusinessTypeService } from './services/core/business-type.service';
 import { ResourceDataService } from './services/data/resource-data.service';
 
@@ -25,13 +28,12 @@ interface ResourceRequestParams {
 
 @Injectable()
 export class ResourcesService {
-
   constructor(
     private readonly resourceModelService: ResourceModelService,
     private readonly resourcePermissionsService: ResourcePermissionsService,
     private readonly businessTypeService: BusinessTypeService,
     private readonly resourceDataService: ResourceDataService,
-  ) { }
+  ) {}
 
   async getResources(params: ResourceRequestParams): Promise<StandardResponse> {
     try {
@@ -49,7 +51,10 @@ export class ResourcesService {
       this.validateRequiredParams(businessId, locationId, resourceType);
 
       // Get business type for permission checking and resource organization
-      const businessType = await this.businessTypeService.getBusinessType(businessId, locationId);
+      const businessType = await this.businessTypeService.getBusinessType(
+        businessId,
+        locationId,
+      );
 
       // Check permissions if user context is provided
       if (user) {
@@ -107,12 +112,15 @@ export class ResourcesService {
   ): Promise<StandardResponse> {
     try {
       const { businessId, locationId, resourceType, data } = params;
-      
+
       // Validate required parameters
       this.validateRequiredParams(businessId, locationId, resourceType);
 
       // Get business type for validation and permission checking
-      const businessType = await this.businessTypeService.getBusinessType(businessId, locationId);
+      const businessType = await this.businessTypeService.getBusinessType(
+        businessId,
+        locationId,
+      );
 
       // Validate resource data structure
       const isValid = this.resourceModelService.validateResourceData(
@@ -166,12 +174,15 @@ export class ResourcesService {
   ): Promise<StandardResponse> {
     try {
       const { businessId, locationId, resourceType, data } = params;
-      
+
       // Validate required parameters
       this.validateRequiredParams(businessId, locationId, resourceType);
 
       // Get business type for validation and permission checking
-      const businessType = await this.businessTypeService.getBusinessType(businessId, locationId);
+      const businessType = await this.businessTypeService.getBusinessType(
+        businessId,
+        locationId,
+      );
 
       // Check permissions if user context is provided
       if (params.user) {
@@ -215,12 +226,15 @@ export class ResourcesService {
   ): Promise<StandardResponse> {
     try {
       const { businessId, locationId, resourceType } = params;
-      
+
       // Validate required parameters
       this.validateRequiredParams(businessId, locationId, resourceType);
 
       // Get business type for permission checking
-      const businessType = await this.businessTypeService.getBusinessType(businessId, locationId);
+      const businessType = await this.businessTypeService.getBusinessType(
+        businessId,
+        locationId,
+      );
 
       // Check permissions if user context is provided
       if (params.user) {
@@ -289,9 +303,15 @@ export class ResourcesService {
     };
   }
 
-  private validateRequiredParams(businessId: string, locationId: string, resourceType: string) {
+  private validateRequiredParams(
+    businessId: string,
+    locationId: string,
+    resourceType: string,
+  ) {
     if (!businessId || !locationId) {
-      throw new BadRequestException('Business ID and Location ID are required.');
+      throw new BadRequestException(
+        'Business ID and Location ID are required.',
+      );
     }
     if (!resourceType) {
       throw new BadRequestException('Resource type is required.');

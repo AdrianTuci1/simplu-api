@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsNumber, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsNumber,
+  IsEnum,
+} from 'class-validator';
 
 // Gym class data model
 export class GymClassData {
@@ -33,14 +40,40 @@ export class GymClassData {
 
   @ApiProperty({
     description: 'Class category',
-    enum: ['cardio', 'strength', 'yoga', 'pilates', 'dance', 'martial-arts', 'aqua', 'crossfit']
+    enum: [
+      'cardio',
+      'strength',
+      'yoga',
+      'pilates',
+      'dance',
+      'martial-arts',
+      'aqua',
+      'crossfit',
+    ],
   })
-  @IsEnum(['cardio', 'strength', 'yoga', 'pilates', 'dance', 'martial-arts', 'aqua', 'crossfit'])
-  category: 'cardio' | 'strength' | 'yoga' | 'pilates' | 'dance' | 'martial-arts' | 'aqua' | 'crossfit';
+  @IsEnum([
+    'cardio',
+    'strength',
+    'yoga',
+    'pilates',
+    'dance',
+    'martial-arts',
+    'aqua',
+    'crossfit',
+  ])
+  category:
+    | 'cardio'
+    | 'strength'
+    | 'yoga'
+    | 'pilates'
+    | 'dance'
+    | 'martial-arts'
+    | 'aqua'
+    | 'crossfit';
 
   @ApiProperty({
     description: 'Difficulty level',
-    enum: ['beginner', 'intermediate', 'advanced']
+    enum: ['beginner', 'intermediate', 'advanced'],
   })
   @IsEnum(['beginner', 'intermediate', 'advanced'])
   difficultyLevel: 'beginner' | 'intermediate' | 'advanced';
@@ -53,7 +86,7 @@ export class GymClassData {
 
   @ApiProperty({
     description: 'Class status',
-    enum: ['scheduled', 'in-progress', 'completed', 'cancelled']
+    enum: ['scheduled', 'in-progress', 'completed', 'cancelled'],
   })
   @IsEnum(['scheduled', 'in-progress', 'completed', 'cancelled'])
   status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';

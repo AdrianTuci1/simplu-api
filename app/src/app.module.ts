@@ -6,8 +6,8 @@ import configuration from './config/configuration';
 import { AuthModule } from './modules/auth/auth.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { BusinessInfoModule } from './modules/business-info/business-info.module';
-import { KafkaModule } from './modules/kafka/kafka.module';
 import { RedisModule } from './modules/redis/redis.module';
+import { KinesisService } from './kinesis.service';
 
 class CustomNamingStrategy extends DefaultNamingStrategy {
   tableName(targetName: string, userSpecifiedName: string | undefined): string {
@@ -37,11 +37,12 @@ class CustomNamingStrategy extends DefaultNamingStrategy {
       }),
       inject: [ConfigService],
     }),
-    KafkaModule,
     RedisModule,
     AuthModule,
     ResourcesModule,
     BusinessInfoModule,
   ],
+  providers: [KinesisService],
+  exports: [KinesisService],
 })
 export class AppModule {}

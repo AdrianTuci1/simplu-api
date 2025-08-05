@@ -1,0 +1,95 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { KinesisClient, PutRecordCommand } from '@aws-sdk/client-kinesis';
+
+export interface ResourceOperation {
+  operation: 'create' | 'update' | 'patch' | 'delete' | 'list';
+  businessId: string;
+  locationId: string;
+  resourceType: string;
+  resourceId?: string;
+  data?: unknown;
+  filters?: Record<string, unknown>;
+  pagination?: {
+    page: number;
+    limit: number;
+  };
+  timestamp: string;
+  requestId: string;
+}
+
+interface AwsConfig {
+  region?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+}
+
+interface KinesisConfig {
+  streamName?: string;
+}
+
+@Injectable()
+export class KinesisService {
+  private readonly logger = new Logger(KinesisService.name);
+  private readonly kinesisClient: KinesisClient;
+  private readonly streamName: string;
+
+  constructor(private readonly configService: ConfigService) {
+    const awsConfig = this.configService.get<AwsConfig>('aws');
+    const kinesisConfig = this.configService.get<KinesisConfig>('kinesis');
+
+    this.kinesisClient = new KinesisClient({
+      region: awsConfig?.region || 'us-east-1',
+      ...(awsConfig?.accessKeyId &&
+        awsConfig?.secretAccessKey && {
+          credentials: {
+            accessKeyId: awsConfig.accessKeyId,
+            secretAccessKey: awsConfig.secretAccessKey,
+          },
+        }),
+    });
+
+    this.streamName = kinesisConfig?.streamName || 'resources-operations';
+  }
+
+  async sendResourceOperation(operation: ResourceOperation): Promise<void> {
+    try {
+      const partitionKey = `${operation.businessId}-${operation.locationId}-${operation.resourceType}`;
+
+      const command = new PutRecordCommand({
+        StreamName: this.streamName,
+        Data: Buffer.from(JSON.stringify(operation)),
+        PartitionKey: partitionKey,
+      });
+
+      const result = await this.kinesisClient.send(command);
+
+      this.logger.log(
+        `Resource operation sent to Kinesis: ${operation.operation} for ${operation.resourceType} ` +
+          `(Business: ${operation.businessId}, Location: ${operation.locationId}) - ` +
+          `Sequence: ${result.SequenceNumber}`,
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      this.logger.error(
+        `Failed to send resource operation to Kinesis: ${errorMessage}`,
+        errorStack,
+      );
+      throw error;
+    }
+  }
+
+  async sendBatchResourceOperations(
+    operations: ResourceOperation[],
+  ): Promise<void> {
+    // For batch operations, we'll send them individually for now
+    // In production, you might want to use PutRecordsCommand for better performance
+    const promises = operations.map((operation) =>
+      this.sendResourceOperation(operation),
+    );
+    await Promise.all(promises);
+  }
+}

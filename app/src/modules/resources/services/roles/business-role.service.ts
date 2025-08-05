@@ -4,7 +4,6 @@ import { RoleData } from '../../models/common/role-models';
 
 @Injectable()
 export class BusinessRoleService {
-  
   /**
    * Get business-specific roles
    */

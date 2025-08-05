@@ -4,7 +4,10 @@ import { BaseTimelineData } from '../common/shared-interfaces';
 
 // Hotel timeline data (reservations and events view)
 export class HotelTimelineData extends BaseTimelineData {
-  @ApiProperty({ description: 'Entry type', enum: ['reservation', 'check-in', 'check-out', 'maintenance'] })
+  @ApiProperty({
+    description: 'Entry type',
+    enum: ['reservation', 'check-in', 'check-out', 'maintenance'],
+  })
   @IsEnum(['reservation', 'check-in', 'check-out', 'maintenance'])
   type: 'reservation' | 'check-in' | 'check-out' | 'maintenance';
 
@@ -34,7 +37,10 @@ export class HotelTimelineData extends BaseTimelineData {
   @IsNumber()
   totalAmount?: number;
 
-  @ApiProperty({ description: 'Status', enum: ['confirmed', 'checked-in', 'checked-out', 'cancelled', 'no-show'] })
+  @ApiProperty({
+    description: 'Status',
+    enum: ['confirmed', 'checked-in', 'checked-out', 'cancelled', 'no-show'],
+  })
   @IsEnum(['confirmed', 'checked-in', 'checked-out', 'cancelled', 'no-show'])
   status: 'confirmed' | 'checked-in' | 'checked-out' | 'cancelled' | 'no-show';
 

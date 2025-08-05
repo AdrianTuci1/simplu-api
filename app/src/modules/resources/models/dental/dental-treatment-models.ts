@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNumber, IsEnum, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsEnum,
+  IsBoolean,
+} from 'class-validator';
 
 // Dental treatment/service data model
 export class DentalTreatmentData {
@@ -21,10 +27,39 @@ export class DentalTreatmentData {
 
   @ApiProperty({
     description: 'Treatment category',
-    enum: ['cleaning', 'filling', 'crown', 'root-canal', 'extraction', 'orthodontics', 'cosmetic', 'surgery', 'consultation']
+    enum: [
+      'cleaning',
+      'filling',
+      'crown',
+      'root-canal',
+      'extraction',
+      'orthodontics',
+      'cosmetic',
+      'surgery',
+      'consultation',
+    ],
   })
-  @IsEnum(['cleaning', 'filling', 'crown', 'root-canal', 'extraction', 'orthodontics', 'cosmetic', 'surgery', 'consultation'])
-  category: 'cleaning' | 'filling' | 'crown' | 'root-canal' | 'extraction' | 'orthodontics' | 'cosmetic' | 'surgery' | 'consultation';
+  @IsEnum([
+    'cleaning',
+    'filling',
+    'crown',
+    'root-canal',
+    'extraction',
+    'orthodontics',
+    'cosmetic',
+    'surgery',
+    'consultation',
+  ])
+  category:
+    | 'cleaning'
+    | 'filling'
+    | 'crown'
+    | 'root-canal'
+    | 'extraction'
+    | 'orthodontics'
+    | 'cosmetic'
+    | 'surgery'
+    | 'consultation';
 
   @ApiProperty({ description: 'Requires anesthesia' })
   @IsBoolean()

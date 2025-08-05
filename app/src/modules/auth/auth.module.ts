@@ -17,7 +17,7 @@ import { BusinessInfoModule } from '../business-info/business-info.module';
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get('jwt.secret', 'fallback-secret'),
-        signOptions: { 
+        signOptions: {
           expiresIn: configService.get('jwt.expiresIn', '1h'),
         },
       }),
@@ -25,15 +25,7 @@ import { BusinessInfoModule } from '../business-info/business-info.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    AuthEnvelopeService,
-    CognitoAuthGuard,
-  ],
-  exports: [
-    AuthService,
-    AuthEnvelopeService,
-    CognitoAuthGuard,
-  ],
+  providers: [AuthService, AuthEnvelopeService, CognitoAuthGuard],
+  exports: [AuthService, AuthEnvelopeService, CognitoAuthGuard],
 })
 export class AuthModule {}

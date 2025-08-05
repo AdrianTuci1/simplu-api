@@ -1,5 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsOptional, IsDateString, IsArray, IsEnum, IsBoolean, IsNumber, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsEnum,
+  IsBoolean,
+  IsNumber,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { AddressData } from '../common/shared-interfaces';
 
@@ -37,9 +47,9 @@ export class HotelReservationSummary {
 
 // ID document interface
 export class IdDocumentData {
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Document type',
-    enum: ['passport', 'drivers-license', 'national-id']
+    enum: ['passport', 'drivers-license', 'national-id'],
   })
   @IsEnum(['passport', 'drivers-license', 'national-id'])
   type: 'passport' | 'drivers-license' | 'national-id';
@@ -53,8 +63,6 @@ export class IdDocumentData {
   @IsDateString()
   expiryDate?: string;
 }
-
-
 
 // Hotel guest data model
 export class HotelGuestData {
@@ -74,9 +82,9 @@ export class HotelGuestData {
   @IsNumber()
   birthYear: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Gender',
-    enum: ['male', 'female', 'other', 'prefer-not-to-say']
+    enum: ['male', 'female', 'other', 'prefer-not-to-say'],
   })
   @IsEnum(['male', 'female', 'other', 'prefer-not-to-say'])
   gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
@@ -96,29 +104,33 @@ export class HotelGuestData {
   @Type(() => IdDocumentData)
   idDocument: IdDocumentData;
 
-
-
   @ApiProperty({ description: 'Additional notes', required: false })
   @IsOptional()
   @IsString()
   notes?: string;
 
-  @ApiProperty({ description: 'Guest tags for categorization', required: false })
+  @ApiProperty({
+    description: 'Guest tags for categorization',
+    required: false,
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
 
-  @ApiProperty({ description: 'Guest reservations (can have multiple rooms)', required: false })
+  @ApiProperty({
+    description: 'Guest reservations (can have multiple rooms)',
+    required: false,
+  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => HotelReservationSummary)
   reservations?: HotelReservationSummary[];
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Guest status',
-    enum: ['active', 'vip', 'blacklisted']
+    enum: ['active', 'vip', 'blacklisted'],
   })
   @IsEnum(['active', 'vip', 'blacklisted'])
   status: 'active' | 'vip' | 'blacklisted';

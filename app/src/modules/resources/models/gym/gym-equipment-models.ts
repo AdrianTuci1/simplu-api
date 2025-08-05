@@ -1,12 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsNumber, IsEnum, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsNumber,
+  IsEnum,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Maintenance schedule interface
 export class MaintenanceScheduleData {
   @ApiProperty({
     description: 'Maintenance frequency',
-    enum: ['daily', 'weekly', 'monthly', 'quarterly', 'annual']
+    enum: ['daily', 'weekly', 'monthly', 'quarterly', 'annual'],
   })
   @IsEnum(['daily', 'weekly', 'monthly', 'quarterly', 'annual'])
   frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
@@ -28,7 +35,7 @@ export class GymEquipmentData {
 
   @ApiProperty({
     description: 'Equipment category',
-    enum: ['cardio', 'strength', 'free-weights', 'functional', 'recovery']
+    enum: ['cardio', 'strength', 'free-weights', 'functional', 'recovery'],
   })
   @IsEnum(['cardio', 'strength', 'free-weights', 'functional', 'recovery'])
   category: 'cardio' | 'strength' | 'free-weights' | 'functional' | 'recovery';
@@ -62,7 +69,7 @@ export class GymEquipmentData {
 
   @ApiProperty({
     description: 'Equipment status',
-    enum: ['active', 'maintenance', 'out-of-order', 'retired']
+    enum: ['active', 'maintenance', 'out-of-order', 'retired'],
   })
   @IsEnum(['active', 'maintenance', 'out-of-order', 'retired'])
   status: 'active' | 'maintenance' | 'out-of-order' | 'retired';

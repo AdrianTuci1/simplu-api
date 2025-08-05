@@ -2,10 +2,10 @@
 export type BusinessType = 'dental' | 'gym' | 'hotel';
 
 // Common resource types (available for all business types)
-export type CommonResourceType = 
-  | 'stocks' 
-  | 'invoices' 
-  | 'activities' 
+export type CommonResourceType =
+  | 'stocks'
+  | 'invoices'
+  | 'activities'
   | 'reports'
   | 'roles'
   | 'sales'
@@ -15,17 +15,17 @@ export type CommonResourceType =
   | 'history'; // Alias for activities (frontend compatibility)
 
 // Dental-specific resource types
-export type DentalResourceType = 
+export type DentalResourceType =
   | 'timeline'
-  | 'clients' 
+  | 'clients'
   | 'services'
   | 'staff'
   | CommonResourceType;
 
 // Gym-specific resource types
-export type GymResourceType = 
+export type GymResourceType =
   | 'timeline'
-  | 'members' 
+  | 'members'
   | 'packages'
   | 'classes'
   | 'equipment'
@@ -33,18 +33,18 @@ export type GymResourceType =
   | CommonResourceType;
 
 // Hotel-specific resource types
-export type HotelResourceType = 
+export type HotelResourceType =
   | 'timeline'
-  | 'clients' 
+  | 'clients'
   | 'rooms'
   | 'services'
   | 'staff'
   | CommonResourceType;
 
 // Union of all resource types
-export type ResourceType = 
-  | DentalResourceType 
-  | GymResourceType 
+export type ResourceType =
+  | DentalResourceType
+  | GymResourceType
   | HotelResourceType;
 
 // Business type to resource type mapping
@@ -58,7 +58,13 @@ export type BusinessResourceMap = {
 export type GetResourceTypes<T extends BusinessType> = BusinessResourceMap[T];
 
 // Resource operation types
-export type ResourceOperation = 'create' | 'read' | 'update' | 'patch' | 'delete' | 'list';
+export type ResourceOperation =
+  | 'create'
+  | 'read'
+  | 'update'
+  | 'patch'
+  | 'delete'
+  | 'list';
 
 // Permission types
 export type Permission = 'create' | 'read' | 'update' | 'delete' | 'list';

@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsNumber, IsEnum, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsNumber,
+  IsEnum,
+  IsBoolean,
+} from 'class-validator';
 
 // Dental appointment data model
 export class DentalAppointmentData {
@@ -26,10 +33,30 @@ export class DentalAppointmentData {
 
   @ApiProperty({
     description: 'Appointment status',
-    enum: ['scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show']
+    enum: [
+      'scheduled',
+      'confirmed',
+      'in-progress',
+      'completed',
+      'cancelled',
+      'no-show',
+    ],
   })
-  @IsEnum(['scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show'])
-  status: 'scheduled' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled' | 'no-show';
+  @IsEnum([
+    'scheduled',
+    'confirmed',
+    'in-progress',
+    'completed',
+    'cancelled',
+    'no-show',
+  ])
+  status:
+    | 'scheduled'
+    | 'confirmed'
+    | 'in-progress'
+    | 'completed'
+    | 'cancelled'
+    | 'no-show';
 
   @ApiProperty({ description: 'Appointment notes', required: false })
   @IsOptional()

@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray, IsNumber, IsEnum, IsBoolean, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsNumber,
+  IsEnum,
+  IsBoolean,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Service availability interface
@@ -28,12 +36,35 @@ export class HotelServiceData {
   @IsString()
   description: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Service category',
-    enum: ['room-service', 'housekeeping', 'concierge', 'spa', 'restaurant', 'laundry', 'transport']
+    enum: [
+      'room-service',
+      'housekeeping',
+      'concierge',
+      'spa',
+      'restaurant',
+      'laundry',
+      'transport',
+    ],
   })
-  @IsEnum(['room-service', 'housekeeping', 'concierge', 'spa', 'restaurant', 'laundry', 'transport'])
-  category: 'room-service' | 'housekeeping' | 'concierge' | 'spa' | 'restaurant' | 'laundry' | 'transport';
+  @IsEnum([
+    'room-service',
+    'housekeeping',
+    'concierge',
+    'spa',
+    'restaurant',
+    'laundry',
+    'transport',
+  ])
+  category:
+    | 'room-service'
+    | 'housekeeping'
+    | 'concierge'
+    | 'spa'
+    | 'restaurant'
+    | 'laundry'
+    | 'transport';
 
   @ApiProperty({ description: 'Service price', required: false })
   @IsOptional()

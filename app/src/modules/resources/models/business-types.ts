@@ -10,4 +10,4 @@ export interface BaseResource {
   data: ResourceDataType; // json - specific to business type and resource
   date: string; // appointment, reservation, checkin, or emitted for rest
   lastUpdated: string;
-} 
+}

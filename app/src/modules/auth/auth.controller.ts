@@ -1,5 +1,18 @@
-import { Controller, Get, Post, Body, Headers, UnauthorizedException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiHeader, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Headers,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiHeader,
+  ApiBody,
+} from '@nestjs/swagger';
 import { AuthService, CognitoUser } from './auth.service';
 import { Step1AuthRequest, Step1AuthResponse } from './dto/auth-step1.dto';
 import { Step2AuthRequest, Step2AuthResponse } from './dto/auth-step2.dto';
@@ -58,9 +71,10 @@ export class AuthController {
   }
 
   @Post('step1')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Step 1: Create authorization envelope and get redirect URL',
-    description: 'Gateway validates user token and creates an authorization envelope with temporary code. Returns redirect URL for the target client service.'
+    description:
+      'Gateway validates user token and creates an authorization envelope with temporary code. Returns redirect URL for the target client service.',
   })
   @ApiBody({ type: Step1AuthRequest })
   @ApiResponse({
@@ -72,31 +86,44 @@ export class AuthController {
     status: 401,
     description: 'Invalid or expired token',
   })
-  async step1Authorization(@Body() request: Step1AuthRequest): Promise<Step1AuthResponse> {
-    if (!request.authorization || !request.authorization.startsWith('Bearer ')) {
+  async step1Authorization(
+    @Body() request: Step1AuthRequest,
+  ): Promise<Step1AuthResponse> {
+    if (
+      !request.authorization ||
+      !request.authorization.startsWith('Bearer ')
+    ) {
       throw new UnauthorizedException('Bearer token required');
     }
 
     const token = request.authorization.substring(7);
-    return this.authService.createAuthorizationEnvelope(token, request.clientId);
+    return this.authService.createAuthorizationEnvelope(
+      token,
+      request.clientId,
+    );
   }
 
   @Post('step2')
-  @ApiOperation({ 
-    summary: 'Step 2: Authorize with business access and get user-specific data',
-    description: 'Client uses envelope ID, auth code, and business ID to get authorization and user-specific business data.'
+  @ApiOperation({
+    summary:
+      'Step 2: Authorize with business access and get user-specific data',
+    description:
+      'Client uses envelope ID, auth code, and business ID to get authorization and user-specific business data.',
   })
   @ApiBody({ type: Step2AuthRequest })
   @ApiResponse({
     status: 200,
-    description: 'Authorization successful, returns user business data and access token',
+    description:
+      'Authorization successful, returns user business data and access token',
     type: Step2AuthResponse,
   })
   @ApiResponse({
     status: 401,
     description: 'Invalid envelope, auth code, or unauthorized for business',
   })
-  async step2Authorization(@Body() request: Step2AuthRequest): Promise<Step2AuthResponse> {
+  async step2Authorization(
+    @Body() request: Step2AuthRequest,
+  ): Promise<Step2AuthResponse> {
     return this.authService.authorizeWithBusinessAccess(
       request.envelopeId,
       request.authCode,

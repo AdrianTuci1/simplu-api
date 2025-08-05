@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsEnum,
+} from 'class-validator';
 
 // Workflow data model
 export class WorkflowData {
@@ -12,9 +18,9 @@ export class WorkflowData {
   @IsString()
   description?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Workflow status',
-    enum: ['active', 'inactive', 'draft', 'archived']
+    enum: ['active', 'inactive', 'draft', 'archived'],
   })
   @IsEnum(['active', 'inactive', 'draft', 'archived'])
   status: 'active' | 'inactive' | 'draft' | 'archived';

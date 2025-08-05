@@ -15,9 +15,9 @@ export class DentalStaffData {
   @IsString()
   phone: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Days of the week when staff is on duty',
-    example: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    example: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
   })
   @IsArray()
   @IsString({ each: true })

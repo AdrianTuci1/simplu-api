@@ -1,19 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { 
-  BusinessResourceDataMap, 
-  BusinessType 
+import {
+  BusinessResourceDataMap,
+  BusinessType,
 } from '../models/unified-data-types';
 import { RoleData } from '../models/common/role-models';
-import { 
-  BusinessTypeService, 
-  ResourceStructureService, 
-  ResourceValidatorService 
+import {
+  BusinessTypeService,
+  ResourceStructureService,
+  ResourceValidatorService,
 } from './core';
 import { RoleManagerService } from './roles';
 
 @Injectable()
 export class ResourceModelService {
-  
   constructor(
     private readonly businessTypeService: BusinessTypeService,
     private readonly resourceStructureService: ResourceStructureService,
@@ -26,12 +25,15 @@ export class ResourceModelService {
    */
   getResourceStructure<
     TBusinessType extends BusinessType,
-    TResourceName extends keyof BusinessResourceDataMap[TBusinessType]
+    TResourceName extends keyof BusinessResourceDataMap[TBusinessType],
   >(
     businessType: TBusinessType,
     resourceName: TResourceName,
   ): Partial<BusinessResourceDataMap[TBusinessType][TResourceName]> {
-    return this.resourceStructureService.getResourceStructure(businessType, resourceName);
+    return this.resourceStructureService.getResourceStructure(
+      businessType,
+      resourceName,
+    );
   }
 
   /**
@@ -39,13 +41,17 @@ export class ResourceModelService {
    */
   validateResourceData<
     TBusinessType extends BusinessType,
-    TResourceName extends keyof BusinessResourceDataMap[TBusinessType]
+    TResourceName extends keyof BusinessResourceDataMap[TBusinessType],
   >(
     businessType: TBusinessType,
     resourceName: TResourceName,
     data: any,
   ): data is BusinessResourceDataMap[TBusinessType][TResourceName] {
-    return this.resourceValidatorService.validateResourceData(businessType, resourceName, data);
+    return this.resourceValidatorService.validateResourceData(
+      businessType,
+      resourceName,
+      data,
+    );
   }
 
   /**
@@ -63,7 +69,11 @@ export class ResourceModelService {
     locationId: string,
     businessType: BusinessType,
   ): Promise<RoleData[]> {
-    return this.roleManagerService.getRoles(businessId, locationId, businessType);
+    return this.roleManagerService.getRoles(
+      businessId,
+      locationId,
+      businessType,
+    );
   }
 
   /**
@@ -75,7 +85,12 @@ export class ResourceModelService {
     businessType: BusinessType,
     roleName: string,
   ): Promise<RoleData | null> {
-    return this.roleManagerService.getRole(businessId, locationId, businessType, roleName);
+    return this.roleManagerService.getRole(
+      businessId,
+      locationId,
+      businessType,
+      roleName,
+    );
   }
 
   /**
@@ -88,7 +103,13 @@ export class ResourceModelService {
     roleData: RoleData,
     userId: string,
   ): Promise<RoleData> {
-    return this.roleManagerService.saveRole(businessId, locationId, businessType, roleData, userId);
+    return this.roleManagerService.saveRole(
+      businessId,
+      locationId,
+      businessType,
+      roleData,
+      userId,
+    );
   }
 
   /**
@@ -100,7 +121,11 @@ export class ResourceModelService {
     businessType: BusinessType,
     roleName: string,
   ): Promise<boolean> {
-    return this.roleManagerService.deleteRole(businessId, locationId, businessType, roleName);
+    return this.roleManagerService.deleteRole(
+      businessId,
+      locationId,
+      businessType,
+      roleName,
+    );
   }
-
-} 
+}

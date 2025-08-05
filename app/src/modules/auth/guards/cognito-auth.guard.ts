@@ -23,7 +23,7 @@ export class CognitoAuthGuard implements CanActivate {
 
     try {
       const user = await this.authService.validateAccessToken(token);
-      
+
       // Attach user to request for use in controllers
       (request as any).user = user;
 
@@ -53,4 +53,4 @@ export class CognitoAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token validation failed');
     }
   }
-} 
+}

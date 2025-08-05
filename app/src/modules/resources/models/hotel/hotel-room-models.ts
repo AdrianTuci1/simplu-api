@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsNumber, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsNumber,
+  IsEnum,
+} from 'class-validator';
 
 // Hotel room data model
 export class HotelRoomData {
@@ -7,9 +14,9 @@ export class HotelRoomData {
   @IsString()
   roomNumber: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Room type',
-    enum: ['standard', 'deluxe', 'suite', 'presidential']
+    enum: ['standard', 'deluxe', 'suite', 'presidential'],
   })
   @IsEnum(['standard', 'deluxe', 'suite', 'presidential'])
   roomType: 'standard' | 'deluxe' | 'suite' | 'presidential';
@@ -22,9 +29,9 @@ export class HotelRoomData {
   @IsNumber()
   capacity: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Bed type',
-    enum: ['single', 'double', 'queen', 'king', 'twin']
+    enum: ['single', 'double', 'queen', 'king', 'twin'],
   })
   @IsEnum(['single', 'double', 'queen', 'king', 'twin'])
   bedType: 'single' | 'double' | 'queen' | 'king' | 'twin';
@@ -38,12 +45,17 @@ export class HotelRoomData {
   @IsNumber()
   baseRate: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Room status',
-    enum: ['available', 'occupied', 'maintenance', 'out-of-order', 'cleaning']
+    enum: ['available', 'occupied', 'maintenance', 'out-of-order', 'cleaning'],
   })
   @IsEnum(['available', 'occupied', 'maintenance', 'out-of-order', 'cleaning'])
-  status: 'available' | 'occupied' | 'maintenance' | 'out-of-order' | 'cleaning';
+  status:
+    | 'available'
+    | 'occupied'
+    | 'maintenance'
+    | 'out-of-order'
+    | 'cleaning';
 
   @ApiProperty({ description: 'Last cleaned date', required: false })
   @IsOptional()

@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsNumber, IsEnum, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsNumber,
+  IsEnum,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Invoice item interface
@@ -37,9 +45,9 @@ export class InvoiceData {
   @IsString()
   customerId: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Customer type',
-    enum: ['patient', 'member', 'guest', 'client']
+    enum: ['patient', 'member', 'guest', 'client'],
   })
   @IsEnum(['patient', 'member', 'guest', 'client'])
   customerType: 'patient' | 'member' | 'guest' | 'client';
@@ -79,17 +87,17 @@ export class InvoiceData {
   @IsNumber()
   total: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Invoice status',
-    enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled']
+    enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
   })
   @IsEnum(['draft', 'sent', 'paid', 'overdue', 'cancelled'])
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Payment method',
     enum: ['cash', 'card', 'transfer', 'check'],
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsEnum(['cash', 'card', 'transfer', 'check'])

@@ -2,35 +2,35 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsUUID, IsOptional } from 'class-validator';
 
 export class Step2AuthRequest {
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Envelope ID from step 1',
-    example: 'env_123456789'
+    example: 'env_123456789',
   })
   @IsString()
   @IsUUID()
   @IsNotEmpty()
   envelopeId: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Authorization code from the envelope (expires in 1 min)',
-    example: 'abc123xyz'
+    example: 'abc123xyz',
   })
   @IsString()
   @IsNotEmpty()
   authCode: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Business ID to authorize access for',
-    example: 'business-456'
+    example: 'business-456',
   })
   @IsString()
   @IsNotEmpty()
   businessId: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Optional location ID within the business',
     example: 'business-456-001',
-    required: false
+    required: false,
   })
   @IsString()
   @IsOptional()
@@ -38,33 +38,33 @@ export class Step2AuthRequest {
 }
 
 export class UserBusinessData {
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'User ID',
-    example: 'user-123'
+    example: 'user-123',
   })
   @IsString()
   userId: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'User email',
-    example: 'user@example.com'
+    example: 'user@example.com',
   })
   @IsString()
   email: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'User roles for this business',
-    example: ['manager', 'staff']
+    example: ['manager', 'staff'],
   })
   roles: string[];
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Business information',
     example: {
       businessId: 'business-456',
       businessName: 'Dental Practice ABC',
-      businessType: 'dental'
-    }
+      businessType: 'dental',
+    },
   })
   business: {
     businessId: string;
@@ -72,14 +72,14 @@ export class UserBusinessData {
     businessType: string;
   };
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Location information if specified',
     required: false,
     example: {
       locationId: 'business-456-001',
       name: 'Main Office',
-      address: '123 Main St'
-    }
+      address: '123 Main St',
+    },
   })
   location?: {
     locationId: string;
@@ -90,26 +90,26 @@ export class UserBusinessData {
 }
 
 export class Step2AuthResponse {
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Whether the authorization was successful',
-    example: true
+    example: true,
   })
   success: boolean;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'JWT token for authenticated requests',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
   accessToken: string;
 
-  @ApiProperty({ 
-    description: 'User and business-specific data'
+  @ApiProperty({
+    description: 'User and business-specific data',
   })
   userData: UserBusinessData;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Token expiration time',
-    example: '2024-01-15T11:30:00Z'
+    example: '2024-01-15T11:30:00Z',
   })
   expiresAt: string;
-} 
+}

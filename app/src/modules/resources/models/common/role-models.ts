@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsArray, IsBoolean, IsNumber, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsBoolean,
+  IsNumber,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Role permissions interface
@@ -28,12 +36,17 @@ export class RoleData {
   @IsString()
   description: string;
 
-  @ApiProperty({ description: 'Role hierarchy level (higher = more permissions)' })
+  @ApiProperty({
+    description: 'Role hierarchy level (higher = more permissions)',
+  })
   @IsNumber()
   hierarchy: number;
 
   @ApiProperty({ description: 'Role permissions' })
-  permissions: Record<string, Array<'create' | 'read' | 'update' | 'delete' | 'list'>>;
+  permissions: Record<
+    string,
+    Array<'create' | 'read' | 'update' | 'delete' | 'list'>
+  >;
 
   @ApiProperty({ description: 'Role is active' })
   @IsBoolean()

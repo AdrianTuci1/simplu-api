@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { BusinessResourceDataMap, BusinessType } from '../../models/unified-data-types';
+import {
+  BusinessResourceDataMap,
+  BusinessType,
+} from '../../models/unified-data-types';
 import { ResourceValidatorService } from './resource-validator.service';
 
 @Injectable()
 export class ResourceStructureService {
-  
   constructor(private readonly resourceValidator: ResourceValidatorService) {}
 
   /**
@@ -12,12 +14,15 @@ export class ResourceStructureService {
    */
   getResourceStructure<
     TBusinessType extends BusinessType,
-    TResourceName extends keyof BusinessResourceDataMap[TBusinessType]
+    TResourceName extends keyof BusinessResourceDataMap[TBusinessType],
   >(
     businessType: TBusinessType,
     resourceName: TResourceName,
   ): Partial<BusinessResourceDataMap[TBusinessType][TResourceName]> {
-    return this.resourceValidator.getDefaultResourceData(businessType, resourceName as string);
+    return this.resourceValidator.getDefaultResourceData(
+      businessType,
+      resourceName as string,
+    );
   }
 
   /**
@@ -25,12 +30,16 @@ export class ResourceStructureService {
    */
   validateResourceStructure<
     TBusinessType extends BusinessType,
-    TResourceName extends keyof BusinessResourceDataMap[TBusinessType]
+    TResourceName extends keyof BusinessResourceDataMap[TBusinessType],
   >(
     businessType: TBusinessType,
     resourceName: TResourceName,
     data: any,
   ): data is BusinessResourceDataMap[TBusinessType][TResourceName] {
-    return this.resourceValidator.validateResourceData(businessType, resourceName, data);
+    return this.resourceValidator.validateResourceData(
+      businessType,
+      resourceName,
+      data,
+    );
   }
 }

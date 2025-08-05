@@ -7,12 +7,41 @@ export class ActivityData {
   @IsString()
   userId: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Activity type',
-    enum: ['login', 'logout', 'create', 'update', 'delete', 'view', 'export', 'import', 'error']
+    enum: [
+      'login',
+      'logout',
+      'create',
+      'update',
+      'delete',
+      'view',
+      'export',
+      'import',
+      'error',
+    ],
   })
-  @IsEnum(['login', 'logout', 'create', 'update', 'delete', 'view', 'export', 'import', 'error'])
-  type: 'login' | 'logout' | 'create' | 'update' | 'delete' | 'view' | 'export' | 'import' | 'error';
+  @IsEnum([
+    'login',
+    'logout',
+    'create',
+    'update',
+    'delete',
+    'view',
+    'export',
+    'import',
+    'error',
+  ])
+  type:
+    | 'login'
+    | 'logout'
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'view'
+    | 'export'
+    | 'import'
+    | 'error';
 
   @ApiProperty({ description: 'Action performed' })
   @IsString()
@@ -46,9 +75,9 @@ export class ActivityData {
   @IsDateString()
   timestamp: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Activity status',
-    enum: ['success', 'failed', 'warning']
+    enum: ['success', 'failed', 'warning'],
   })
   @IsEnum(['success', 'failed', 'warning'])
   status: 'success' | 'failed' | 'warning';

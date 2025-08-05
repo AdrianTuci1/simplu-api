@@ -7,7 +7,6 @@ import { BusinessRoleService } from './business-role.service';
 
 @Injectable()
 export class RoleManagerService {
-  
   constructor(
     private readonly rolePermissionService: RolePermissionService,
     private readonly businessRoleService: BusinessRoleService,
@@ -22,14 +21,18 @@ export class RoleManagerService {
     businessType: BusinessType,
   ): Promise<RoleData[]> {
     try {
-      const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
+      const shardConnection = await citrusShardingService.getShardForBusiness(
+        businessId,
+        locationId,
+      );
       console.log(`Using shard ${shardConnection.shardId} for roles query`);
-      
+
       // In real implementation, would query database using shardConnection
       // For now, return system roles + business-specific roles
       const systemRoles = this.getSystemRoles(businessType);
-      const businessSpecificRoles = this.businessRoleService.getBusinessSpecificRoles(businessType);
-      
+      const businessSpecificRoles =
+        this.businessRoleService.getBusinessSpecificRoles(businessType);
+
       return [...systemRoles, ...businessSpecificRoles];
     } catch (error) {
       console.error('Error fetching roles:', error);
@@ -48,7 +51,7 @@ export class RoleManagerService {
     roleName: string,
   ): Promise<RoleData | null> {
     const roles = await this.getRoles(businessId, locationId, businessType);
-    return roles.find(role => role.name === roleName) || null;
+    return roles.find((role) => role.name === roleName) || null;
   }
 
   /**
@@ -62,9 +65,12 @@ export class RoleManagerService {
     userId: string,
   ): Promise<RoleData> {
     try {
-      const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
+      const shardConnection = await citrusShardingService.getShardForBusiness(
+        businessId,
+        locationId,
+      );
       console.log(`Using shard ${shardConnection.shardId} for role save`);
-      
+
       // In real implementation, would save to database using shardConnection
       const updatedRole = {
         ...roleData,
@@ -90,8 +96,13 @@ export class RoleManagerService {
     roleName: string,
   ): Promise<boolean> {
     try {
-      const role = await this.getRole(businessId, locationId, businessType, roleName);
-      
+      const role = await this.getRole(
+        businessId,
+        locationId,
+        businessType,
+        roleName,
+      );
+
       if (!role) {
         return false;
       }
@@ -100,9 +111,12 @@ export class RoleManagerService {
         throw new Error('Cannot delete system role');
       }
 
-      const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
+      const shardConnection = await citrusShardingService.getShardForBusiness(
+        businessId,
+        locationId,
+      );
       console.log(`Using shard ${shardConnection.shardId} for role deletion`);
-      
+
       // In real implementation, would delete from database using shardConnection
       console.log(`Deleting role ${roleName} for business ${businessId}`);
       return true;
@@ -132,7 +146,10 @@ export class RoleManagerService {
         displayName: 'Administrator',
         description: 'Full access within business type',
         hierarchy: 90,
-        permissions: this.rolePermissionService.getBusinessTypePermissions(businessType, 'admin'),
+        permissions: this.rolePermissionService.getBusinessTypePermissions(
+          businessType,
+          'admin',
+        ),
         active: true,
         businessTypeSpecific: true,
         isSystemRole: true,
@@ -142,7 +159,10 @@ export class RoleManagerService {
         displayName: 'Manager',
         description: 'Manage operations and staff',
         hierarchy: 80,
-        permissions: this.rolePermissionService.getBusinessTypePermissions(businessType, 'manager'),
+        permissions: this.rolePermissionService.getBusinessTypePermissions(
+          businessType,
+          'manager',
+        ),
         active: true,
         businessTypeSpecific: true,
         isSystemRole: true,
@@ -152,7 +172,10 @@ export class RoleManagerService {
         displayName: 'Staff',
         description: 'Basic operations',
         hierarchy: 70,
-        permissions: this.rolePermissionService.getBusinessTypePermissions(businessType, 'staff'),
+        permissions: this.rolePermissionService.getBusinessTypePermissions(
+          businessType,
+          'staff',
+        ),
         active: true,
         businessTypeSpecific: true,
         isSystemRole: true,
@@ -162,7 +185,10 @@ export class RoleManagerService {
         displayName: 'Viewer',
         description: 'Read-only access',
         hierarchy: 50,
-        permissions: this.rolePermissionService.getBusinessTypePermissions(businessType, 'viewer'),
+        permissions: this.rolePermissionService.getBusinessTypePermissions(
+          businessType,
+          'viewer',
+        ),
         active: true,
         businessTypeSpecific: true,
         isSystemRole: true,

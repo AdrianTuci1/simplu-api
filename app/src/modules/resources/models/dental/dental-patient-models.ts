@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsOptional, IsArray, IsEnum, ValidateNested, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsArray,
+  IsEnum,
+  ValidateNested,
+  IsNumber,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { AddressData, EmergencyContactData } from '../common/shared-interfaces';
 
@@ -44,7 +52,7 @@ export class DentalAppointmentSummary {
 
   @ApiProperty({
     description: 'Appointment status',
-    enum: ['completed', 'cancelled', 'no-show']
+    enum: ['completed', 'cancelled', 'no-show'],
   })
   @IsEnum(['completed', 'cancelled', 'no-show'])
   status: 'completed' | 'cancelled' | 'no-show';
@@ -75,7 +83,7 @@ export class DentalPatientData {
 
   @ApiProperty({
     description: 'Gender',
-    enum: ['male', 'female', 'other', 'prefer-not-to-say']
+    enum: ['male', 'female', 'other', 'prefer-not-to-say'],
   })
   @IsEnum(['male', 'female', 'other', 'prefer-not-to-say'])
   gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
@@ -114,13 +122,14 @@ export class DentalPatientData {
   @IsString()
   notes?: string;
 
-  @ApiProperty({ description: 'Patient tags for categorization', required: false })
+  @ApiProperty({
+    description: 'Patient tags for categorization',
+    required: false,
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
-
-
 
   @ApiProperty({ description: 'Last 10 appointments', required: false })
   @IsOptional()
@@ -129,7 +138,10 @@ export class DentalPatientData {
   @Type(() => DentalAppointmentSummary)
   lastAppointments?: DentalAppointmentSummary[];
 
-  @ApiProperty({ description: 'Patient status', enum: ['active', 'inactive', 'archived'] })
+  @ApiProperty({
+    description: 'Patient status',
+    enum: ['active', 'inactive', 'archived'],
+  })
   @IsEnum(['active', 'inactive', 'archived'])
   status: 'active' | 'inactive' | 'archived';
 }

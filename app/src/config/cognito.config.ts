@@ -22,15 +22,16 @@ export class CognitoService {
 
   constructor() {
     this.config = cognitoConfig();
-    
+
     this.client = new CognitoIdentityProviderClient({
       region: this.config.region,
-      ...(this.config.accessKeyId && this.config.secretAccessKey && {
-        credentials: {
-          accessKeyId: this.config.accessKeyId,
-          secretAccessKey: this.config.secretAccessKey,
-        },
-      }),
+      ...(this.config.accessKeyId &&
+        this.config.secretAccessKey && {
+          credentials: {
+            accessKeyId: this.config.accessKeyId,
+            secretAccessKey: this.config.secretAccessKey,
+          },
+        }),
     });
   }
 
@@ -43,4 +44,4 @@ export class CognitoService {
   }
 }
 
-export const cognitoService = new CognitoService(); 
+export const cognitoService = new CognitoService();
