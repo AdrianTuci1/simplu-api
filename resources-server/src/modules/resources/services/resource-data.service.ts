@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
 import { KinesisService } from '../../kinesis/kinesis.service';
+import { NotificationService } from '../../notification/notification.service';
 
 @Injectable()
 export class ResourceDataService {
-  
-  constructor(private readonly kinesisService: KinesisService) {}
+
+  constructor(
+    private readonly kinesisService: KinesisService,
+    private readonly notificationService: NotificationService,
+  ) { }
 
   /**
    * Create a resource and send to Kinesis stream
@@ -19,10 +23,10 @@ export class ResourceDataService {
     try {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
       console.log(`Using shard ${shardConnection.shardId} for creating ${resourceType}`);
-      
+
       // Generate resource ID
       const resourceId = `${resourceType}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Prepare resource data
       const resourceData = {
         id: resourceId,
@@ -45,14 +49,13 @@ export class ResourceDataService {
       });
 
       // Send notification to Elixir
-      await this.kinesisService.sendToStream('elixir-notifications', {
-        type: 'resource_created',
+      await this.notificationService.notifyResourceCreated({
         resourceType,
         businessId,
         locationId,
         resourceId,
         shardId: shardConnection.shardId,
-        timestamp: new Date().toISOString(),
+        data: resourceData,
       });
 
       console.log(`Created ${resourceType} with ID: ${resourceId} and sent to Kinesis`);
@@ -76,7 +79,7 @@ export class ResourceDataService {
     try {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
       console.log(`Using shard ${shardConnection.shardId} for updating ${resourceType}`);
-      
+
       // Prepare updated resource data
       const resourceData = {
         id: resourceId,
@@ -100,14 +103,13 @@ export class ResourceDataService {
       });
 
       // Send notification to Elixir
-      await this.kinesisService.sendToStream('elixir-notifications', {
-        type: 'resource_updated',
+      await this.notificationService.notifyResourceUpdated({
         resourceType,
         businessId,
         locationId,
         resourceId,
         shardId: shardConnection.shardId,
-        timestamp: new Date().toISOString(),
+        data: resourceData,
       });
 
       console.log(`Updated ${resourceType} with ID: ${resourceId} and sent to Kinesis`);
@@ -130,7 +132,7 @@ export class ResourceDataService {
     try {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
       console.log(`Using shard ${shardConnection.shardId} for deleting ${resourceType}`);
-      
+
       // Send to Kinesis stream for processing
       await this.kinesisService.sendToStream('resources-stream', {
         operation: 'delete',
@@ -143,14 +145,12 @@ export class ResourceDataService {
       });
 
       // Send notification to Elixir
-      await this.kinesisService.sendToStream('elixir-notifications', {
-        type: 'resource_deleted',
+      await this.notificationService.notifyResourceDeleted({
         resourceType,
         businessId,
         locationId,
         resourceId,
         shardId: shardConnection.shardId,
-        timestamp: new Date().toISOString(),
       });
 
       console.log(`Deleted ${resourceType} with ID: ${resourceId} and sent to Kinesis`);
@@ -174,7 +174,7 @@ export class ResourceDataService {
     try {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
       console.log(`Using shard ${shardConnection.shardId} for patching ${resourceType}`);
-      
+
       // Prepare patched resource data
       const resourceData = {
         id: resourceId,
@@ -198,14 +198,13 @@ export class ResourceDataService {
       });
 
       // Send notification to Elixir
-      await this.kinesisService.sendToStream('elixir-notifications', {
-        type: 'resource_patched',
+      await this.notificationService.notifyResourcePatched({
         resourceType,
         businessId,
         locationId,
         resourceId,
         shardId: shardConnection.shardId,
-        timestamp: new Date().toISOString(),
+        data: resourceData,
       });
 
       console.log(`Patched ${resourceType} with ID: ${resourceId} and sent to Kinesis`);

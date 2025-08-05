@@ -1,15 +1,15 @@
-defmodule KafkaConsumer.MixProject do
+defmodule NotificationHub.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :kafka_consumer,
+      app: :notification_hub,
       version: "0.1.0",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: [
-        kafka_consumer: [
+        notification_hub: [
           include_erts: true,
           include_src: false
         ]
@@ -19,8 +19,8 @@ defmodule KafkaConsumer.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :broadway],
-      mod: {KafkaConsumer.Application, []}
+      extra_applications: [:logger],
+      mod: {NotificationHub.Application, []}
     ]
   end
 
@@ -32,12 +32,11 @@ defmodule KafkaConsumer.MixProject do
       {:phoenix_live_reload, "~> 1.4", only: :dev},
       {:plug_cowboy, "~> 2.6"},
       {:gettext, "~> 0.20"},
-      {:broadway, "~> 1.0"},
-      {:broadway_kafka, "~> 0.4"},
       {:jason, "~> 1.4"},
       {:uuid, "~> 1.1"},
-      {:brod, "~> 3.16"},
-      {:cors_plug, "~> 3.0"}
+      {:cors_plug, "~> 3.0"},
+      {:grpc, "~> 0.7"},
+      {:protobuf, "~> 0.11"}
     ]
   end
 end

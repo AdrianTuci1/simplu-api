@@ -1,22 +1,8 @@
 import Config
 
-# Configure your database
-config :kafka_consumer, KafkaConsumer.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "kafka_consumer_dev",
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
-
 # For development, we disable any cache and enable
 # debugging and code reloading.
-#
-# The watchers configuration can be used to run external
-# watchers to your application. For example, we can use it
-# to bundle .js and .css sources.
-config :kafka_consumer, KafkaConsumerWeb.Endpoint,
+config :notification_hub, NotificationHubWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {0, 0, 0, 0}, port: 4000],
@@ -33,20 +19,10 @@ config :kafka_consumer, KafkaConsumerWeb.Endpoint,
     credentials: true
   ]
 
-# Kafka configuration
-config :kafka_consumer,
-  kafka_brokers: System.get_env("KAFKA_BROKERS", "kafka:29092")
-    |> String.split(",")
-    |> Enum.map(fn broker ->
-      [host, port] = String.split(broker, ":")
-      {String.to_atom(host), String.to_integer(port)}
-    end),
-  kafka_group_id: System.get_env("KAFKA_GROUP_ID", "elixir-consumer-group"),
-  kafka_client_id: System.get_env("KAFKA_CLIENT_ID", "elixir-consumer"),
-  kafka_publisher_group_id: System.get_env("KAFKA_PUBLISHER_GROUP_ID", "elixir-publisher-group"),
-  kafka_publisher_client_id: System.get_env("KAFKA_PUBLISHER_CLIENT_ID", "elixir-publisher"),
-  kafka_publisher_topic: System.get_env("KAFKA_PUBLISHER_TOPIC", "elixir.to.agent"),
-  kafka_consumer_topic: System.get_env("KAFKA_CONSUMER_TOPIC", "agent.to.elixir")
+# gRPC configuration for development
+config :notification_hub,
+  grpc_port: String.to_integer(System.get_env("GRPC_PORT", "50051")),
+  ai_agent_grpc_url: System.get_env("AI_AGENT_GRPC_URL", "localhost:50052")
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"

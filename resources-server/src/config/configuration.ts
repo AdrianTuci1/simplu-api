@@ -23,6 +23,11 @@ export default () => ({
     retryAttempts: parseInt(process.env.CITRUS_RETRY_ATTEMPTS || '3', 10),
   },
   
+  // Elixir Service Configuration
+  elixir: {
+    url: process.env.ELIXIR_URL || 'http://elixir:4000',
+  },
+  
   // Cognito Configuration
   cognito: {
     userPoolId: process.env.COGNITO_USER_POOL_ID,

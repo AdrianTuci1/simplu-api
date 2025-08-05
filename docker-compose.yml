@@ -65,24 +65,59 @@ services:
     networks:
       - app-network
 
-  elixir:
+  resources-server:
+    build:
+      context: ./resources-server
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3001"
+    environment:
+      # Application Configuration
+      - NODE_ENV=development
+      - PORT=3001
+      
+      # AWS Configuration for Kinesis
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      
+      # Kinesis Configuration
+      - KINESIS_STREAM_NAME=${KINESIS_STREAM_NAME:-resources-stream}
+      - ELIXIR_STREAM_NAME=${KINESIS_ELIXIR_STREAM_NAME:-elixir-notifications}
+      
+      # Notification Hub Service Configuration
+      - ELIXIR_URL=http://notification-hub:4000
+      
+      # Citrus Sharding Configuration
+      - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
+      - CITRUS_API_KEY=${CITRUS_API_KEY}
+      - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
+      - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
+      
+      # Cognito Configuration
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+      - COGNITO_REGION=${AWS_REGION:-us-east-1}
+    depends_on:
+      citrus:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  notification-hub:
     build:
       context: ./elixir
       dockerfile: Dockerfile
     ports:
       - "4000:4000"
+      - "50051:50051"
     environment:
-      - KAFKA_BROKERS=kafka:29092
-      - KAFKA_CLIENT_ID=elixir-consumer
-      - KAFKA_GROUP_ID=elixir-consumer-group
-      - KAFKA_PUBLISHER_CLIENT_ID=elixir-publisher
-      - KAFKA_PUBLISHER_GROUP_ID=elixir-publisher-group
-      - KAFKA_CONSUMER_TOPIC=agent.to.elixir
-      - KAFKA_PUBLISHER_TOPIC=elixir.to.agent
+      # gRPC Configuration (for AI agent communication)
+      - GRPC_PORT=50051
+      - AI_AGENT_GRPC_URL=ai-agent-server:50052
+      
+      # Application Configuration
       - EXS_SECRET=${EXS_SECRET}
-    depends_on:
-      kafka:
-        condition: service_started
     networks:
       - app-network
 
@@ -92,21 +127,21 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3001:3000"
+      - "50052:50052"
     environment:
       - NODE_ENV=development
-      - KAFKA_BROKERS=kafka:29092
-      - KAFKA_CLIENT_ID=ai-agent-consumer
-      - KAFKA_GROUP_ID=ai-agent-consumer-group
-      - KAFKA_PUBLISHER_CLIENT_ID=ai-agent-publisher
-      - KAFKA_PUBLISHER_GROUP_ID=ai-agent-publisher-group
-      - KAFKA_CONSUMER_TOPIC=elixir.to.agent
-      - KAFKA_PUBLISHER_TOPIC=agent.to.elixir
+      
+      # gRPC Configuration
+      - GRPC_PORT=50052
+      - NOTIFICATION_HUB_GRPC_URL=notification-hub:50051
+      
+      # Redis Configuration
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      
+      # AI Configuration
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     depends_on:
-      kafka:
-        condition: service_started
       redis:
         condition: service_healthy
     networks:

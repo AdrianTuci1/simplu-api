@@ -1,7 +1,7 @@
 FROM hexpm/elixir:1.15.7-erlang-26.2.1-debian-bullseye-20231009 as build
 
 # Install build dependencies
-RUN apt-get update -y && apt-get install -y build-essential git \
+RUN apt-get update -y && apt-get install -y build-essential git curl \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Prepare build dir
@@ -29,7 +29,7 @@ RUN mix do compile, release
 # Start a new build stage
 FROM debian:bullseye-slim
 
-RUN apt-get update -y && apt-get install -y libstdc++6 openssl libncurses5 locales netcat \
+RUN apt-get update -y && apt-get install -y libstdc++6 openssl libncurses5 locales curl netcat \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale
@@ -42,27 +42,26 @@ ENV LC_ALL en_US.UTF-8
 WORKDIR /app
 
 # Copy the release from the build stage
-COPY --from=build /app/_build/prod/rel/kafka_consumer ./
+COPY --from=build /app/_build/prod/rel/notification_hub ./
 
-# Set Kafka environment variables
-ENV KAFKA_GROUP_ID="kafka-consumer-group"
-ENV KAFKA_CLIENT_ID="kafka-consumer"
-ENV KAFKA_BROKERS="kafka:29092"
+# Set gRPC environment variables
+ENV GRPC_PORT="50051"
+ENV AI_AGENT_GRPC_URL="ai-agent-server:50052"
 
-# Expose Phoenix port
-EXPOSE 4000
+# Expose Phoenix and gRPC ports
+EXPOSE 4000 50051
 
-# Create wait script
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:4000/health || exit 1
+
+# Create start script
 RUN echo '#!/bin/sh\n\
-echo "Waiting for Kafka to be ready..."\n\
-while ! nc -z kafka 29092; do\n\
-  echo "Waiting for Kafka port..."\n\
-  sleep 2\n\
-done\n\
-echo "Kafka port is available, waiting for Kafka to be fully ready..."\n\
-sleep 30\n\
-echo "Starting Phoenix server and Kafka consumer..."\n\
-exec bin/kafka_consumer start' > /app/start.sh && \
+echo "Starting Notification Hub service..."\n\
+echo "Phoenix port: 4000"\n\
+echo "gRPC port: $GRPC_PORT"\n\
+echo "AI Agent gRPC URL: $AI_AGENT_GRPC_URL"\n\
+exec bin/notification_hub start' > /app/start.sh && \
 chmod +x /app/start.sh
 
 CMD ["/app/start.sh"] 
