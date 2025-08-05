@@ -19,10 +19,9 @@ config :notification_hub, NotificationHubWeb.Endpoint,
     credentials: true
   ]
 
-# gRPC configuration for development
+# HTTP configuration for development
 config :notification_hub,
-  grpc_port: String.to_integer(System.get_env("GRPC_PORT", "50051")),
-  ai_agent_grpc_url: System.get_env("AI_AGENT_GRPC_URL", "localhost:50052")
+  ai_agent_http_url: System.get_env("AI_AGENT_HTTP_URL", "http://localhost:3001")
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"

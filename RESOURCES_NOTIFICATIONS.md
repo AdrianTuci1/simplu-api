@@ -5,17 +5,39 @@ This document describes the resources notification system that allows the resour
 ## Architecture
 
 ```
-App → Resources Server (via Kinesis) → Notification Hub (via HTTP) → Clients (via WebSocket)
-                                    ↕
-                              AI Agent Server (via gRPC)
+                    ┌─── App (via Kinesis) ───┐
+                    ↓                         ↓
+            Resources Server ──────→ Notification Hub ←──── Frontend (WebSocket)
+                                          ↕ (HTTP)
+                                    AI Agent Server
 ```
 
+### Resource Updates Flow:
 1. **App** sends resource operations to **Resources Server** via Kinesis streams
 2. **Resources Server** processes the operations and sends HTTP notifications to **Notification Hub**
-3. **Notification Hub** receives HTTP notifications and broadcasts them to connected clients via WebSocket
-4. **Notification Hub** communicates with **AI Agent Server** via gRPC for message processing
+3. **Notification Hub** broadcasts resource updates to connected clients via WebSocket
+
+### AI Messages Flow:
+4. **Frontend** sends messages to **Notification Hub** via HTTP
+5. **Notification Hub** forwards messages to **AI Agent Server** via HTTP
+6. **AI Agent Server** processes messages and sends responses back to **Notification Hub** via HTTP
+7. **Notification Hub** broadcasts AI responses to connected clients via WebSocket
 
 ## Components
+
+### App (Node.js/NestJS)
+
+- **Port**: 3000
+- **Purpose**: Main application that sends resource operations
+- **Kinesis Streams**:
+  - Publishes to: `resources-stream` (to resources-server)
+
+#### Key Features:
+- AWS Kinesis integration for sending resource operations
+- Citrus sharding service integration for multi-tenant data management
+- Cognito authentication
+- DynamoDB integration for business info
+- Redis caching
 
 ### Resources Server (Node.js/NestJS)
 
@@ -23,33 +45,32 @@ App → Resources Server (via Kinesis) → Notification Hub (via HTTP) → Clien
 - **Purpose**: Handles CREATE, READ, UPDATE, DELETE operations for resources
 - **Kinesis Streams**:
   - Consumes from: `resources-stream` (from app)
-  - Publishes to: `elixir-notifications` (to Elixir)
+- **HTTP Notifications**:
+  - Sends to: `notification-hub:4000/api/notifications`
 
 #### Key Features:
 - AWS Kinesis integration for reliable message processing
 - Citrus sharding service integration for multi-tenant data management
 - Cognito authentication
+- HTTP notifications to Notification Hub
 - Swagger API documentation at `/api`
 - Health check endpoint at `/health`
 
 ### Notification Hub (Phoenix/Elixir)
 
 - **HTTP Port**: 4000
-- **gRPC Port**: 50051
 - **Purpose**: Central hub for notifications and AI agent communication
 - **HTTP Endpoints**:
   - Receives resource notifications: `POST /api/notifications`
   - Receives messages for AI agent: `POST /api/messages`
-- **gRPC Services**:
-  - Receives AI agent responses via gRPC
+  - Health check: `GET /api/health`
 
 #### Key Features:
 - HTTP API for receiving resource notifications from resources-server
 - HTTP API for receiving messages from frontend to send to AI agent
-- gRPC communication with AI agent server
+- HTTP client for communicating with AI agent server
 - Phoenix Channels for WebSocket communication
 - Real-time broadcasting to business/location-specific channels
-- Health check endpoint at `/api/health`
 - Test client at `/test`
 
 ## WebSocket Channels
@@ -75,6 +96,40 @@ App → Resources Server (via Kinesis) → Notification Hub (via HTTP) → Clien
 
 ## Environment Variables
 
+### App
+
+```bash
+# Application
+NODE_ENV=development
+PORT=3000
+
+# AWS/Kinesis
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=us-east-1
+KINESIS_STREAM_NAME=resources-stream
+
+# JWT Authentication
+JWT_SECRET=your-super-secret-jwt-key
+JWT_EXPIRES_IN=1d
+
+# Cognito
+COGNITO_USER_POOL_ID=your-user-pool-id
+COGNITO_CLIENT_ID=your-client-id
+
+# DynamoDB
+DYNAMODB_BUSINESS_INFO_TABLE=business-info
+DYNAMODB_ENDPOINT=your-dynamodb-endpoint
+
+# Citrus Sharding
+CITRUS_SERVER_URL=http://citrus:8080
+CITRUS_API_KEY=your-citrus-api-key
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+
 ### Resources Server
 
 ```bash
@@ -87,7 +142,9 @@ AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_REGION=us-east-1
 KINESIS_STREAM_NAME=resources-stream
-ELIXIR_STREAM_NAME=elixir-notifications
+
+# Notification Hub
+ELIXIR_URL=http://notification-hub:4000
 
 # Citrus Sharding
 CITRUS_SERVER_URL=http://citrus:8080
@@ -101,9 +158,8 @@ COGNITO_CLIENT_ID=your-client-id
 ### Notification Hub
 
 ```bash
-# gRPC Configuration
-GRPC_PORT=50051
-AI_AGENT_GRPC_URL=ai-agent-server:50052
+# HTTP Configuration
+AI_AGENT_HTTP_URL=http://ai-agent-server:3000
 
 # Application
 EXS_SECRET=your-secret-key
@@ -112,9 +168,8 @@ EXS_SECRET=your-secret-key
 ### AI Agent Server
 
 ```bash
-# gRPC Configuration
-GRPC_PORT=50052
-NOTIFICATION_HUB_GRPC_URL=notification-hub:50051
+# HTTP Configuration
+NOTIFICATION_HUB_HTTP_URL=http://notification-hub:4000
 
 # AI Configuration
 OPENROUTER_API_KEY=your-openrouter-api-key

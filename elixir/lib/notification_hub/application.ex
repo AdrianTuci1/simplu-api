@@ -5,8 +5,6 @@ defmodule NotificationHub.Application do
   def start(_type, _args) do
     children = [
       {Phoenix.PubSub, name: NotificationHub.PubSub},
-      # gRPC server for AI agent communication
-      {GRPC.Server.Supervisor, {NotificationHub.GrpcEndpoint, 50051}},
       NotificationHubWeb.Endpoint
     ]
 

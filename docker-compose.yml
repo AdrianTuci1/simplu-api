@@ -1,4 +1,5 @@
 services:
+  # App - sends resource operations to resources-server via Kinesis
   app:
     build:
       context: ./app
@@ -10,16 +11,21 @@ services:
       - NODE_ENV=development
       - PORT=3000
       
+      # AWS Configuration for Kinesis
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      
+      # Kinesis Configuration
+      - KINESIS_STREAM_NAME=${KINESIS_STREAM_NAME:-resources-stream}
+      
       # JWT Authentication
-      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
       - JWT_EXPIRES_IN=1d
       
       # External AWS Cognito Configuration
       - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
       - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       
       # External AWS DynamoDB Configuration (Business Info)
       - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
@@ -30,11 +36,6 @@ services:
       - CITRUS_API_KEY=${CITRUS_API_KEY}
       - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
       - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
-      
-      # Kafka Configuration
-      - KAFKA_BROKERS=kafka:29092
-      - KAFKA_CLIENT_ID=simplu-api
-      - KAFKA_GROUP_ID=simplu-api-group
       
       # Redis Configuration
       - REDIS_HOST=redis
@@ -49,22 +50,17 @@ services:
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
       
       # Security Configuration
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:4000}
       - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-1000}
-      
-      # Development Configuration
-      - SEED_DATA_ENABLED=${SEED_DATA_ENABLED:-false}
     depends_on:
-      # External services that must be available
       citrus:
         condition: service_healthy
-      kafka:
-        condition: service_started
       redis:
         condition: service_healthy
     networks:
       - app-network
 
+  # Resources Server - handles resource operations via Kinesis
   resources-server:
     build:
       context: ./resources-server
@@ -83,7 +79,6 @@ services:
       
       # Kinesis Configuration
       - KINESIS_STREAM_NAME=${KINESIS_STREAM_NAME:-resources-stream}
-      - ELIXIR_STREAM_NAME=${KINESIS_ELIXIR_STREAM_NAME:-elixir-notifications}
       
       # Notification Hub Service Configuration
       - ELIXIR_URL=http://notification-hub:4000
@@ -104,36 +99,37 @@ services:
     networks:
       - app-network
 
+  # Notification Hub - central hub for WebSocket communication
   notification-hub:
     build:
       context: ./elixir
       dockerfile: Dockerfile
     ports:
       - "4000:4000"
-      - "50051:50051"
     environment:
-      # gRPC Configuration (for AI agent communication)
-      - GRPC_PORT=50051
-      - AI_AGENT_GRPC_URL=ai-agent-server:50052
+      # HTTP Configuration (for AI agent communication)
+      - AI_AGENT_HTTP_URL=http://ai-agent-server:3000
       
       # Application Configuration
       - EXS_SECRET=${EXS_SECRET}
+    depends_on:
+      - resources-server
+      - ai-agent-server
     networks:
       - app-network
 
+  # AI Agent Server - processes AI messages
   ai-agent-server:
     build:
       context: ./ai-agent-server
       dockerfile: Dockerfile
     ports:
       - "3001:3000"
-      - "50052:50052"
     environment:
       - NODE_ENV=development
       
-      # gRPC Configuration
-      - GRPC_PORT=50052
-      - NOTIFICATION_HUB_GRPC_URL=notification-hub:50051
+      # HTTP Configuration
+      - NOTIFICATION_HUB_HTTP_URL=http://notification-hub:4000
       
       # Redis Configuration
       - REDIS_HOST=redis
@@ -149,7 +145,7 @@ services:
 
   # External Citrus Sharding Service
   citrus:
-    image: citrus/sharding-service:latest  # Replace with actual Citrus image
+    image: citrus/sharding-service:latest
     ports:
       - "8080:8080"
     environment:
@@ -188,7 +184,7 @@ services:
     networks:
       - app-network
 
-  # PostgreSQL for Citrus-managed shards (Citrus will create and manage individual shard databases)
+  # PostgreSQL for Citrus-managed shards
   postgres:
     image: postgres:15-alpine
     environment:
@@ -199,8 +195,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Mount initialization scripts for Citrus
-      - ./citrus-init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -209,22 +203,7 @@ services:
     networks:
       - app-network
 
-  # Local DynamoDB for development (optional - can use AWS DynamoDB in production)
-  dynamodb-local:
-    image: amazon/dynamodb-local:latest
-    ports:
-      - "8000:8000"
-    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "./data"]
-    volumes:
-      - dynamodb_data:/home/dynamodblocal/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/shell"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app-network
-
+  # Redis for AI Agent Server
   redis:
     image: redis:7-alpine
     ports:
@@ -239,66 +218,10 @@ services:
     networks:
       - app-network
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    networks:
-      - app-network
-
-  kafka:
-    image: confluentinc/cp-kafka:7.3.0
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    networks:
-      - app-network
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    depends_on:
-      - kafka
-    ports:
-      - "8081:8080"  # Changed port to avoid conflict with Citrus
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
-    networks:
-      - app-network
-
-  # Citrus Management UI (optional)
-  citrus-ui:
-    image: citrus/management-ui:latest  # Replace with actual Citrus UI image
-    ports:
-      - "8082:80"
-    environment:
-      - CITRUS_API_URL=http://citrus:8080
-      - CITRUS_API_KEY=${CITRUS_API_KEY}
-    depends_on:
-      - citrus
-    networks:
-      - app-network
-
 volumes:
   postgres_data:
   redis_data:
-  dynamodb_data:
 
 networks:
   app-network:
-    external: true
-    name: app-network
-    driver: bridge 
+    driver: bridge

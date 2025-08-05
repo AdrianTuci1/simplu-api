@@ -33,9 +33,6 @@ config :notification_hub, NotificationHubWeb.Endpoint,
 config :phoenix_live_view,
   signing_salt: System.get_env("EXS_SECRET", "temporary-signing-salt")
 
-# gRPC configuration for AI agent communication
-config :grpc, start_server: true
-
+# HTTP configuration for AI agent communication
 config :notification_hub,
-  grpc_port: String.to_integer(System.get_env("GRPC_PORT", "50051")),
-  ai_agent_grpc_url: System.get_env("AI_AGENT_GRPC_URL", "ai-agent-server:50051")
+  ai_agent_http_url: System.get_env("AI_AGENT_HTTP_URL", "http://ai-agent-server:3000")

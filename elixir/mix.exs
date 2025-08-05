@@ -35,8 +35,7 @@ defmodule NotificationHub.MixProject do
       {:jason, "~> 1.4"},
       {:uuid, "~> 1.1"},
       {:cors_plug, "~> 3.0"},
-      {:grpc, "~> 0.7"},
-      {:protobuf, "~> 0.11"}
+      {:httpoison, "~> 2.0"}
     ]
   end
 end

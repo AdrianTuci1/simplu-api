@@ -44,12 +44,11 @@ WORKDIR /app
 # Copy the release from the build stage
 COPY --from=build /app/_build/prod/rel/notification_hub ./
 
-# Set gRPC environment variables
-ENV GRPC_PORT="50051"
-ENV AI_AGENT_GRPC_URL="ai-agent-server:50052"
+# Set HTTP environment variables
+ENV AI_AGENT_HTTP_URL="http://ai-agent-server:3000"
 
-# Expose Phoenix and gRPC ports
-EXPOSE 4000 50051
+# Expose Phoenix port
+EXPOSE 4000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
@@ -59,8 +58,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 RUN echo '#!/bin/sh\n\
 echo "Starting Notification Hub service..."\n\
 echo "Phoenix port: 4000"\n\
-echo "gRPC port: $GRPC_PORT"\n\
-echo "AI Agent gRPC URL: $AI_AGENT_GRPC_URL"\n\
+echo "AI Agent HTTP URL: $AI_AGENT_HTTP_URL"\n\
 exec bin/notification_hub start' > /app/start.sh && \
 chmod +x /app/start.sh
 

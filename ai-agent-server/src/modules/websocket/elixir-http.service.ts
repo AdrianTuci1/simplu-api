@@ -1,85 +1,49 @@
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { MessageDto, AgentResponse } from '@/shared/interfaces/message.interface';
+import { MessageDto } from '@/shared/interfaces/message.interface';
 import { firstValueFrom } from 'rxjs';
-import { elixirConfig } from '@/config/elixir.config';
 
 @Injectable()
 export class ElixirHttpService {
-  private readonly elixirHttpUrl: string;
+  private readonly notificationHubUrl: string;
 
   constructor(private readonly httpService: HttpService) {
-    this.elixirHttpUrl = elixirConfig.httpUrl;
+    this.notificationHubUrl = process.env.NOTIFICATION_HUB_HTTP_URL || 'http://notification-hub:4000';
   }
 
-  // Notifică Elixir despre o nouă conversație AI
-  async notifyNewAIConversation(data: MessageDto): Promise<void> {
+  // Trimite răspunsul AI înapoi la Notification Hub
+  async sendAIResponse(tenantId: string, userId: string, sessionId: string, messageId: string, content: string, context: any = {}): Promise<void> {
     try {
       await firstValueFrom(
-        this.httpService.post(`${this.elixirHttpUrl}${elixirConfig.endpoints.aiConversation}`, {
-          businessId: data.businessId,
-          locationId: data.locationId,
-          userId: data.userId,
-          sessionId: data.sessionId,
-          message: data.message,
-          timestamp: data.timestamp || new Date().toISOString(),
-          type: 'ai_conversation'
+        this.httpService.post(`${this.notificationHubUrl}/api/ai-responses`, {
+          tenant_id: tenantId,
+          user_id: userId,
+          session_id: sessionId,
+          message_id: messageId,
+          content: content,
+          context: context,
+          timestamp: new Date().toISOString(),
+          type: 'agent.response'
         })
       );
       
-      console.log('AI conversation notification sent to Elixir successfully');
+      console.log('AI response sent to Notification Hub successfully');
     } catch (error) {
-      console.error('Error notifying Elixir about AI conversation:', error);
+      console.error('Error sending AI response to Notification Hub:', error);
       // Nu aruncăm eroarea pentru că aceasta nu este critică
     }
   }
 
-  // Trimite context AI către Elixir pentru agent
-  async sendAIContextToElixir(sessionId: string, context: any): Promise<void> {
-    try {
-      await firstValueFrom(
-        this.httpService.post(`${this.elixirHttpUrl}${elixirConfig.endpoints.aiContext}`, {
-          sessionId,
-          context,
-          timestamp: new Date().toISOString()
-        })
-      );
-      
-      console.log('AI context sent to Elixir successfully');
-    } catch (error) {
-      console.error('Error sending AI context to Elixir:', error);
-      // Nu aruncăm eroarea pentru că aceasta nu este critică
-    }
-  }
-
-  // Actualizează statusul conversației în Elixir
-  async updateConversationStatus(sessionId: string, status: string, summary?: string): Promise<void> {
-    try {
-      await firstValueFrom(
-        this.httpService.put(`${this.elixirHttpUrl}${elixirConfig.endpoints.conversationStatus}/${sessionId}`, {
-          status,
-          summary,
-          updatedAt: new Date().toISOString()
-        })
-      );
-      
-      console.log('Conversation status update sent to Elixir successfully');
-    } catch (error) {
-      console.error('Error updating conversation status in Elixir:', error);
-      // Nu aruncăm eroarea pentru că aceasta nu este critică
-    }
-  }
-
-  // Verifică starea aplicației Elixir
-  async checkElixirHealth(): Promise<boolean> {
+  // Verifică starea Notification Hub-ului
+  async checkNotificationHubHealth(): Promise<boolean> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.elixirHttpUrl}${elixirConfig.endpoints.health}`)
+        this.httpService.get(`${this.notificationHubUrl}/health`)
       );
       
       return response.status === 200;
     } catch (error) {
-      console.error('Elixir health check failed:', error);
+      console.error('Notification Hub health check failed:', error);
       return false;
     }
   }
