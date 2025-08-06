@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../database/database.service';
 import { PaymentService } from '../payment/payment.service';
 import { InfrastructureService } from '../infrastructure/infrastructure.service';
+import { ShardManagementService } from '../shared/services/shard-management.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { BusinessEntity, LocationInfo } from './entities/business.entity';
@@ -16,6 +17,7 @@ export class BusinessService {
     private readonly databaseService: DatabaseService,
     private readonly paymentService: PaymentService,
     private readonly infrastructureService: InfrastructureService,
+    private readonly shardManagementService: ShardManagementService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -103,6 +105,25 @@ export class BusinessService {
 
       // Save to database
       const savedBusiness = await this.databaseService.createBusiness(business);
+
+      // Trigger shard creation for business locations via SQS
+      try {
+        const locationRegistrations = locations.map(location => ({
+          id: location.id,
+          businessType: createBusinessDto.businessType,
+        }));
+
+        await this.shardManagementService.triggerMultipleShardCreations(
+          businessId,
+          locationRegistrations,
+        );
+
+        this.logger.log(`Shard creation triggered for business: ${businessId}`);
+      } catch (shardError) {
+        this.logger.error(`Failed to trigger shard creation for business ${businessId}:`, shardError);
+        // Don't fail the business creation if shard creation trigger fails
+        // The shards can be created later through a retry mechanism
+      }
 
       this.logger.log(`Business created successfully: ${businessId}`);
       return savedBusiness;
@@ -225,6 +246,31 @@ export class BusinessService {
 
   async getBusinessesByPaymentStatus(paymentStatus: string): Promise<BusinessEntity[]> {
     return await this.databaseService.getBusinessesByPaymentStatus(paymentStatus);
+  }
+
+  async registerBusinessShards(businessId: string): Promise<void> {
+    try {
+      const business = await this.getBusiness(businessId);
+      
+      if (!business.locations || business.locations.length === 0) {
+        throw new BadRequestException('No locations found for this business');
+      }
+
+      const locationRegistrations = business.locations.map(location => ({
+        id: location.id,
+        businessType: business.businessType,
+      }));
+
+      await this.shardManagementService.triggerMultipleShardCreations(
+        businessId,
+        locationRegistrations,
+      );
+
+      this.logger.log(`Successfully triggered shard creation for ${locationRegistrations.length} locations of business ${businessId}`);
+    } catch (error) {
+      this.logger.error(`Error triggering shard creation for business ${businessId}: ${error.message}`);
+      throw new BadRequestException(`Failed to trigger shard creation: ${error.message}`);
+    }
   }
 
   private getPriceIdForBusinessType(businessType: string): string {

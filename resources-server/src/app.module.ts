@@ -4,6 +4,7 @@ import { ResourcesModule } from './modules/resources/resources.module';
 import { KinesisModule } from './modules/kinesis/kinesis.module';
 import { HealthModule } from './modules/health/health.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { SqsModule } from './modules/sqs/sqs.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     KinesisModule,
     HealthModule,
     NotificationModule,
+    SqsModule,
   ],
 })
 export class AppModule {} 

@@ -96,6 +96,9 @@ services:
       
       # Validation Configuration
       - VALIDATION_ENABLED=${VALIDATION_ENABLED:-true}
+      
+      # SQS Configuration for Shard Creation Notifications
+      - SQS_SHARD_CREATION_QUEUE_URL=${SQS_SHARD_CREATION_QUEUE_URL}
     depends_on:
       citrus:
         condition: service_healthy
@@ -240,8 +243,12 @@ services:
       
       # CloudFormation Configuration
       - CLOUDFORMATION_STACK_PREFIX=${CLOUDFORMATION_STACK_PREFIX:-react-app-}
+      
+      # SQS Configuration for Shard Creation Notifications
+      - SQS_SHARD_CREATION_QUEUE_URL=${SQS_SHARD_CREATION_QUEUE_URL}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - app-network
 

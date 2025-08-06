@@ -95,4 +95,19 @@ export class BusinessController {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
   }
+
+  @Post(':id/register-shards')
+  @ApiOperation({ summary: 'Trigger shard creation for business locations' })
+  @ApiResponse({ status: 200, description: 'Shard creation triggered successfully' })
+  async registerBusinessShards(@Param('id') id: string) {
+    try {
+      await this.businessService.registerBusinessShards(id);
+      return { 
+        message: 'Shard creation triggered successfully',
+        note: 'Shards will be created by the resources server via SQS messages'
+      };
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
+  }
 } 

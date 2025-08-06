@@ -23,6 +23,7 @@
     "@aws-sdk/client-cloudformation": "^3.540.0",
     "@aws-sdk/client-dynamodb": "^3.540.0",
     "@aws-sdk/client-route-53": "^3.540.0",
+    "@aws-sdk/client-sqs": "^3.859.0",
     "@aws-sdk/lib-dynamodb": "^3.540.0",
     "@nestjs/common": "^10.4.0",
     "@nestjs/config": "^3.2.0",
