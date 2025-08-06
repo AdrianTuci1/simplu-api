@@ -1,9 +1,9 @@
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { AgentState } from '../../interfaces/agent.interface';
 
 export class ResponseNode {
-  constructor(private geminiModel: ChatGoogleGenerativeAI) {}
+  constructor(private openaiModel: ChatOpenAI) {}
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
@@ -24,7 +24,7 @@ export class ResponseNode {
       - Să nu depășească 200 de cuvinte
       `;
 
-      const response = await this.geminiModel.invoke([new HumanMessage(prompt)]);
+      const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       
       return {
         response: response.content as string,

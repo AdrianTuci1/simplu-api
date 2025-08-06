@@ -24,7 +24,6 @@ Acest server gestionează operațiunile de modificare a resurselor (CREATE, UPDA
 ### Integrări:
 - **Citrus**: Pentru shard-uri și distribuția datelor
 - **AWS Kinesis**: Pentru stream-uri de date
-- **AWS Cognito**: Pentru autentificare
 
 ## Endpoints
 
@@ -45,7 +44,6 @@ Actualizează parțial o resursă existentă
 - `X-Business-ID`: ID-ul business-ului
 - `X-Location-ID`: ID-ul locației
 - `X-Resource-Type`: Tipul resursei
-- `Authorization`: Bearer token pentru autentificare
 
 ## Configurare
 
@@ -64,10 +62,6 @@ AWS_SECRET_ACCESS_KEY=your-secret
 # Kinesis
 KINESIS_STREAM_NAME=resources-stream
 ELIXIR_STREAM_NAME=elixir-notifications
-
-# Cognito
-COGNITO_USER_POOL_ID=your-pool-id
-COGNITO_CLIENT_ID=your-client-id
 
 # Citrus
 CITRUS_SERVER_URL=http://localhost:8080
@@ -107,7 +101,6 @@ Serverul generează loguri detaliate pentru:
 
 ## Securitate
 
-- Autentificare prin AWS Cognito
 - Validare parametri pentru toate operațiunile
 - Logging pentru audit
 - **Notă**: Verificarea permisiunilor, rolurilor și validările se fac în serverul care procesează stream-urile Kinesis

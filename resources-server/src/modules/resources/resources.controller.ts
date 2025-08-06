@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   Headers,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,13 +16,11 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { ResourcesService } from './resources.service';
-import { CognitoAuthGuard } from '../auth/guards/cognito-auth.guard';
 import { StandardResponse } from './dto/standard-response.dto';
 import { ResourceRequest } from './dto/resource-request.dto';
 
 @ApiTags('Resources')
 @Controller('resources')
-@UseGuards(CognitoAuthGuard)
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 

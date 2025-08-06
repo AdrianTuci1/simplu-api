@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { StateGraph } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
-import { geminiConfig } from '@/config/gemini.config';
+import { openaiConfig } from '@/config/openai.config';
 import { BusinessInfoService } from '../business-info/business-info.service';
 import { RagService } from '../rag/rag.service';
 import { SessionService } from '../session/session.service';
@@ -25,7 +25,7 @@ import { ResponseNode } from './langchain/nodes/response.node';
 
 @Injectable()
 export class AgentService {
-  private geminiModel: ChatGoogleGenerativeAI;
+  private openaiModel: ChatOpenAI;
   private graph: StateGraph<AgentState>;
 
   constructor(
@@ -36,7 +36,7 @@ export class AgentService {
     private readonly resourcesService: ResourcesService,
     private readonly externalApisService: ExternalApisService
   ) {
-    this.initializeGemini();
+    this.initializeOpenAI();
     this.setupGraph();
   }
 
@@ -68,26 +68,26 @@ export class AgentService {
       Object.assign(state, businessInfoResult);
       
       // 2. RAG Search Node
-      const ragSearchNode = new RagSearchNode(this.geminiModel, this.ragService);
+      const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService);
       const ragResult = await ragSearchNode.invoke(state);
       Object.assign(state, ragResult);
       
       // 3. Resource Operations Node (dacă este necesar)
       if (state.needsResourceSearch) {
-        const resourceOperationsNode = new ResourceOperationsNode(this.geminiModel);
+        const resourceOperationsNode = new ResourceOperationsNode(this.openaiModel);
         const resourceResult = await resourceOperationsNode.invoke(state);
         Object.assign(state, resourceResult);
         
         // 4. External API Node (dacă este necesar)
         if (state.needsExternalApi) {
-          const externalApiNode = new ExternalApiNode(this.geminiModel);
+          const externalApiNode = new ExternalApiNode(this.openaiModel);
           const externalResult = await externalApiNode.invoke(state);
           Object.assign(state, externalResult);
         }
       }
       
       // 5. Response Node
-      const responseNode = new ResponseNode(this.geminiModel);
+      const responseNode = new ResponseNode(this.openaiModel);
       const responseResult = await responseNode.invoke(state);
       Object.assign(state, responseResult);
       
@@ -118,7 +118,7 @@ export class AgentService {
 
   // Procesare autonomă pentru webhook-uri
   async processWebhookMessage(webhookData: WebhookData): Promise<AutonomousActionResult> {
-    // 1. Analiză mesaj cu Gemini pentru a determina intenția
+    // 1. Analiză mesaj cu OpenAI pentru a determina intenția
     const intent = await this.analyzeIntent(webhookData.message, webhookData.businessId);
     
     // 2. Determinare dacă poate fi rezolvat autonom
@@ -146,7 +146,7 @@ export class AgentService {
       };
     }
     
-    // 2. Analiză intenție cu Gemini
+    // 2. Analiză intenție cu OpenAI
     const intent = await this.analyzeIntent(webhookData.message, businessInfo.businessType);
     
     // 3. Obținere instrucțiuni RAG
@@ -202,7 +202,7 @@ export class AgentService {
     `;
 
     try {
-      const response = await this.geminiModel.invoke([new HumanMessage(prompt)]);
+      const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       return JSON.parse(response.content as string);
     } catch (error) {
       console.error('Error analyzing intent:', error);
@@ -327,8 +327,8 @@ export class AgentService {
     }
 
     if (step.action === 'extract_reservation_details') {
-      // Extragere detalii cu Gemini
-      const extractedData = await this.extractDataWithGemini(context.webhookData.message, 'reservation');
+      // Extragere detalii cu OpenAI
+      const extractedData = await this.extractDataWithOpenAI(context.webhookData.message, 'reservation');
       
       return {
         step: step.step,
@@ -367,7 +367,7 @@ export class AgentService {
     };
   }
 
-  private async extractDataWithGemini(message: string, dataType: string): Promise<any> {
+  private async extractDataWithOpenAI(message: string, dataType: string): Promise<any> {
     const prompt = `
     Extrage datele relevante din mesaj pentru ${dataType}.
     
@@ -377,7 +377,7 @@ export class AgentService {
     `;
 
     try {
-      const response = await this.geminiModel.invoke([new HumanMessage(prompt)]);
+      const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       return JSON.parse(response.content as string);
     } catch (error) {
       console.error('Error extracting data:', error);
@@ -439,7 +439,7 @@ export class AgentService {
     results: any[],
     context: WorkflowContext
   ): string {
-    // Generare răspuns de succes cu Gemini
+    // Generare răspuns de succes cu OpenAI
     const prompt = `
     Generează un răspuns de succes pentru utilizator.
     
@@ -455,7 +455,7 @@ export class AgentService {
     `;
 
     try {
-      const response = this.geminiModel.invoke([new HumanMessage(prompt)]);
+      const response = this.openaiModel.invoke([new HumanMessage(prompt)]);
       return (response as any).content || 'Acțiunea a fost realizată cu succes!';
     } catch (error) {
       return 'Acțiunea a fost realizată cu succes!';
@@ -488,7 +488,7 @@ export class AgentService {
     `;
 
     try {
-      const response = await this.geminiModel.invoke([new HumanMessage(prompt)]);
+      const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       return response.content as string;
     } catch (error) {
       console.error('Error generating response:', error);
@@ -546,20 +546,19 @@ export class AgentService {
     };
   }
 
-  private initializeGemini(): void {
+  private initializeOpenAI(): void {
     try {
-      this.geminiModel = new ChatGoogleGenerativeAI({
-        model: geminiConfig.modelName,
-        maxOutputTokens: geminiConfig.maxOutputTokens,
-        temperature: geminiConfig.temperature,
-        topP: geminiConfig.topP,
-        topK: geminiConfig.topK,
-        // Pentru moment, omitem safetySettings pentru a evita problemele de tipuri
+      this.openaiModel = new ChatOpenAI({
+        modelName: openaiConfig.modelName,
+        maxTokens: openaiConfig.maxTokens,
+        temperature: openaiConfig.temperature,
+        topP: openaiConfig.topP,
+        openAIApiKey: process.env.OPENAI_API_KEY,
       });
     } catch (error) {
-      console.warn('Failed to initialize Gemini model:', error.message);
+      console.warn('Failed to initialize OpenAI model:', error.message);
       // Pentru teste, creăm un mock model
-      this.geminiModel = {
+      this.openaiModel = {
         invoke: jest.fn().mockResolvedValue({ content: 'Mock response' })
       } as any;
     }
@@ -569,10 +568,10 @@ export class AgentService {
     try {
       // Creare instanțe pentru noduri
       const businessInfoNode = new BusinessInfoNode(this.businessInfoService);
-      const ragSearchNode = new RagSearchNode(this.geminiModel, this.ragService);
-      const resourceOperationsNode = new ResourceOperationsNode(this.geminiModel);
-      const externalApiNode = new ExternalApiNode(this.geminiModel);
-      const responseNode = new ResponseNode(this.geminiModel);
+      const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService);
+      const resourceOperationsNode = new ResourceOperationsNode(this.openaiModel);
+      const externalApiNode = new ExternalApiNode(this.openaiModel);
+      const responseNode = new ResponseNode(this.openaiModel);
 
       // Pentru moment, simulăm graful LangGraph
       // În etapa următoare vom implementa graful complet cu StateGraph
@@ -631,7 +630,7 @@ export class AgentService {
   }
 
   private generateConfirmationMessage(context: WorkflowContext): string {
-    // Generare mesaj de confirmare cu Gemini
+    // Generare mesaj de confirmare cu OpenAI
     const prompt = `
       Generează un mesaj de confirmare pentru utilizator.
       

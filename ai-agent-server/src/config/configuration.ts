@@ -39,14 +39,13 @@ export default () => ({
     appSecret: process.env.META_APP_SECRET,
   },
   
-  // Gemini Configuration
-  gemini: {
-    apiKey: process.env.GOOGLE_API_KEY,
-    modelName: process.env.GEMINI_MODEL_NAME || 'gemini-2.0-flash-exp',
-    maxTokens: parseInt(process.env.GEMINI_MAX_TOKENS || '8192'),
-    temperature: parseFloat(process.env.GEMINI_TEMPERATURE || '0.1'),
-    topP: parseFloat(process.env.GEMINI_TOP_P || '0.8'),
-    topK: parseInt(process.env.GEMINI_TOP_K || '40'),
+  // OpenAI Configuration
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY,
+    modelName: process.env.OPENAI_MODEL_NAME || 'gpt-4o-mini',
+    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '8192'),
+    temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.1'),
+    topP: parseFloat(process.env.OPENAI_TOP_P || '0.8'),
   },
   
   // Redis

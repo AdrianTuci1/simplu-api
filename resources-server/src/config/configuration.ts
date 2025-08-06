@@ -28,13 +28,6 @@ export default () => ({
     url: process.env.ELIXIR_URL || 'http://elixir:4000',
   },
   
-  // Cognito Configuration
-  cognito: {
-    userPoolId: process.env.COGNITO_USER_POOL_ID,
-    clientId: process.env.COGNITO_CLIENT_ID,
-    region: process.env.COGNITO_REGION || 'us-east-1',
-  },
-  
   // Validation Configuration
   validation: {
     enabled: process.env.VALIDATION_ENABLED === 'true' || true,

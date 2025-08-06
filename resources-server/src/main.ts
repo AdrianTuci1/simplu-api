@@ -21,7 +21,6 @@ async function bootstrap() {
     .setTitle('Resources Server API')
     .setDescription('API for handling resource operations with AWS Kinesis integration')
     .setVersion('1.0')
-    .addBearerAuth()
     .build();
   
   const document = SwaggerModule.createDocument(app, config);

@@ -1,8 +1,8 @@
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { AgentState } from '../../interfaces/agent.interface';
 
 export class ExternalApiNode {
-  constructor(private geminiModel: ChatGoogleGenerativeAI) {}
+  constructor(private openaiModel: ChatOpenAI) {}
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {

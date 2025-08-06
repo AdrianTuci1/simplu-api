@@ -1,9 +1,9 @@
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { AgentState } from '../../interfaces/agent.interface';
 
 export class ResourceOperationsNode {
-  constructor(private geminiModel: ChatGoogleGenerativeAI) {}
+  constructor(private openaiModel: ChatOpenAI) {}
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
@@ -27,7 +27,7 @@ export class ResourceOperationsNode {
       }
       `;
 
-      const response = await this.geminiModel.invoke([new HumanMessage(prompt)]);
+      const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       const operations = JSON.parse(response.content as string);
 
       // Pentru moment, simulăm operațiile

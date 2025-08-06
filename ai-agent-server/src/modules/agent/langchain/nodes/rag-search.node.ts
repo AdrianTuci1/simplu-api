@@ -1,11 +1,11 @@
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { RagService } from '../../../rag/rag.service';
 import { AgentState } from '../../interfaces/agent.interface';
 
 export class RagSearchNode {
   constructor(
-    private geminiModel: ChatGoogleGenerativeAI,
+    private openaiModel: ChatOpenAI,
     private ragService: RagService
   ) {}
 
@@ -22,7 +22,7 @@ export class RagSearchNode {
       Returnează doar interogarea, fără explicații suplimentare.
       `;
 
-      const response = await this.geminiModel.invoke([new HumanMessage(prompt)]);
+      const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       const query = response.content as string;
 
       // Executare căutare RAG

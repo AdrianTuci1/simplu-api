@@ -29,7 +29,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     private readonly sessionService: SessionService,
     private readonly elixirHttpService: ElixirHttpService,
     private readonly agentService: AgentService
-  ) {}
+  ) { }
 
   async handleConnection(client: Socket) {
     console.log('Client connected');
@@ -54,9 +54,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     const { topic, payload, ref } = data;
     const connectionKey = `${topic}:${payload.businessId || 'unknown'}`;
     this.connections.set(connectionKey, client);
-    
+
     console.log(`Client joined topic: ${topic}`);
-    
+
     // Răspuns Phoenix pentru join
     client.send(JSON.stringify({
       event: 'phx_reply',
@@ -87,11 +87,11 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   ): Promise<void> {
     try {
       console.log(`Received message from ${data.userId} in business ${data.businessId}: ${data.message}`);
-      
+
       // Salvare mesaj în baza de date
       const messageId = this.generateMessageId();
       const timestamp = new Date().toISOString();
-      
+
       await this.sessionService.saveMessage({
         messageId,
         sessionId: data.sessionId || this.generateSessionId(data),
@@ -104,10 +104,10 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           source: 'websocket'
         }
       });
-      
+
       // Procesare mesaj prin agent
       const response = await this.agentService.processMessage(data);
-      
+
       // Salvare răspuns în baza de date
       await this.sessionService.saveMessage({
         messageId: this.generateMessageId(),
@@ -122,14 +122,14 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           responseId: response.responseId
         }
       });
-      
+
       // Trimitere răspuns către client în format Phoenix
       client.send(JSON.stringify({
         event: 'new_message',
         topic: `messages:${data.businessId}`,
         payload: response
       }));
-      
+
       // Broadcast către toți coordonatorii business-ului
       this.broadcastToBusiness(data.businessId, 'message_processed', {
         userId: data.userId,
@@ -137,10 +137,10 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         responseId: response.responseId,
         timestamp: response.timestamp
       });
-      
+
       // Notifică Elixir despre conversația AI pentru sincronizare
       await this.forwardToElixir(data, response);
-      
+
     } catch (error) {
       console.error('Error processing message:', error);
       client.send(JSON.stringify({
@@ -161,7 +161,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       topic: `messages:${businessId}`,
       payload: data
     });
-    
+
     // Găsirea tuturor conexiunilor pentru business-ul respectiv
     for (const [key, socket] of this.connections.entries()) {
       if (key.includes(`messages:${businessId}`)) {
@@ -176,7 +176,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       topic: `user:${userId}`,
       payload: data
     });
-    
+
     // Găsirea tuturor conexiunilor pentru utilizatorul respectiv
     for (const [key, socket] of this.connections.entries()) {
       if (key.includes(`user:${userId}`)) {
@@ -195,20 +195,20 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         response: response.message
       });
 
-      // Notifică Elixir despre conversația AI
-      await this.elixirHttpService.notifyNewAIConversation(data);
-      
-      // Trimite context AI către Elixir pentru agent
-      const context = {
-        sessionId: data.sessionId,
-        businessId: data.businessId,
-        userId: data.userId,
-        lastMessage: data.message,
-        aiResponse: response.message,
-        timestamp: response.timestamp
-      };
-      await this.elixirHttpService.sendAIContextToElixir(data.sessionId, context);
-      
+      // TODO: Implementează notificarea către Elixir despre conversația AI
+      // await this.elixirHttpService.notifyNewAIConversation(data);
+
+      // TODO: Implementează trimiterea contextului AI către Elixir
+      // const context = {
+      //   sessionId: data.sessionId,
+      //   businessId: data.businessId,
+      //   userId: data.userId,
+      //   lastMessage: data.message,
+      //   aiResponse: response.message,
+      //   timestamp: response.timestamp
+      // };
+      // await this.elixirHttpService.sendAIContextToElixir(data.sessionId, context);
+
     } catch (error) {
       console.error('Error forwarding AI conversation to Elixir:', error);
     }

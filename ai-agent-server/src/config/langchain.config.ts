@@ -1,9 +1,8 @@
 export const langchainConfig = {
-  modelName: process.env.GEMINI_MODEL_NAME || 'gemini-2.0-flash-exp',
-  temperature: parseFloat(process.env.GEMINI_TEMPERATURE || '0.1'),
-  maxTokens: parseInt(process.env.GEMINI_MAX_TOKENS || '8192'),
-  topP: parseFloat(process.env.GEMINI_TOP_P || '0.8'),
-  topK: parseInt(process.env.GEMINI_TOP_K || '40'),
+  modelName: process.env.OPENAI_MODEL_NAME || 'gpt-4o-mini',
+  temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.1'),
+  maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '8192'),
+  topP: parseFloat(process.env.OPENAI_TOP_P || '0.8'),
   
   // RAG Configuration
   rag: {
