@@ -1,8 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpException, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpException, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { BusinessService } from './business.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
+import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
+import { RolesGuard } from '../modules/auth/guards/roles.guard';
+import { Roles } from '../modules/auth/decorators/roles.decorator';
 
 @ApiTags('businesses')
 @Controller('businesses')
@@ -10,23 +13,30 @@ export class BusinessController {
   constructor(private readonly businessService: BusinessService) {}
 
   @Post()
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new business' })
   @ApiResponse({ status: 201, description: 'Business created successfully' })
   async createBusiness(
     @Body() createBusinessDto: CreateBusinessDto,
-    @Query('userEmail') userEmail: string
+    @Request() req: any
   ) {
     try {
-      if (!userEmail) {
+      const user = req.user;
+      if (!user || !user.email) {
         throw new HttpException('User email is required', HttpStatus.BAD_REQUEST);
       }
-      return await this.businessService.createBusiness(createBusinessDto, userEmail);
+      return await this.businessService.createBusiness(createBusinessDto, user.email);
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
   }
 
   @Get()
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin', 'manager')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all businesses' })
   @ApiResponse({ status: 200, description: 'Businesses retrieved successfully' })
   async getAllBusinesses() {
@@ -38,6 +48,9 @@ export class BusinessController {
   }
 
   @Get('status/:status')
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin', 'manager')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get businesses by status' })
   @ApiResponse({ status: 200, description: 'Businesses retrieved successfully' })
   async getBusinessesByStatus(@Param('status') status: string) {
@@ -49,6 +62,9 @@ export class BusinessController {
   }
 
   @Get('payment-status/:paymentStatus')
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin', 'manager')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get businesses by payment status' })
   @ApiResponse({ status: 200, description: 'Businesses retrieved successfully' })
   async getBusinessesByPaymentStatus(@Param('paymentStatus') paymentStatus: string) {
@@ -60,6 +76,9 @@ export class BusinessController {
   }
 
   @Get(':id')
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin', 'manager')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a business by ID' })
   @ApiResponse({ status: 200, description: 'Business retrieved successfully' })
   async getBusiness(@Param('id') id: string) {
@@ -71,6 +90,9 @@ export class BusinessController {
   }
 
   @Put(':id')
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin', 'manager')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a business' })
   @ApiResponse({ status: 200, description: 'Business updated successfully' })
   async updateBusiness(
@@ -85,6 +107,9 @@ export class BusinessController {
   }
 
   @Delete(':id')
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a business' })
   @ApiResponse({ status: 200, description: 'Business deleted successfully' })
   async deleteBusiness(@Param('id') id: string) {
@@ -97,6 +122,9 @@ export class BusinessController {
   }
 
   @Post(':id/register-shards')
+  @UseGuards(CognitoAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Trigger shard creation for business locations' })
   @ApiResponse({ status: 200, description: 'Shard creation triggered successfully' })
   async registerBusinessShards(@Param('id') id: string) {

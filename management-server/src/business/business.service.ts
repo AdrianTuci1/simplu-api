@@ -63,33 +63,41 @@ export class BusinessService {
 
       // Prepare locations with timestamps
       const locations: LocationInfo[] = createBusinessDto.locations.map(location => ({
-        id: uuidv4(),
+        locationId: uuidv4(),
         name: location.name,
         address: location.address,
         phone: location.phone,
         email: location.email,
-        active: location.active ?? true,
-        createdAt: now,
-        updatedAt: now,
+        timezone: location.timezone ?? 'UTC',
+        isActive: location.active ?? true,
       }));
 
       // Create business entity
       const business: BusinessEntity = {
-        id: businessId,
-        companyName: createBusinessDto.companyName,
+        businessId: businessId,
+        businessName: createBusinessDto.companyName,
         registrationNumber: createBusinessDto.registrationNumber,
         businessType: createBusinessDto.businessType,
         locations,
         settings: {
-          timezone: createBusinessDto.settings?.timezone ?? 'UTC',
           currency: createBusinessDto.settings?.currency ?? 'USD',
           language: createBusinessDto.settings?.language ?? 'en',
-          features: createBusinessDto.settings?.features ?? [],
+          dateFormat: createBusinessDto.settings?.dateFormat ?? 'DD/MM/YYYY',
+          timeFormat: createBusinessDto.settings?.timeFormat ?? '24h',
+          workingHours: createBusinessDto.settings?.workingHours ?? {
+            monday: { open: '09:00', close: '18:00', isOpen: true },
+            tuesday: { open: '09:00', close: '18:00', isOpen: true },
+            wednesday: { open: '09:00', close: '18:00', isOpen: true },
+            thursday: { open: '09:00', close: '18:00', isOpen: true },
+            friday: { open: '09:00', close: '18:00', isOpen: true },
+            saturday: { open: '09:00', close: '14:00', isOpen: true },
+            sunday: { open: '00:00', close: '00:00', isOpen: false }
+          },
         },
-        permissions: {
-          roles: createBusinessDto.permissions?.roles ?? [],
-          modules: createBusinessDto.permissions?.modules ?? [],
-        },
+        permissions: [
+          ...(createBusinessDto.permissions?.roles ?? []),
+          ...(createBusinessDto.permissions?.modules ?? [])
+        ],
         customDomain: createBusinessDto.customDomain,
         subdomain,
         stripeCustomerId: stripeCustomer.id,
@@ -109,7 +117,7 @@ export class BusinessService {
       // Trigger shard creation for business locations via SQS
       try {
         const locationRegistrations = locations.map(location => ({
-          id: location.id,
+          id: location.locationId,
           businessType: createBusinessDto.businessType,
         }));
 
@@ -152,7 +160,7 @@ export class BusinessService {
       };
 
       if (updateBusinessDto.companyName) {
-        updates.companyName = updateBusinessDto.companyName;
+        updates.businessName = updateBusinessDto.companyName;
       }
 
       if (updateBusinessDto.registrationNumber) {
@@ -165,14 +173,13 @@ export class BusinessService {
 
       if (updateBusinessDto.locations) {
         updates.locations = updateBusinessDto.locations.map(location => ({
-          id: location.id || uuidv4(),
+          locationId: location.locationId || uuidv4(),
           name: location.name,
           address: location.address,
           phone: location.phone,
           email: location.email,
-          active: location.active ?? true,
-          createdAt: location.id ? existingBusiness.locations.find(l => l.id === location.id)?.createdAt || now : now,
-          updatedAt: now,
+          timezone: location.timezone ?? 'UTC',
+          isActive: location.active ?? true,
         }));
       }
 
@@ -257,7 +264,7 @@ export class BusinessService {
       }
 
       const locationRegistrations = business.locations.map(location => ({
-        id: location.id,
+        id: location.locationId,
         businessType: business.businessType,
       }));
 

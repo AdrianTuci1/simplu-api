@@ -6,6 +6,7 @@ import { BusinessModule } from './business/business.module';
 import { PaymentModule } from './payment/payment.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DatabaseModule } from './database/database.module';
     BusinessModule,
     PaymentModule,
     InfrastructureModule,
+    AuthModule,
   ],
   controllers: [AppController],
 })

@@ -32,7 +32,7 @@ export class DatabaseService {
       });
 
       await this.docClient.send(command);
-      this.logger.log(`Business created with ID: ${business.id}`);
+      this.logger.log(`Business created with ID: ${business.businessId}`);
       return business;
     } catch (error) {
       this.logger.error(`Error creating business: ${error.message}`);
@@ -40,11 +40,11 @@ export class DatabaseService {
     }
   }
 
-  async getBusiness(id: string): Promise<BusinessEntity | null> {
+  async getBusiness(businessId: string): Promise<BusinessEntity | null> {
     try {
       const command = new GetCommand({
         TableName: this.tableName,
-        Key: { id },
+        Key: { businessId },
       });
 
       const result = await this.docClient.send(command);
@@ -55,7 +55,7 @@ export class DatabaseService {
     }
   }
 
-  async updateBusiness(id: string, updates: Partial<BusinessEntity>): Promise<BusinessEntity> {
+  async updateBusiness(businessId: string, updates: Partial<BusinessEntity>): Promise<BusinessEntity> {
     try {
       const updateExpression = [];
       const expressionAttributeNames = {};
@@ -71,7 +71,7 @@ export class DatabaseService {
 
       const command = new UpdateCommand({
         TableName: this.tableName,
-        Key: { id },
+        Key: { businessId },
         UpdateExpression: `SET ${updateExpression.join(', ')}`,
         ExpressionAttributeNames: expressionAttributeNames,
         ExpressionAttributeValues: expressionAttributeValues,
@@ -86,15 +86,15 @@ export class DatabaseService {
     }
   }
 
-  async deleteBusiness(id: string): Promise<void> {
+  async deleteBusiness(businessId: string): Promise<void> {
     try {
       const command = new DeleteCommand({
         TableName: this.tableName,
-        Key: { id },
+        Key: { businessId },
       });
 
       await this.docClient.send(command);
-      this.logger.log(`Business deleted with ID: ${id}`);
+      this.logger.log(`Business deleted with ID: ${businessId}`);
     } catch (error) {
       this.logger.error(`Error deleting business: ${error.message}`);
       throw error;

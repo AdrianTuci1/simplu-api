@@ -2,11 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsArray, IsOptional } from 'class-validator';
 
 export class BusinessSettingsDto {
-  @ApiProperty({ description: 'Business timezone', default: 'UTC' })
-  @IsString()
-  @IsOptional()
-  timezone?: string = 'UTC';
-
   @ApiProperty({ description: 'Business currency', default: 'USD' })
   @IsString()
   @IsOptional()
@@ -17,8 +12,23 @@ export class BusinessSettingsDto {
   @IsOptional()
   language?: string = 'en';
 
-  @ApiProperty({ description: 'Business features', type: [String], default: [] })
-  @IsArray()
+  @ApiProperty({ description: 'Business date format', default: 'DD/MM/YYYY' })
+  @IsString()
   @IsOptional()
-  features?: string[] = [];
+  dateFormat?: string = 'DD/MM/YYYY';
+
+  @ApiProperty({ description: 'Business time format', default: '24h' })
+  @IsString()
+  @IsOptional()
+  timeFormat?: string = '24h';
+
+  @ApiProperty({ description: 'Business working hours' })
+  @IsOptional()
+  workingHours?: {
+    [day: string]: {
+      open: string;
+      close: string;
+      isOpen: boolean;
+    };
+  };
 } 

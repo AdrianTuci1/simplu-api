@@ -1,36 +1,39 @@
 
 
 export interface LocationInfo {
-  id: string;
+  locationId: string;
   name: string;
   address: string;
-  phone: string;
-  email: string;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
+  phone?: string;
+  email?: string;
+  timezone: string;
+  isActive: boolean;
 }
 
 export interface BusinessSettings {
-  timezone: string;
   currency: string;
   language: string;
-  features: string[];
+  dateFormat: string;
+  timeFormat: string;
+  workingHours: {
+    [day: string]: {
+      open: string;
+      close: string;
+      isOpen: boolean;
+    };
+  };
 }
 
-export interface BusinessPermissions {
-  roles: string[];
-  modules: string[];
-}
+
 
 export interface BusinessEntity {
-  id: string;
-  companyName: string;
+  businessId: string;
+  businessName: string;
   registrationNumber: string;
   businessType: 'dental' | 'gym' | 'hotel';
   locations: LocationInfo[];
   settings: BusinessSettings;
-  permissions: BusinessPermissions;
+  permissions: string[];
   customDomain?: string;
   subdomain?: string;
   stripeCustomerId?: string;

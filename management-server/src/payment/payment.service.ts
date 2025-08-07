@@ -9,7 +9,7 @@ export class PaymentService {
 
   constructor(private configService: ConfigService) {
     this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY'), {
-      apiVersion: '2023-10-16',
+      apiVersion: '2024-04-10',
     });
   }
 
@@ -114,10 +114,20 @@ export class PaymentService {
     try {
       const invoice = await this.stripe.invoices.create({
         customer: customerId,
-        amount_due: amount,
         currency,
         description,
         auto_advance: false,
+        collection_method: 'send_invoice',
+        due_date: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60), // 30 days from now
+      });
+
+      // Add invoice item for the amount
+      await this.stripe.invoiceItems.create({
+        customer: customerId,
+        amount: amount,
+        currency: currency,
+        description: description,
+        invoice: invoice.id,
       });
 
       this.logger.log(`Invoice created: ${invoice.id}`);

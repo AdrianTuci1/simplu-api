@@ -5,7 +5,7 @@ export class LocationInfoDto {
   @ApiProperty({ description: 'Location ID', required: false })
   @IsOptional()
   @IsString()
-  id?: string;
+  locationId?: string;
 
   @ApiProperty({ description: 'Location name' })
   @IsString()
@@ -16,12 +16,19 @@ export class LocationInfoDto {
   address: string;
 
   @ApiProperty({ description: 'Location phone number' })
+  @IsOptional()
   @IsString()
-  phone: string;
+  phone?: string;
 
   @ApiProperty({ description: 'Location email' })
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
+
+  @ApiProperty({ description: 'Location timezone', default: 'UTC' })
+  @IsOptional()
+  @IsString()
+  timezone?: string = 'UTC';
 
   @ApiProperty({ description: 'Location active status', default: true })
   @IsBoolean()
