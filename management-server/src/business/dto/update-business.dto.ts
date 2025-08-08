@@ -3,7 +3,6 @@ import { IsString, IsEnum, IsArray, IsOptional, ValidateNested } from 'class-val
 import { Type } from 'class-transformer';
 import { LocationInfoDto } from './location-info.dto';
 import { BusinessSettingsDto } from './business-settings.dto';
-import { BusinessPermissionsDto } from './business-permissions.dto';
 
 export class UpdateBusinessDto {
   @ApiProperty({ description: 'Company name', required: false })
@@ -34,11 +33,10 @@ export class UpdateBusinessDto {
   @Type(() => BusinessSettingsDto)
   settings?: BusinessSettingsDto;
 
-  @ApiProperty({ description: 'Business permissions', type: BusinessPermissionsDto, required: false })
+  @ApiProperty({ description: 'Modules to be deactivated', type: [String], required: false })
   @IsOptional()
-  @ValidateNested()
-  @Type(() => BusinessPermissionsDto)
-  permissions?: BusinessPermissionsDto;
+  @IsArray()
+  deactivatedModules?: string[];
 
   @ApiProperty({ description: 'Custom domain (optional)', required: false })
   @IsOptional()

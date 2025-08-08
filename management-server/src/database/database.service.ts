@@ -156,4 +156,68 @@ export class DatabaseService {
       throw error;
     }
   }
+
+  async getBusinessesByOwner(userId: string): Promise<BusinessEntity[]> {
+    try {
+      const command = new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: '#ownerUserId = :ownerUserId',
+        ExpressionAttributeNames: {
+          '#ownerUserId': 'ownerUserId',
+        },
+        ExpressionAttributeValues: {
+          ':ownerUserId': userId,
+        },
+      });
+
+      const result = await this.docClient.send(command);
+      return (result.Items as BusinessEntity[]) || [];
+    } catch (error) {
+      this.logger.error(`Error getting businesses by owner: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getBusinessesByAuthorizedEmail(email: string): Promise<BusinessEntity[]> {
+    try {
+      const command = new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: 'contains(#authorizedEmails, :email) OR #ownerEmail = :email',
+        ExpressionAttributeNames: {
+          '#authorizedEmails': 'authorizedEmails',
+          '#ownerEmail': 'ownerEmail',
+        },
+        ExpressionAttributeValues: {
+          ':email': email,
+        },
+      });
+
+      const result = await this.docClient.send(command);
+      return (result.Items as BusinessEntity[]) || [];
+    } catch (error) {
+      this.logger.error(`Error getting businesses by authorized email: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getBusinessesByCreator(userId: string): Promise<BusinessEntity[]> {
+    try {
+      const command = new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: '#createdByUserId = :createdByUserId',
+        ExpressionAttributeNames: {
+          '#createdByUserId': 'createdByUserId',
+        },
+        ExpressionAttributeValues: {
+          ':createdByUserId': userId,
+        },
+      });
+
+      const result = await this.docClient.send(command);
+      return (result.Items as BusinessEntity[]) || [];
+    } catch (error) {
+      this.logger.error(`Error getting businesses by creator: ${error.message}`);
+      throw error;
+    }
+  }
 } 

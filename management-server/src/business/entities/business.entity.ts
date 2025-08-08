@@ -31,9 +31,16 @@ export interface BusinessEntity {
   businessName: string;
   registrationNumber: string;
   businessType: 'dental' | 'gym' | 'hotel';
+  ownerUserId?: string;
+  ownerEmail: string;
+  createdByUserId: string;
+  isActivated: boolean;
+  activationToken?: string;
+  activationUrl?: string;
+  authorizedEmails?: string[];
   locations: LocationInfo[];
   settings: BusinessSettings;
-  permissions: string[];
+  deactivatedModules: string[];
   customDomain?: string;
   subdomain?: string;
   stripeCustomerId?: string;

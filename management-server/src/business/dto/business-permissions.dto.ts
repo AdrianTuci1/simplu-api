@@ -1,14 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsOptional } from 'class-validator';
 
-export class BusinessPermissionsDto {
-  @ApiProperty({ description: 'Available roles', type: [String], default: [] })
-  @IsArray()
-  @IsOptional()
-  roles?: string[] = [];
-
-  @ApiProperty({ description: 'Available modules', type: [String], default: [] })
-  @IsArray()
-  @IsOptional()
-  modules?: string[] = [];
-} 
+// Deprecated: per-business permissions are not used anymore. Use deactivatedModules in Create/Update DTOs.
+export class BusinessPermissionsDto {}

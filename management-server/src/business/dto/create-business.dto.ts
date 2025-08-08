@@ -1,9 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEnum, IsArray, IsOptional, ValidateNested } from 'class-validator';
+import { IsString, IsEnum, IsArray, IsOptional, ValidateNested, IsEmail, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 import { LocationInfoDto } from './location-info.dto';
 import { BusinessSettingsDto } from './business-settings.dto';
-import { BusinessPermissionsDto } from './business-permissions.dto';
 
 export class CreateBusinessDto {
   @ApiProperty({ description: 'Company name' })
@@ -30,11 +29,10 @@ export class CreateBusinessDto {
   @Type(() => BusinessSettingsDto)
   settings?: BusinessSettingsDto;
 
-  @ApiProperty({ description: 'Business permissions', type: BusinessPermissionsDto })
+  @ApiProperty({ description: 'Modules to be deactivated', type: [String], required: false })
   @IsOptional()
-  @ValidateNested()
-  @Type(() => BusinessPermissionsDto)
-  permissions?: BusinessPermissionsDto;
+  @IsArray()
+  deactivatedModules?: string[];
 
   @ApiProperty({ description: 'Custom domain (optional)' })
   @IsOptional()
@@ -45,4 +43,14 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsString()
   stripeCustomerId?: string;
+
+  @ApiProperty({ description: 'Configure on behalf of email (optional)' })
+  @IsOptional()
+  @IsEmail()
+  configureForEmail?: string;
+
+  @ApiProperty({ description: 'Additional authorized emails (optional)', type: [String] })
+  @IsOptional()
+  @IsArray()
+  authorizedEmails?: string[];
 } 

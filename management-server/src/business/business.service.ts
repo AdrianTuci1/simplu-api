@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { PaymentService } from '../payment/payment.service';
 import { InfrastructureService } from '../infrastructure/infrastructure.service';
 import { ShardManagementService } from '../shared/services/shard-management.service';
+import { EmailService } from '../shared/services/email.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { BusinessEntity, LocationInfo } from './entities/business.entity';
@@ -18,17 +19,21 @@ export class BusinessService {
     private readonly paymentService: PaymentService,
     private readonly infrastructureService: InfrastructureService,
     private readonly shardManagementService: ShardManagementService,
+    private readonly emailService: EmailService,
     private readonly configService: ConfigService,
   ) {}
 
-  async createBusiness(createBusinessDto: CreateBusinessDto, userEmail: string): Promise<BusinessEntity> {
+  async createBusiness(createBusinessDto: CreateBusinessDto, userEmail: string, createdByUserId: string): Promise<BusinessEntity> {
     try {
       const businessId = uuidv4();
       const now = new Date().toISOString();
 
-      // Create Stripe customer
+      // Determine target email (owner) for activation flow
+      const targetEmail = createBusinessDto.configureForEmail?.trim() || userEmail;
+
+      // Create Stripe customer for the target email
       const stripeCustomer = await this.paymentService.createCustomer(
-        userEmail,
+        targetEmail,
         createBusinessDto.companyName
       );
 
@@ -68,22 +73,33 @@ export class BusinessService {
         address: location.address,
         phone: location.phone,
         email: location.email,
-        timezone: location.timezone ?? 'UTC',
+        timezone: location.timezone ?? 'Europe/Bucharest',
         isActive: location.active ?? true,
       }));
 
       // Create business entity
+      // Activation link/token for onboarding if configured for another email
+      const activationToken = uuidv4();
+      const activationUrl = `${this.configService.get('FRONTEND_BASE_URL', 'https://app.simplu.ro')}/activate?token=${activationToken}`;
+
       const business: BusinessEntity = {
         businessId: businessId,
         businessName: createBusinessDto.companyName,
         registrationNumber: createBusinessDto.registrationNumber,
         businessType: createBusinessDto.businessType,
+        ownerUserId: undefined,
+        ownerEmail: targetEmail,
+        createdByUserId,
+        isActivated: false,
+        activationToken,
+        activationUrl,
+        authorizedEmails: createBusinessDto.authorizedEmails ?? [],
         locations,
         settings: {
-          currency: createBusinessDto.settings?.currency ?? 'USD',
-          language: createBusinessDto.settings?.language ?? 'en',
-          dateFormat: createBusinessDto.settings?.dateFormat ?? 'DD/MM/YYYY',
-          timeFormat: createBusinessDto.settings?.timeFormat ?? '24h',
+          currency: createBusinessDto.settings?.currency ?? 'RON',
+          language: createBusinessDto.settings?.language ?? 'ro',
+          dateFormat: createBusinessDto.settings?.dateFormat ?? 'yyyy-mm-dd',
+          timeFormat: createBusinessDto.settings?.timeFormat ?? 'hh:mm',
           workingHours: createBusinessDto.settings?.workingHours ?? {
             monday: { open: '09:00', close: '18:00', isOpen: true },
             tuesday: { open: '09:00', close: '18:00', isOpen: true },
@@ -94,10 +110,7 @@ export class BusinessService {
             sunday: { open: '00:00', close: '00:00', isOpen: false }
           },
         },
-        permissions: [
-          ...(createBusinessDto.permissions?.roles ?? []),
-          ...(createBusinessDto.permissions?.modules ?? [])
-        ],
+        deactivatedModules: createBusinessDto.deactivatedModules ?? [],
         customDomain: createBusinessDto.customDomain,
         subdomain,
         stripeCustomerId: stripeCustomer.id,
@@ -134,6 +147,11 @@ export class BusinessService {
       }
 
       this.logger.log(`Business created successfully: ${businessId}`);
+      this.logger.log(`Activation URL for owner ${targetEmail}: ${activationUrl}`);
+
+      // Fire and forget activation email
+      this.emailService.sendActivationEmail(targetEmail, activationUrl, createBusinessDto.companyName)
+        .catch(() => undefined);
       return savedBusiness;
     } catch (error) {
       this.logger.error(`Error creating business: ${error.message}`);
@@ -190,11 +208,8 @@ export class BusinessService {
         };
       }
 
-      if (updateBusinessDto.permissions) {
-        updates.permissions = {
-          ...existingBusiness.permissions,
-          ...updateBusinessDto.permissions,
-        };
+      if (updateBusinessDto.deactivatedModules) {
+        updates.deactivatedModules = updateBusinessDto.deactivatedModules;
       }
 
       if (updateBusinessDto.customDomain && updateBusinessDto.customDomain !== existingBusiness.customDomain) {
@@ -253,6 +268,24 @@ export class BusinessService {
 
   async getBusinessesByPaymentStatus(paymentStatus: string): Promise<BusinessEntity[]> {
     return await this.databaseService.getBusinessesByPaymentStatus(paymentStatus);
+  }
+
+  async getBusinessesForUser(userId: string): Promise<BusinessEntity[]> {
+    return await this.databaseService.getBusinessesByOwner(userId);
+  }
+
+  async activateBusinessForOwner(token: string, ownerUserId: string): Promise<BusinessEntity> {
+    const all = await this.databaseService.getAllBusinesses();
+    const business = all.find(b => b.activationToken === token);
+    if (!business) {
+      throw new BadRequestException('Invalid activation token');
+    }
+    const updates: Partial<BusinessEntity> = {
+      ownerUserId,
+      isActivated: true,
+      activationToken: undefined,
+    } as any;
+    return await this.databaseService.updateBusiness(business.businessId, updates);
   }
 
   async registerBusinessShards(businessId: string): Promise<void> {
