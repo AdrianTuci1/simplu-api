@@ -188,4 +188,179 @@ export class BusinessController {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
   }
+
+  @Get(':id/subscription')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get business subscription information including Stripe details' })
+  @ApiResponse({ status: 200, description: 'Business subscription information retrieved successfully' })
+  async getBusinessSubscription(@Param('id') id: string, @Request() req: any) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      
+      return await this.businessService.getBusinessSubscriptionInfo(id);
+    } catch (error) {
+      throw new HttpException('Failed to get business subscription information', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Get(':id/status')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get detailed business status with subscription, payment methods, and credits' })
+  @ApiResponse({ status: 200, description: 'Business status retrieved successfully' })
+  async getBusinessStatus(@Param('id') id: string, @Request() req: any) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      
+      return await this.businessService.getDetailedBusinessStatus(id);
+    } catch (error) {
+      throw new HttpException('Failed to get business status', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Get(':id/credits')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get business credits balance and history' })
+  @ApiResponse({ status: 200, description: 'Business credits information retrieved successfully' })
+  async getBusinessCredits(@Param('id') id: string, @Request() req: any) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      
+      return await this.businessService.getBusinessCredits(id);
+    } catch (error) {
+      throw new HttpException('Failed to get business credits', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post(':id/credits/purchase')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Purchase additional credits for business' })
+  @ApiResponse({ status: 200, description: 'Credits purchase initiated successfully' })
+  async purchaseCredits(@Param('id') id: string, @Body() purchaseData: { amount: number; paymentMethodId?: string }, @Request() req: any) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      return await this.businessService.purchaseCredits(
+        id,
+        purchaseData.amount,
+        { userId: user.userId, email: user.email, name: user.name },
+        purchaseData.paymentMethodId,
+      );
+    } catch (error) {
+      throw new HttpException('Failed to purchase credits', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post(':id/credits/allocate')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Allocate credits from business to a specific location' })
+  @ApiResponse({ status: 200, description: 'Credits allocated successfully' })
+  async allocateCredits(@Param('id') id: string, @Body() allocationData: { locationId: string; amount: number }, @Request() req: any) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      
+      return await this.businessService.allocateCreditsToLocation(id, allocationData.locationId, allocationData.amount);
+    } catch (error) {
+      throw new HttpException('Failed to allocate credits', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post(':id/credits/reallocate')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reallocate credits between locations' })
+  @ApiResponse({ status: 200, description: 'Credits reallocated successfully' })
+  async reallocateCredits(@Param('id') id: string, @Body() reallocationData: { fromLocationId: string; toLocationId: string; amount: number }, @Request() req: any) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      
+      return await this.businessService.reallocateCredits(id, reallocationData.fromLocationId, reallocationData.toLocationId, reallocationData.amount);
+    } catch (error) {
+      throw new HttpException('Failed to reallocate credits', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post(':id/credits/deallocate')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Deallocate credits from location back to business pool' })
+  @ApiResponse({ status: 200, description: 'Credits deallocated successfully' })
+  async deallocateCredits(@Param('id') id: string, @Body() deallocationData: { locationId: string; amount: number }, @Request() req: any) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      
+      return await this.businessService.deallocateCreditsFromLocation(id, deallocationData.locationId, deallocationData.amount);
+    } catch (error) {
+      throw new HttpException('Failed to deallocate credits', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post(':id/subscription')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create or replace Stripe subscription for this business' })
+  @ApiResponse({ status: 200, description: 'Subscription created/replaced successfully' })
+  async createOrReplaceSubscription(
+    @Param('id') id: string,
+    @Body() data: { priceId: string; cancelPrevious?: boolean },
+    @Request() req: any
+  ) {
+    try {
+      const user = req.user;
+      const business = await this.businessService.getBusiness(id);
+      const isAuthorized = business.ownerUserId === user.userId || business.ownerEmail === user.email || (business.authorizedEmails || []).includes(user.email);
+      if (!isAuthorized) {
+        throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+      }
+      if (!data?.priceId) {
+        throw new HttpException('priceId is required', HttpStatus.BAD_REQUEST);
+      }
+      return await this.businessService.createOrReplaceBusinessSubscriptionForUser(
+        id,
+        data.priceId,
+        { userId: user.userId, email: user.email, name: user.name },
+        data.cancelPrevious ?? true,
+      );
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to create/replace subscription', HttpStatus.BAD_REQUEST);
+    }
+  }
 } 

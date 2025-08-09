@@ -42,4 +42,9 @@ export class UpdateBusinessDto {
   @IsOptional()
   @IsString()
   customDomain?: string;
+
+  @ApiProperty({ description: 'Client page type for custom domain', enum: ['website', 'form'], required: false })
+  @IsOptional()
+  @IsEnum(['website', 'form'])
+  clientPageType?: 'website' | 'form';
 } 

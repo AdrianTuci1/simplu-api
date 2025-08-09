@@ -30,40 +30,55 @@ export class BusinessService {
 
       // Determine target email (owner) for activation flow
       const targetEmail = createBusinessDto.configureForEmail?.trim() || userEmail;
+      const isConfiguredForSomeoneElse = targetEmail !== userEmail;
 
-      // Create Stripe customer for the target email
-      const stripeCustomer = await this.paymentService.createCustomer(
-        targetEmail,
-        createBusinessDto.companyName
-      );
+      // Determine billing email for Stripe (can be different from business owner)
+      const billingEmail = createBusinessDto.billingEmail?.trim() || targetEmail;
 
-      // Create Stripe subscription
-      const priceId = this.getPriceIdForBusinessType(createBusinessDto.businessType);
-      const subscription = await this.paymentService.createSubscription(
-        stripeCustomer.id,
-        priceId
-      );
+      // Determine price but do NOT create Stripe artifacts here. Business will be suspended until a user subscribes.
+      const priceId = createBusinessDto.subscriptionPlanPriceId || this.getDefaultPriceId();
 
-      // Generate subdomain if no custom domain
-      const subdomain = createBusinessDto.customDomain 
-        ? undefined 
-        : this.generateSubdomain(createBusinessDto.companyName);
+      // Decide domain strategy based on domainType + domainLabel
+      const normalizedLabel = (createBusinessDto.domainLabel || createBusinessDto.subdomainLabel || createBusinessDto.companyName)
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
 
-      // Create React app infrastructure
-      const infrastructure = await this.infrastructureService.createReactApp(
-        businessId,
-        createBusinessDto.businessType,
-        subdomain,
-        createBusinessDto.customDomain
-      );
+      let finalCustomDomain: string | undefined = createBusinessDto.customDomain;
+      let finalSubdomain: string | undefined = undefined;
 
-      // Create custom domain if provided
-      if (createBusinessDto.customDomain) {
-        await this.infrastructureService.createCustomDomain(createBusinessDto.customDomain);
-        await this.infrastructureService.setupDomainDNS(
-          createBusinessDto.customDomain,
-          infrastructure.appUrl
+      if (createBusinessDto.domainType === 'custom' || createBusinessDto.customDomain) {
+        // Build custom domain from label + tld if not directly provided
+        if (!finalCustomDomain) {
+          const tld = (createBusinessDto.customTld || 'ro').replace(/^\./, '');
+          finalCustomDomain = `${normalizedLabel}.${tld}`;
+        }
+      } else {
+        // Use our subdomain under BASE_DOMAIN
+        finalSubdomain = normalizedLabel || this.generateSubdomain(createBusinessDto.companyName);
+      }
+
+      // Only create infrastructure if configuring for self AND we decide to allow trial before payment; otherwise, defer until subscription is active
+      let infrastructure: any = null;
+      const shouldCreateInfrastructure = false;
+      
+      if (shouldCreateInfrastructure) {
+        // Create React app infrastructure
+        infrastructure = await this.infrastructureService.createReactApp(
+          businessId,
+          createBusinessDto.businessType,
+          finalSubdomain,
+          finalCustomDomain
         );
+
+        // Create custom domain if provided
+        if (finalCustomDomain) {
+          await this.infrastructureService.createCustomDomain(finalCustomDomain);
+          await this.infrastructureService.setupDomainDNS(
+            finalCustomDomain,
+            infrastructure.appUrl
+          );
+        }
       }
 
       // Prepare locations with timestamps
@@ -75,6 +90,10 @@ export class BusinessService {
         email: location.email,
         timezone: location.timezone ?? 'Europe/Bucharest',
         isActive: location.active ?? true,
+        allocatedCredits: {
+          balance: 0,
+          lastUpdated: now,
+        },
       }));
 
       // Create business entity
@@ -87,13 +106,22 @@ export class BusinessService {
         businessName: createBusinessDto.companyName,
         registrationNumber: createBusinessDto.registrationNumber,
         businessType: createBusinessDto.businessType,
+        companyAddress: createBusinessDto.companyAddress ? {
+          street: createBusinessDto.companyAddress.street,
+          city: createBusinessDto.companyAddress.city,
+          district: createBusinessDto.companyAddress.district,
+          country: createBusinessDto.companyAddress.country,
+          postalCode: createBusinessDto.companyAddress.postalCode,
+        } : undefined,
         ownerUserId: undefined,
         ownerEmail: targetEmail,
+        billingEmail: billingEmail,
         createdByUserId,
-        isActivated: false,
-        activationToken,
-        activationUrl,
+        isActivated: !isConfiguredForSomeoneElse, // Auto-activate if configuring for self
+        activationToken: isConfiguredForSomeoneElse ? activationToken : undefined,
+        activationUrl: isConfiguredForSomeoneElse ? activationUrl : undefined,
         authorizedEmails: createBusinessDto.authorizedEmails ?? [],
+        appLabel: createBusinessDto.appLabel || createBusinessDto.companyName,
         locations,
         settings: {
           currency: createBusinessDto.settings?.currency ?? 'RON',
@@ -111,15 +139,22 @@ export class BusinessService {
           },
         },
         deactivatedModules: createBusinessDto.deactivatedModules ?? [],
-        customDomain: createBusinessDto.customDomain,
-        subdomain,
-        stripeCustomerId: stripeCustomer.id,
-        stripeSubscriptionId: subscription.id,
-        paymentStatus: subscription.status as 'active' | 'past_due' | 'canceled' | 'unpaid',
-        nextPaymentDate: this.calculateNextPaymentDate(subscription),
-        status: 'active',
-        cloudFormationStackName: infrastructure.stackName,
-        reactAppUrl: infrastructure.appUrl,
+        customDomain: finalCustomDomain,
+        subdomain: finalSubdomain,
+        clientPageType: createBusinessDto.clientPageType || 'website',
+        stripeCustomerId: undefined,
+        stripeSubscriptionId: undefined,
+        paymentStatus: 'unpaid',
+        nextPaymentDate: undefined,
+        credits: {
+          totalBalance: 0,
+          availableBalance: 0,
+          currency: createBusinessDto.settings?.currency || 'RON',
+          lastUpdated: now,
+        },
+        status: 'suspended',
+        cloudFormationStackName: infrastructure?.stackName,
+        reactAppUrl: infrastructure?.appUrl,
         createdAt: now,
         updatedAt: now,
       };
@@ -127,31 +162,41 @@ export class BusinessService {
       // Save to database
       const savedBusiness = await this.databaseService.createBusiness(business);
 
-      // Trigger shard creation for business locations via SQS
-      try {
-        const locationRegistrations = locations.map(location => ({
-          id: location.locationId,
-          businessType: createBusinessDto.businessType,
-        }));
+      // Only trigger shard creation if infrastructure was created (i.e., payment confirmed or self-configuration)
+      if (shouldCreateInfrastructure) {
+        try {
+          const locationRegistrations = locations.map(location => ({
+            id: location.locationId,
+            businessType: createBusinessDto.businessType,
+          }));
 
-        await this.shardManagementService.triggerMultipleShardCreations(
-          businessId,
-          locationRegistrations,
-        );
+          await this.shardManagementService.triggerMultipleShardCreations(
+            businessId,
+            locationRegistrations,
+          );
 
-        this.logger.log(`Shard creation triggered for business: ${businessId}`);
-      } catch (shardError) {
-        this.logger.error(`Failed to trigger shard creation for business ${businessId}:`, shardError);
-        // Don't fail the business creation if shard creation trigger fails
-        // The shards can be created later through a retry mechanism
+          this.logger.log(`Shard creation triggered for business: ${businessId}`);
+        } catch (shardError) {
+          this.logger.error(`Failed to trigger shard creation for business ${businessId}:`, shardError);
+          // Don't fail the business creation if shard creation trigger fails
+          // The shards can be created later through a retry mechanism
+        }
+      } else {
+        this.logger.log(`Shard creation skipped for business ${businessId} - waiting for payment confirmation`);
       }
 
       this.logger.log(`Business created successfully: ${businessId}`);
-      this.logger.log(`Activation URL for owner ${targetEmail}: ${activationUrl}`);
-
-      // Fire and forget activation email
-      this.emailService.sendActivationEmail(targetEmail, activationUrl, createBusinessDto.companyName)
-        .catch(() => undefined);
+      
+      // Send activation email only if configured for someone else
+      if (isConfiguredForSomeoneElse) {
+        this.logger.log(`Activation URL for owner ${targetEmail}: ${activationUrl}`);
+        // Fire and forget activation email
+        this.emailService.sendActivationEmail(targetEmail, activationUrl, createBusinessDto.companyName)
+          .catch(() => undefined);
+      } else {
+        this.logger.log(`Business auto-activated for self-configuration: ${businessId}`);
+      }
+      
       return savedBusiness;
     } catch (error) {
       this.logger.error(`Error creating business: ${error.message}`);
@@ -221,6 +266,10 @@ export class BusinessService {
         );
       }
 
+      if (updateBusinessDto.clientPageType) {
+        updates.clientPageType = updateBusinessDto.clientPageType as any;
+      }
+
       const updatedBusiness = await this.databaseService.updateBusiness(id, updates);
       this.logger.log(`Business updated successfully: ${id}`);
       return updatedBusiness;
@@ -234,9 +283,14 @@ export class BusinessService {
     try {
       const business = await this.getBusiness(id);
 
-      // Cancel Stripe subscription
-      if (business.stripeSubscriptionId) {
-        await this.paymentService.cancelSubscription(business.stripeSubscriptionId);
+      // Cancel all subscriptions associated via mapping table
+      const mappings = await this.paymentService.getSubscriptionsForBusiness(id);
+      for (const m of mappings) {
+        try {
+          await this.paymentService.cancelSubscription(m.stripeSubscriptionId);
+        } catch (e) {
+          this.logger.warn(`Failed canceling subscription ${m.stripeSubscriptionId} for business ${id}: ${e?.message}`);
+        }
       }
 
       // Delete React app infrastructure
@@ -313,19 +367,13 @@ export class BusinessService {
     }
   }
 
-  private getPriceIdForBusinessType(businessType: string): string {
-    const priceIds = {
-      dental: this.configService.get('STRIPE_DENTAL_PRICE_ID'),
-      gym: this.configService.get('STRIPE_GYM_PRICE_ID'),
-      hotel: this.configService.get('STRIPE_HOTEL_PRICE_ID'),
-    };
-
-    const priceId = priceIds[businessType];
-    if (!priceId) {
-      throw new BadRequestException(`No price ID configured for business type: ${businessType}`);
+  private getDefaultPriceId(): string {
+    // Use Basic plan as default if no subscription plan is selected
+    const defaultPriceId = this.configService.get('STRIPE_BASIC_PLAN_PRICE_ID');
+    if (!defaultPriceId) {
+      throw new BadRequestException('No default subscription plan configured. Please set STRIPE_BASIC_PLAN_PRICE_ID.');
     }
-
-    return priceId;
+    return defaultPriceId;
   }
 
   private generateSubdomain(companyName: string): string {
@@ -340,5 +388,484 @@ export class BusinessService {
       return new Date(subscription.current_period_end * 1000).toISOString();
     }
     return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days from now
+  }
+
+  async getBusinessSubscriptionInfo(businessId: string) {
+    try {
+      const business = await this.getBusiness(businessId);
+      const mappings = await this.paymentService.getSubscriptionsForBusiness(businessId);
+      if (mappings.length === 0) {
+        return {
+          business: {
+            businessId: business.businessId,
+            businessName: business.businessName,
+            businessType: business.businessType,
+            paymentStatus: business.paymentStatus,
+            status: business.status
+          },
+          stripe: {
+            customerId: null,
+            customer: null,
+            subscriptions: [],
+            activeSubscriptions: [],
+            hasActiveSubscription: false,
+            subscriptionCount: 0,
+          },
+          summary: {
+            isSubscribed: false,
+            subscriptionStatus: 'none',
+            nextPaymentDate: null,
+            currentPlan: null,
+          },
+        };
+      }
+      // Load customer/subscription from Stripe using first mapping
+      const activeMapping = mappings.find(m => m.status === 'active') || mappings[0];
+      const subscriptions = await this.paymentService.getCustomerSubscriptions(activeMapping.stripeCustomerId);
+      const activeSubscriptions = subscriptions.filter(sub => sub.status === 'active');
+      const customer = await this.paymentService.getCustomer(activeMapping.stripeCustomerId);
+      return {
+        business: {
+          businessId: business.businessId,
+          businessName: business.businessName,
+          businessType: business.businessType,
+          paymentStatus: business.paymentStatus,
+          status: business.status
+        },
+        stripe: {
+          customerId: activeMapping.stripeCustomerId,
+          customer: customer,
+          subscriptions: subscriptions,
+          activeSubscriptions: activeSubscriptions,
+          hasActiveSubscription: activeSubscriptions.length > 0,
+          subscriptionCount: subscriptions.length
+        },
+        summary: {
+          isSubscribed: activeSubscriptions.length > 0,
+          subscriptionStatus: activeSubscriptions.length > 0 ? activeSubscriptions[0].status : 'none',
+          nextPaymentDate: activeSubscriptions.length > 0 ? this.calculateNextPaymentDate(activeSubscriptions[0]) : null,
+          currentPlan: activeSubscriptions.length > 0 ? activeSubscriptions[0].items.data[0]?.price?.nickname || 'Unknown' : null
+        }
+      };
+    } catch (error) {
+      this.logger.error(`Error getting business subscription info: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getDetailedBusinessStatus(businessId: string) {
+    try {
+      const business = await this.getBusiness(businessId);
+
+      // Get subscription info via mapping
+      const subscriptionInfo = await this.getBusinessSubscriptionInfo(businessId);
+      const stripeCustomerId = subscriptionInfo.stripe.customerId as string | null;
+      const paymentMethods = stripeCustomerId ? await this.paymentService.getCustomerPaymentMethods(stripeCustomerId) : [];
+      const invoices = stripeCustomerId ? await this.paymentService.getCustomerInvoices(stripeCustomerId) : [];
+
+      return {
+        business: {
+          businessId: business.businessId,
+          businessName: business.businessName,
+          registrationNumber: business.registrationNumber,
+          businessType: business.businessType,
+          ownerEmail: business.ownerEmail,
+          billingEmail: business.billingEmail || business.ownerEmail,
+          companyAddress: business.companyAddress,
+          status: business.status,
+          paymentStatus: business.paymentStatus,
+          createdAt: business.createdAt,
+        },
+        subscription: {
+          isActive: subscriptionInfo.summary.isSubscribed,
+          status: subscriptionInfo.summary.subscriptionStatus,
+          currentPlan: subscriptionInfo.summary.currentPlan,
+          validFrom: subscriptionInfo.stripe.activeSubscriptions[0]?.current_period_start 
+            ? new Date(subscriptionInfo.stripe.activeSubscriptions[0].current_period_start * 1000).toISOString()
+            : null,
+          validUntil: subscriptionInfo.summary.nextPaymentDate,
+          price: subscriptionInfo.stripe.activeSubscriptions[0]?.items?.data[0]?.price?.unit_amount || 0,
+          currency: subscriptionInfo.stripe.activeSubscriptions[0]?.items?.data[0]?.price?.currency || 'ron',
+          interval: subscriptionInfo.stripe.activeSubscriptions[0]?.items?.data[0]?.price?.recurring?.interval || 'month',
+        },
+        paymentMethods: {
+          hasCard: paymentMethods.length > 0,
+          cards: paymentMethods.map(pm => ({
+            id: pm.id,
+            type: pm.type,
+            card: pm.card ? {
+              brand: pm.card.brand,
+              last4: pm.card.last4,
+              exp_month: pm.card.exp_month,
+              exp_year: pm.card.exp_year,
+            } : null,
+            isDefault: pm.id === subscriptionInfo.stripe.customer.invoice_settings?.default_payment_method,
+          })),
+        },
+        credits: {
+          business: business.credits || { totalBalance: 0, availableBalance: 0, currency: 'RON', lastUpdated: business.createdAt },
+          locations: business.locations.map(location => ({
+            locationId: location.locationId,
+            locationName: location.name,
+            allocatedCredits: location.allocatedCredits || { balance: 0, lastUpdated: business.createdAt },
+          })),
+          summary: {
+            totalCredits: business.credits?.totalBalance || 0,
+            availableCredits: business.credits?.availableBalance || 0,
+            allocatedCredits: business.locations.reduce((total, loc) => total + (loc.allocatedCredits?.balance || 0), 0),
+          },
+        },
+        invoices: invoices.slice(0, 10).map(invoice => ({
+          id: invoice.id,
+          amount: invoice.amount_paid,
+          currency: invoice.currency,
+          status: invoice.status,
+          date: new Date(invoice.created * 1000).toISOString(),
+          description: invoice.description,
+        })),
+      };
+    } catch (error) {
+      this.logger.error(`Error getting detailed business status: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async createOrReplaceBusinessSubscription(
+    businessId: string,
+    priceId: string,
+    cancelPrevious: boolean = true,
+  ) {
+    throw new BadRequestException('Use createOrReplaceBusinessSubscriptionForUser with payer user context');
+  }
+
+  async createOrReplaceBusinessSubscriptionForUser(
+    businessId: string,
+    priceId: string,
+    payerUser: { userId: string; email: string; name?: string },
+    cancelPrevious: boolean = true,
+  ) {
+    try {
+      const business = await this.getBusiness(businessId);
+      const { subscription, customer, clientSecret, record } = await this.paymentService.createBusinessSubscription(
+        payerUser,
+        business,
+        priceId,
+        cancelPrevious,
+      );
+      const updatedBusiness = await this.getBusiness(businessId);
+      return {
+        business: {
+          businessId: updatedBusiness.businessId,
+          businessName: updatedBusiness.businessName,
+          paymentStatus: updatedBusiness.paymentStatus,
+          nextPaymentDate: updatedBusiness.nextPaymentDate,
+          status: updatedBusiness.status,
+        },
+        stripe: {
+          customerId: customer.id,
+          subscriptionId: subscription.id,
+          clientSecret,
+        },
+        mapping: record,
+      };
+    } catch (error) {
+      this.logger.error(`Error creating/replacing business subscription: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getBusinessCredits(businessId: string) {
+    try {
+      const business = await this.getBusiness(businessId);
+      
+      return {
+        businessId: business.businessId,
+        businessName: business.businessName,
+        credits: {
+          business: business.credits || { totalBalance: 0, availableBalance: 0, currency: 'RON', lastUpdated: business.createdAt },
+          locations: business.locations.map(location => ({
+            locationId: location.locationId,
+            locationName: location.name,
+            allocatedCredits: location.allocatedCredits || { balance: 0, lastUpdated: business.createdAt },
+          })),
+          summary: {
+            totalCredits: business.credits?.totalBalance || 0,
+            availableCredits: business.credits?.availableBalance || 0,
+            allocatedCredits: business.locations.reduce((total, loc) => total + (loc.allocatedCredits?.balance || 0), 0),
+          },
+        },
+        // TODO: Implement credit transaction history from database
+        transactions: [],
+      };
+    } catch (error) {
+      this.logger.error(`Error getting business credits: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async purchaseCredits(
+    businessId: string,
+    creditAmount: number,
+    payerUser: { userId: string; email: string; name?: string },
+    paymentMethodId?: string,
+  ) {
+    try {
+      const business = await this.getBusiness(businessId);
+
+      // Use payer user stripe customer
+      const customer = await this.paymentService.ensureStripeCustomerForUser(
+        payerUser.userId,
+        payerUser.email,
+        payerUser.name,
+      );
+
+      // Calculate price for credits (e.g., 1 credit = 1 RON)
+      const unitPrice = 100; // 1 RON in cents
+      const totalAmount = creditAmount * unitPrice;
+
+      // Create payment intent for credits purchase
+      const paymentIntent = await this.paymentService.createPaymentIntent(
+        totalAmount,
+        business.credits?.currency || 'ron',
+        customer.id,
+      );
+
+      // If payment method provided, confirm payment immediately
+      if (paymentMethodId) {
+        await this.paymentService.confirmPaymentIntent(paymentIntent.id, paymentMethodId);
+        
+        // Update credits balance
+        await this.addCreditsToBalance(businessId, creditAmount);
+      }
+
+      return {
+        paymentIntent: {
+          id: paymentIntent.id,
+          client_secret: paymentIntent.client_secret,
+          amount: totalAmount,
+          currency: paymentIntent.currency,
+        },
+        credits: {
+          purchased: creditAmount,
+          unitPrice: unitPrice,
+          totalAmount: totalAmount,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error purchasing credits: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async allocateCreditsToLocation(businessId: string, locationId: string, amount: number) {
+    try {
+      const business = await this.getBusiness(businessId);
+      
+      // Check if business has enough available credits
+      const availableCredits = business.credits?.availableBalance || 0;
+      if (availableCredits < amount) {
+        throw new Error(`Insufficient available credits. Available: ${availableCredits}, Requested: ${amount}`);
+      }
+
+      // Find the location
+      const locationIndex = business.locations.findIndex(loc => loc.locationId === locationId);
+      if (locationIndex === -1) {
+        throw new Error('Location not found');
+      }
+
+      const updatedBusiness = { ...business };
+      
+      // Update business credits
+      updatedBusiness.credits = {
+        ...business.credits!,
+        availableBalance: availableCredits - amount,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Update location credits
+      updatedBusiness.locations[locationIndex] = {
+        ...business.locations[locationIndex],
+        allocatedCredits: {
+          balance: (business.locations[locationIndex].allocatedCredits?.balance || 0) + amount,
+          lastUpdated: new Date().toISOString(),
+        },
+      };
+
+      updatedBusiness.updatedAt = new Date().toISOString();
+
+      await this.databaseService.updateBusiness(businessId, updatedBusiness);
+      
+      this.logger.log(`Allocated ${amount} credits to location ${locationId} in business ${businessId}`);
+      
+      return {
+        success: true,
+        allocated: amount,
+        location: {
+          locationId: locationId,
+          locationName: updatedBusiness.locations[locationIndex].name,
+          newBalance: updatedBusiness.locations[locationIndex].allocatedCredits!.balance,
+        },
+        business: {
+          availableCredits: updatedBusiness.credits.availableBalance,
+          totalCredits: updatedBusiness.credits.totalBalance,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error allocating credits to location: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async reallocateCredits(businessId: string, fromLocationId: string, toLocationId: string, amount: number) {
+    try {
+      const business = await this.getBusiness(businessId);
+      
+      // Find the locations
+      const fromLocationIndex = business.locations.findIndex(loc => loc.locationId === fromLocationId);
+      const toLocationIndex = business.locations.findIndex(loc => loc.locationId === toLocationId);
+      
+      if (fromLocationIndex === -1 || toLocationIndex === -1) {
+        throw new Error('One or both locations not found');
+      }
+
+      // Check if source location has enough credits
+      const fromLocationCredits = business.locations[fromLocationIndex].allocatedCredits?.balance || 0;
+      if (fromLocationCredits < amount) {
+        throw new Error(`Insufficient credits in source location. Available: ${fromLocationCredits}, Requested: ${amount}`);
+      }
+
+      const updatedBusiness = { ...business };
+      
+      // Update source location
+      updatedBusiness.locations[fromLocationIndex] = {
+        ...business.locations[fromLocationIndex],
+        allocatedCredits: {
+          balance: fromLocationCredits - amount,
+          lastUpdated: new Date().toISOString(),
+        },
+      };
+
+      // Update destination location
+      updatedBusiness.locations[toLocationIndex] = {
+        ...business.locations[toLocationIndex],
+        allocatedCredits: {
+          balance: (business.locations[toLocationIndex].allocatedCredits?.balance || 0) + amount,
+          lastUpdated: new Date().toISOString(),
+        },
+      };
+
+      updatedBusiness.updatedAt = new Date().toISOString();
+
+      await this.databaseService.updateBusiness(businessId, updatedBusiness);
+      
+      this.logger.log(`Reallocated ${amount} credits from location ${fromLocationId} to ${toLocationId} in business ${businessId}`);
+      
+      return {
+        success: true,
+        reallocated: amount,
+        fromLocation: {
+          locationId: fromLocationId,
+          locationName: updatedBusiness.locations[fromLocationIndex].name,
+          newBalance: updatedBusiness.locations[fromLocationIndex].allocatedCredits!.balance,
+        },
+        toLocation: {
+          locationId: toLocationId,
+          locationName: updatedBusiness.locations[toLocationIndex].name,
+          newBalance: updatedBusiness.locations[toLocationIndex].allocatedCredits!.balance,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error reallocating credits: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async deallocateCreditsFromLocation(businessId: string, locationId: string, amount: number) {
+    try {
+      const business = await this.getBusiness(businessId);
+      
+      // Find the location
+      const locationIndex = business.locations.findIndex(loc => loc.locationId === locationId);
+      if (locationIndex === -1) {
+        throw new Error('Location not found');
+      }
+
+      // Check if location has enough credits
+      const locationCredits = business.locations[locationIndex].allocatedCredits?.balance || 0;
+      if (locationCredits < amount) {
+        throw new Error(`Insufficient credits in location. Available: ${locationCredits}, Requested: ${amount}`);
+      }
+
+      const updatedBusiness = { ...business };
+      
+      // Update business credits
+      updatedBusiness.credits = {
+        ...business.credits!,
+        availableBalance: (business.credits?.availableBalance || 0) + amount,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Update location credits
+      updatedBusiness.locations[locationIndex] = {
+        ...business.locations[locationIndex],
+        allocatedCredits: {
+          balance: locationCredits - amount,
+          lastUpdated: new Date().toISOString(),
+        },
+      };
+
+      updatedBusiness.updatedAt = new Date().toISOString();
+
+      await this.databaseService.updateBusiness(businessId, updatedBusiness);
+      
+      this.logger.log(`Deallocated ${amount} credits from location ${locationId} to business pool ${businessId}`);
+      
+      return {
+        success: true,
+        deallocated: amount,
+        location: {
+          locationId: locationId,
+          locationName: updatedBusiness.locations[locationIndex].name,
+          newBalance: updatedBusiness.locations[locationIndex].allocatedCredits!.balance,
+        },
+        business: {
+          availableCredits: updatedBusiness.credits.availableBalance,
+          totalCredits: updatedBusiness.credits.totalBalance,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error deallocating credits from location: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private async addCreditsToBalance(businessId: string, amount: number) {
+    try {
+      const business = await this.getBusiness(businessId);
+      const currentTotalBalance = business.credits?.totalBalance || 0;
+      const currentAvailableBalance = business.credits?.availableBalance || 0;
+      const newTotalBalance = currentTotalBalance + amount;
+      const newAvailableBalance = currentAvailableBalance + amount;
+      
+      const updatedBusiness = {
+        ...business,
+        credits: {
+          totalBalance: newTotalBalance,
+          availableBalance: newAvailableBalance,
+          currency: business.credits?.currency || 'RON',
+          lastUpdated: new Date().toISOString(),
+        },
+        updatedAt: new Date().toISOString(),
+      };
+
+      await this.databaseService.updateBusiness(businessId, updatedBusiness);
+      
+      this.logger.log(`Added ${amount} credits to business ${businessId}. New total: ${newTotalBalance}, Available: ${newAvailableBalance}`);
+      
+      return updatedBusiness;
+    } catch (error) {
+      this.logger.error(`Error adding credits to balance: ${error.message}`);
+      throw error;
+    }
   }
 } 
