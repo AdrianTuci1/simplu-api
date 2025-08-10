@@ -1,72 +1,79 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { PaymentService } from '../payment/payment.service';
 import { ConfigService } from '@nestjs/config';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { UserEntity } from './entities/user.entity';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+
+export interface UserProfileEntity {
+  userId: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  billingAddress?: {
+    company?: string;
+    street?: string;
+    city?: string;
+    district?: string;
+    postalCode?: string;
+    country?: string;
+  };
+  entityType?: 'pf' | 'pfa' | 'srl';
+  registrationNumber?: string;
+  taxCode?: string;
+  stripeCustomerId?: string;
+  defaultPaymentMethodId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name);
-  private readonly dynamoClient: DynamoDBClient;
-  private readonly docClient: DynamoDBDocumentClient;
-  private readonly tableName: string;
+  private doc: DynamoDBDocumentClient;
+  private usersTable: string;
 
-  constructor(private readonly configService: ConfigService) {
-    this.dynamoClient = new DynamoDBClient({
-      region: this.configService.get('AWS_REGION', 'us-east-1'),
-      credentials: {
-        accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
-      },
+  constructor(private readonly payments: PaymentService, private readonly config: ConfigService) {
+    const ddb = new DynamoDBClient({
+      region: config.get('AWS_REGION', 'us-east-1'),
+      credentials: { accessKeyId: config.get('AWS_ACCESS_KEY_ID'), secretAccessKey: config.get('AWS_SECRET_ACCESS_KEY') },
     });
-    this.docClient = DynamoDBDocumentClient.from(this.dynamoClient);
-    this.tableName = this.configService.get('DYNAMODB_USERS_TABLE_NAME', 'users');
+    this.doc = DynamoDBDocumentClient.from(ddb);
+    this.usersTable = config.get('DYNAMODB_USERS_TABLE_NAME', 'users');
   }
 
-  async getOrCreateUser(userId: string, email: string, name?: string): Promise<UserEntity> {
-    const existing = await this.getUser(userId);
-    if (existing) {
-      return existing;
-    }
+  async getMe(userId: string, email: string): Promise<UserProfileEntity> {
+    const res = await this.doc.send(new GetCommand({ TableName: this.usersTable, Key: { userId } }));
     const now = new Date().toISOString();
-    const user: UserEntity = {
+    const profile: UserProfileEntity = res.Item as any || {
       userId,
       email,
-      name,
       createdAt: now,
       updatedAt: now,
     };
-    await this.docClient.send(new PutCommand({ TableName: this.tableName, Item: user }));
-    this.logger.log(`Created user profile ${userId}`);
-    return user;
+    // Ensure Stripe customer exists
+    const customerId = await this.payments.ensureCustomer(userId, email);
+    if (profile.stripeCustomerId !== customerId) {
+      profile.stripeCustomerId = customerId;
+      await this.doc.send(new PutCommand({ TableName: this.usersTable, Item: profile }));
+    }
+    return profile;
   }
 
-  async getUser(userId: string): Promise<UserEntity | null> {
-    const res = await this.docClient.send(new GetCommand({ TableName: this.tableName, Key: { userId } }));
-    return (res.Item as UserEntity) || null;
+  async updateMe(userId: string, email: string, updates: Partial<UserProfileEntity>): Promise<UserProfileEntity> {
+    const current = await this.getMe(userId, email);
+    const merged = { ...current, ...updates, userId, email, updatedAt: new Date().toISOString() };
+    await this.doc.send(new PutCommand({ TableName: this.usersTable, Item: merged }));
+    return merged;
   }
 
-  async updateUser(userId: string, updates: Partial<UserEntity>): Promise<UserEntity> {
-    const updateExpression: string[] = [];
-    const expressionAttributeNames: Record<string, string> = {};
-    const expressionAttributeValues: Record<string, any> = {};
-    const payload = { ...updates, updatedAt: new Date().toISOString() } as Partial<UserEntity>;
-    Object.keys(payload).forEach((key) => {
-      if (payload[key as keyof UserEntity] !== undefined) {
-        updateExpression.push(`#${key} = :${key}`);
-        expressionAttributeNames[`#${key}`] = key;
-        expressionAttributeValues[`:${key}`] = (payload as any)[key];
-      }
-    });
-    const res = await this.docClient.send(new UpdateCommand({
-      TableName: this.tableName,
-      Key: { userId },
-      UpdateExpression: `SET ${updateExpression.join(', ')}`,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
-    }));
-    return res.Attributes as UserEntity;
+  async addPaymentMethod(userId: string, email: string, paymentMethodId: string): Promise<{ ok: true }>{
+    const profile = await this.getMe(userId, email);
+    if (!profile.stripeCustomerId) {
+      profile.stripeCustomerId = await this.payments.ensureCustomer(userId, email);
+    }
+    await this.payments.attachPaymentMethod(profile.stripeCustomerId, paymentMethodId);
+    await this.updateMe(userId, email, { defaultPaymentMethodId: paymentMethodId });
+    return { ok: true };
   }
 }
 

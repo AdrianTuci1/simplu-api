@@ -14,13 +14,6 @@ Documentație pentru integrarea frontend cu modulele `@business/`.
     "companyName": "SRL Exemplu",
     "registrationNumber": "J12/123/2024",
     "businessType": "dental", // "dental" | "gym" | "hotel"
-    "companyAddress": {
-      "street": "Str. Exemplu 1",
-      "city": "Cluj-Napoca",
-      "district": "Cluj",
-      "country": "RO",
-      "postalCode": "400000"
-    },
     "locations": [
       {
         "name": "Clinica Centrală",

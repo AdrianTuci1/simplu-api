@@ -1,15 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { UsersModule } from '../users/users.module';
-import { DatabaseModule } from '../database/database.module';
-import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
+import { PaymentService } from './payment.service';
 import { SubscriptionStoreService } from './subscription-store.service';
+import { BusinessModule } from '../business/business.module';
 
 @Module({
-  imports: [ConfigModule, UsersModule, DatabaseModule],
-  providers: [PaymentService, SubscriptionStoreService],
+  imports: [ConfigModule, BusinessModule],
   controllers: [PaymentController],
-  exports: [PaymentService, SubscriptionStoreService],
+  providers: [PaymentService, SubscriptionStoreService],
+  exports: [PaymentService],
 })
-export class PaymentModule {} 
+export class PaymentModule {}
+

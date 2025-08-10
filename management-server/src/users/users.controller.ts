@@ -1,32 +1,31 @@
-import { Body, Controller, Get, Put, UseGuards, Request } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { Body, Controller, Get, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
+import { UsersService } from './users.service';
 
 @ApiTags('users')
+@ApiBearerAuth()
+@UseGuards(CognitoAuthGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  @UseGuards(CognitoAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user profile (DynamoDB mapping to Cognito user)' })
-  @ApiResponse({ status: 200, description: 'Returns user profile' })
-  async getMe(@Request() req: any) {
-    const user = req.user; // contains userId (sub), email, name
-    return this.usersService.getOrCreateUser(user.userId, user.email, user.name);
+  async me(@Req() req: any) {
+    const user = req.user;
+    return this.usersService.getMe(user.userId, user.email);
   }
 
   @Put('me')
-  @UseGuards(CognitoAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update current user profile (address, default payment method)' })
-  @ApiResponse({ status: 200, description: 'Profile updated' })
-  async updateMe(@Request() req: any, @Body() dto: UpdateUserDto) {
+  async updateMe(@Req() req: any, @Body() body: any) {
     const user = req.user;
-    return this.usersService.updateUser(user.userId, dto as any);
+    return this.usersService.updateMe(user.userId, user.email, body);
+  }
+
+  @Post('me/payment-methods')
+  async addPaymentMethod(@Req() req: any, @Body() body: { paymentMethodId: string }) {
+    const user = req.user;
+    return this.usersService.addPaymentMethod(user.userId, user.email, body.paymentMethodId);
   }
 }
 
