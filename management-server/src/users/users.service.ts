@@ -41,15 +41,25 @@ export class UsersService {
     this.usersTable = config.get('DYNAMODB_USERS_TABLE_NAME', 'users');
   }
 
-  async getMe(userId: string, email: string): Promise<UserProfileEntity> {
+  async getMe(userId: string, email: string, firstName?: string, lastName?: string): Promise<UserProfileEntity> {
     const res = await this.doc.send(new GetCommand({ TableName: this.usersTable, Key: { userId } }));
     const now = new Date().toISOString();
-    const profile: UserProfileEntity = res.Item as any || {
+    
+    let profile: UserProfileEntity = res.Item as any || {
       userId,
       email,
       createdAt: now,
       updatedAt: now,
     };
+
+    // If we have name data from Cognito and the profile doesn't have firstName/lastName, populate them
+    if ((firstName || lastName) && (!profile.firstName && !profile.lastName)) {
+      profile.firstName = firstName || profile.firstName;
+      profile.lastName = lastName || profile.lastName;
+      profile.updatedAt = now;
+      await this.doc.send(new PutCommand({ TableName: this.usersTable, Item: profile }));
+    }
+
     // Ensure Stripe customer exists
     const customerId = await this.payments.ensureCustomer(userId, email);
     if (profile.stripeCustomerId !== customerId) {
@@ -59,21 +69,41 @@ export class UsersService {
     return profile;
   }
 
-  async updateMe(userId: string, email: string, updates: Partial<UserProfileEntity>): Promise<UserProfileEntity> {
-    const current = await this.getMe(userId, email);
+  async updateMe(userId: string, email: string, updates: Partial<UserProfileEntity>, firstName?: string, lastName?: string): Promise<UserProfileEntity> {
+    const current = await this.getMe(userId, email, firstName, lastName);
     const merged = { ...current, ...updates, userId, email, updatedAt: new Date().toISOString() };
     await this.doc.send(new PutCommand({ TableName: this.usersTable, Item: merged }));
     return merged;
   }
 
-  async addPaymentMethod(userId: string, email: string, paymentMethodId: string): Promise<{ ok: true }>{
-    const profile = await this.getMe(userId, email);
+  async addPaymentMethod(userId: string, email: string, paymentMethodId: string, firstName?: string, lastName?: string): Promise<{ ok: true }>{
+    const profile = await this.getMe(userId, email, firstName, lastName);
     if (!profile.stripeCustomerId) {
       profile.stripeCustomerId = await this.payments.ensureCustomer(userId, email);
     }
     await this.payments.attachPaymentMethod(profile.stripeCustomerId, paymentMethodId);
-    await this.updateMe(userId, email, { defaultPaymentMethodId: paymentMethodId });
+    await this.updateMe(userId, email, { defaultPaymentMethodId: paymentMethodId }, firstName, lastName);
     return { ok: true };
+  }
+
+  async getPaymentMethods(userId: string, email: string, firstName?: string, lastName?: string): Promise<any[]> {
+    const profile = await this.getMe(userId, email, firstName, lastName);
+    if (!profile.stripeCustomerId) {
+      return [];
+    }
+    const paymentMethods = await this.payments.listPaymentMethods(profile.stripeCustomerId);
+    return paymentMethods.map(pm => ({
+      id: pm.id,
+      type: pm.type,
+      card: pm.card ? {
+        brand: pm.card.brand,
+        last4: pm.card.last4,
+        expMonth: pm.card.exp_month,
+        expYear: pm.card.exp_year,
+      } : null,
+      billingDetails: pm.billing_details,
+      isDefault: pm.id === profile.defaultPaymentMethodId,
+    }));
   }
 }
 

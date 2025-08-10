@@ -1,29 +1,18 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import {
-  GetUserCommand,
   AdminGetUserCommand,
-  AdminCreateUserCommand,
-  AdminSetUserPasswordCommand,
-  AdminAddUserToGroupCommand,
-  AdminRemoveUserFromGroupCommand,
-  ListUsersCommand,
-  ListGroupsCommand,
-  CreateGroupCommand,
-  DeleteGroupCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { cognitoService } from '../../config/cognito.config';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
 export interface CognitoUser {
-  userId: string;
-  username: string;
-  email: string;
-  roles: string[];
-  permissions: string[];
-  isActive: boolean;
-  createdAt?: string;
-  lastModified?: string;
+  userId: string;       // Cognito's 'sub' claim
+  username: string;     // Cognito username
+  email: string;        // Cognito email
+  name?: string;        // Full name from Cognito (if available)
+  firstName?: string;   // Extracted first name
+  lastName?: string;    // Extracted last name
 }
 
 export interface AuthResult {
@@ -90,18 +79,17 @@ export class AuthService {
         {} as Record<string, string>,
       );
 
-      // Get user groups to determine roles
-      const groups = await this.getUserGroups(username);
+      // Extract and split name
+      const fullName = attributes.name || attributes['custom:name'] || '';
+      const { firstName, lastName } = this.splitFullName(fullName);
 
       return {
         userId: attributes.sub || username,
         username: result.Username || username,
         email: attributes.email || '',
-        roles: groups,
-        permissions: this.getPermissionsFromRoles(groups),
-        isActive: result.Enabled || false,
-        createdAt: result.UserCreateDate?.toISOString(),
-        lastModified: result.UserLastModifiedDate?.toISOString(),
+        name: fullName,
+        firstName,
+        lastName,
       };
     } catch (error) {
       console.error(`Error fetching user info for ${username}:`, error);
@@ -141,75 +129,40 @@ export class AuthService {
     throw new Error('User listing is not supported in management server. Use the central auth gateway.');
   }
 
-  /**
-   * Gets user groups (roles)
-   */
-  private async getUserGroups(username: string): Promise<string[]> {
-    try {
-      // Note: In a real implementation, you would use AdminListGroupsForUserCommand
-      // For now, return default roles based on username
-      const groups = ['user'];
-      
-      if (username.includes('admin')) {
-        groups.push('admin');
-      }
-      
-      if (username.includes('manager')) {
-        groups.push('manager');
-      }
 
-      return groups;
-    } catch (error) {
-      console.error('Error getting user groups:', error);
-      return ['user'];
+
+
+
+
+
+  /**
+   * Splits a full name into first and last name
+   */
+  private splitFullName(fullName: string): { firstName: string; lastName: string } {
+    if (!fullName || typeof fullName !== 'string') {
+      return { firstName: '', lastName: '' };
     }
-  }
 
-  /**
-   * Adds user to a group
-   */
-  private async addUserToGroup(username: string, groupName: string): Promise<void> {
-    try {
-      const command = new AdminAddUserToGroupCommand({
-        UserPoolId: this.config.userPoolId,
-        Username: username,
-        GroupName: groupName,
-      });
-
-      await this.cognitoClient.send(command);
-    } catch (error) {
-      console.error(`Error adding user ${username} to group ${groupName}:`, error);
-      // Don't throw error, just log it
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      return { firstName: '', lastName: '' };
     }
-  }
 
-  /**
-   * Removes user from a group
-   */
-  private async removeUserFromGroup(username: string, groupName: string): Promise<void> {
-    try {
-      const command = new AdminRemoveUserFromGroupCommand({
-        UserPoolId: this.config.userPoolId,
-        Username: username,
-        GroupName: groupName,
-      });
-
-      await this.cognitoClient.send(command);
-    } catch (error) {
-      console.error(`Error removing user ${username} from group ${groupName}:`, error);
-      // Don't throw error, just log it
+    const nameParts = trimmedName.split(/\s+/);
+    
+    if (nameParts.length === 1) {
+      return { firstName: nameParts[0], lastName: '' };
     }
-  }
-
-  /**
-   * Validates user permissions for a specific action
-   */
-  async validatePermission(user: CognitoUser, permission: string): Promise<boolean> {
-    return (
-      user.permissions.includes(permission) || 
-      user.roles.includes('admin') || 
-      user.roles.includes('super_admin')
-    );
+    
+    if (nameParts.length === 2) {
+      return { firstName: nameParts[0], lastName: nameParts[1] };
+    }
+    
+    // For names with more than 2 parts, first part is firstName, rest is lastName
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ');
+    
+    return { firstName, lastName };
   }
 
   /**
@@ -239,63 +192,13 @@ export class AuthService {
     
     return {
       userId: `user-${tokenHash}`,
-      username: `admin${tokenHash}`,
-      email: `admin${tokenHash}@management.com`,
-      roles: ['admin', 'manager'],
-      permissions: [
-        'create:business',
-        'read:business',
-        'update:business',
-        'delete:business',
-        'manage:users',
-        'manage:infrastructure',
-      ],
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      lastModified: new Date().toISOString(),
+      username: `user${tokenHash}`,
+      email: `user${tokenHash}@example.com`,
+      name: `User ${tokenHash}`,
+      firstName: `User`,
+      lastName: `${tokenHash}`,
     };
   }
 
-  /**
-   * Maps roles to permissions
-   */
-  private getPermissionsFromRoles(roles: string[]): string[] {
-    const permissions: string[] = [];
 
-    if (roles.includes('super_admin')) {
-      permissions.push(
-        'create:business',
-        'read:business',
-        'update:business',
-        'delete:business',
-        'manage:users',
-        'manage:infrastructure',
-        'manage:payments',
-        'view:analytics',
-        'manage:system'
-      );
-    } else if (roles.includes('admin')) {
-      permissions.push(
-        'create:business',
-        'read:business',
-        'update:business',
-        'delete:business',
-        'manage:users',
-        'manage:infrastructure',
-        'manage:payments',
-        'view:analytics'
-      );
-    } else if (roles.includes('manager')) {
-      permissions.push(
-        'read:business',
-        'update:business',
-        'manage:users',
-        'view:analytics'
-      );
-    } else {
-      permissions.push('read:business');
-    }
-
-    return permissions;
-  }
 } 

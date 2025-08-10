@@ -21,9 +21,9 @@ export class AuthController {
           userId: user.userId,
           username: user.username,
           email: user.email,
-          roles: user.roles,
-          permissions: user.permissions,
-          isActive: user.isActive,
+          name: user.name,
+          firstName: user.firstName,
+          lastName: user.lastName,
         },
       };
     } catch (error) {
@@ -44,11 +44,9 @@ export class AuthController {
         userId: user.userId,
         username: user.username,
         email: user.email,
-        roles: user.roles,
-        permissions: user.permissions,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-        lastModified: user.lastModified,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
       },
     };
   }

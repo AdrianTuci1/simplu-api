@@ -204,6 +204,29 @@ Body (subset):
 ```
 
 #### Payment
+- `GET /users/me/payment-methods`
+
+Răspuns:
+```json
+[
+  {
+    "id": "pm_123",
+    "type": "card",
+    "card": {
+      "brand": "visa",
+      "last4": "4242",
+      "expMonth": 12,
+      "expYear": 2025
+    },
+    "billingDetails": {
+      "name": "John Doe",
+      "email": "john@example.com"
+    },
+    "isDefault": true
+  }
+]
+```
+
 - `POST /users/me/payment-methods`
 
 Body:

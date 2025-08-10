@@ -140,5 +140,13 @@ export class PaymentService {
     }
     return { businessId, subscriptionId: sub.id, status: sub.status };
   }
+
+  async listPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
+    const paymentMethods = await this.stripe.paymentMethods.list({
+      customer: customerId,
+      type: 'card',
+    });
+    return paymentMethods.data;
+  }
 }
 

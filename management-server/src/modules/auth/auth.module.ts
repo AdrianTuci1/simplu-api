@@ -4,7 +4,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { CognitoAuthGuard } from './guards/cognito-auth.guard';
-import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -20,7 +19,7 @@ import { RolesGuard } from './guards/roles.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, CognitoAuthGuard, RolesGuard],
-  exports: [AuthService, CognitoAuthGuard, RolesGuard],
+  providers: [AuthService, CognitoAuthGuard],
+  exports: [AuthService, CognitoAuthGuard],
 })
 export class AuthModule {} 

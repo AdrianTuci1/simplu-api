@@ -13,19 +13,25 @@ export class UsersController {
   @Get('me')
   async me(@Req() req: any) {
     const user = req.user;
-    return this.usersService.getMe(user.userId, user.email);
+    return this.usersService.getMe(user.userId, user.email, user.firstName, user.lastName);
   }
 
   @Put('me')
   async updateMe(@Req() req: any, @Body() body: any) {
     const user = req.user;
-    return this.usersService.updateMe(user.userId, user.email, body);
+    return this.usersService.updateMe(user.userId, user.email, body, user.firstName, user.lastName);
+  }
+
+  @Get('me/payment-methods')
+  async getPaymentMethods(@Req() req: any) {
+    const user = req.user;
+    return this.usersService.getPaymentMethods(user.userId, user.email, user.firstName, user.lastName);
   }
 
   @Post('me/payment-methods')
   async addPaymentMethod(@Req() req: any, @Body() body: { paymentMethodId: string }) {
     const user = req.user;
-    return this.usersService.addPaymentMethod(user.userId, user.email, body.paymentMethodId);
+    return this.usersService.addPaymentMethod(user.userId, user.email, body.paymentMethodId, user.firstName, user.lastName);
   }
 }
 
