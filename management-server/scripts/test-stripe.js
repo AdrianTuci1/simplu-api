@@ -1,3 +1,5 @@
+require('dotenv/config');
+
 /*
  Usage:
   node scripts/test-stripe.js inspect --product $STRIPE_BASIC_PRODUCT_ID --currency ron
