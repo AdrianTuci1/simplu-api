@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BusinessService } from './business.service';
 import { BusinessController } from './business.controller';
@@ -11,7 +11,7 @@ import { UsersModule } from '../users/users.module';
 import { BusinessScheduler } from './business.scheduler';
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, SharedModule, InfrastructureModule, AuthModule, PaymentModule, UsersModule],
+  imports: [ConfigModule, DatabaseModule, SharedModule, InfrastructureModule, AuthModule, forwardRef(() => PaymentModule), UsersModule],
   providers: [BusinessService, BusinessScheduler],
   controllers: [BusinessController],
   exports: [BusinessService],

@@ -169,5 +169,6 @@ export class UsersService {
       throw new Error(`Failed to create placeholder user for email ${email}: ${error.message}`);
     }
   }
+
 }
 

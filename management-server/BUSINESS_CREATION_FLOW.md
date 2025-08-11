@@ -186,6 +186,73 @@ Crearea unui business se face în 3 pași distincti pentru a asigura:
 - Fiecare pas verifică autorizarea corespunzătoare
 - Shard-urile au cheie compusă `businessId-locationId` pentru izolare completă
 
+## Listarea Business-urilor
+
+### `GET /businesses`
+
+Returnează toate business-urile pentru utilizatorul curent, incluzând:
+- **Business-uri unde utilizatorul este owner** (`ownerUserId`)
+- **Business-uri create de utilizator** (`createdByUserId`) 
+- **Business-uri unde utilizatorul este autorizat prin email** (`authorizedEmails`)
+
+Business-urile sunt sortate după data creării (cele mai noi primele).
+
+## Crearea și Completarea Utilizatorilor
+
+### Arhitectura de Autentificare
+
+Management-server **nu creează utilizatori** în Cognito. Aceasta se face prin:
+- **Central auth gateway** (pentru înregistrări directe)
+- **Invitații prin email** (pentru utilizatori noi)
+
+### Fluxul pentru Utilizatori Noi
+
+1. **Admin creează business** cu `configureForEmail: "client@firma.ro"`
+2. **Sistemul creează profil placeholder** în DynamoDB
+3. **Se trimite email cu invitație** către client
+4. **Client accesează link-ul** din email
+5. **Client creează contul** în Cognito (prin auth gateway)
+6. **Client completează profilul** prin `PUT /users/me`
+
+### Endpoint-uri pentru Utilizatori
+
+#### `GET /users/me`
+- Obține profilul utilizatorului curent
+- Creează automat profil dacă nu există
+
+#### `PUT /users/me`
+- Actualizează profilul utilizatorului
+
+#### `PUT /users/me`
+- Actualizează profilul utilizatorului
+- Poate fi folosit pentru completarea profilului după primirea invitației
+
+**Body** (exemplu pentru completarea profilului):
+```json
+{
+  "firstName": "Ion",
+  "lastName": "Pop",
+  "phone": "+40...",
+  "billingAddress": {
+    "company": "SRL Exemplu",
+    "street": "Str. Exemplului 1",
+    "city": "București",
+    "district": "Sector 1",
+    "postalCode": "010101",
+    "country": "RO"
+  },
+  "entityType": "srl",
+  "registrationNumber": "J12/123/2024",
+  "taxCode": "RO12345678"
+}
+```
+
+#### `GET /users/me/payment-methods`
+- Lista metodele de plată ale utilizatorului
+
+#### `POST /users/me/payment-methods`
+- Adaugă o metodă de plată nouă
+
 ## Compatibilitate
 
 Endpoint-urile legacy (`POST /businesses`, `POST /businesses/:id/activate`) sunt păstrate pentru compatibilitate, dar se recomandă folosirea noilor endpoint-uri pentru control mai bun. 

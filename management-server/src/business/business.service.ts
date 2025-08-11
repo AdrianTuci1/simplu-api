@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../database/database.service';
 import { BusinessEntity, BusinessLocation, BusinessSettings, BusinessStatus } from './entities/business.entity';
@@ -16,6 +16,7 @@ export class BusinessService {
     private readonly db: DatabaseService,
     private readonly shardService: ShardManagementService,
     private readonly infraService: InfrastructureService,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
     private readonly usersService: UsersService,
     private readonly emailService: EmailService,
@@ -285,11 +286,17 @@ export class BusinessService {
 
   async listBusinessesForUser(userId: string, userEmail: string): Promise<BusinessEntity[]> {
     const byOwner = await this.db.getBusinessesByOwner(userId);
+    const byCreator = await this.db.getBusinessesByCreator(userId);
     const byEmail = await this.db.getBusinessesByAuthorizedEmail(userEmail);
-    // Merge unique by id
+    
+    // Merge unique by id - include all business types
     const map = new Map<string, BusinessEntity>();
-    [...byOwner, ...byEmail].forEach((b) => map.set(b.businessId, b));
-    return Array.from(map.values());
+    [...byOwner, ...byCreator, ...byEmail].forEach((b) => map.set(b.businessId, b));
+    
+    // Sort by creation date (newest first)
+    return Array.from(map.values()).sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   async updateBusiness(businessId: string, updates: Partial<BusinessEntity>): Promise<BusinessEntity> {

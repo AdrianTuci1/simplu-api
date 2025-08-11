@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import Stripe from 'stripe';
 import { ConfigService } from '@nestjs/config';
 import { SubscriptionStoreService } from './subscription-store.service';
@@ -12,6 +12,7 @@ export class PaymentService {
   constructor(
     private readonly configService: ConfigService,
     private readonly subscriptionStore: SubscriptionStoreService,
+    @Inject(forwardRef(() => BusinessService))
     private readonly businessService: BusinessService,
   ) {
     const key = this.configService.get<string>('STRIPE_SECRET_KEY');
