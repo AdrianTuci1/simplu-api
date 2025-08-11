@@ -83,6 +83,34 @@ export class InfrastructureService {
     }
   }
 
+  async destroyReactApp(businessId: string): Promise<void> {
+    try {
+      const stackName = `react-app-${businessId}`;
+      
+      // Check if stack exists before trying to delete
+      try {
+        const describeCommand = new DescribeStacksCommand({
+          StackName: stackName,
+        });
+        await this.cloudFormationClient.send(describeCommand);
+      } catch (error) {
+        // Stack doesn't exist, nothing to delete
+        this.logger.log(`Stack ${stackName} doesn't exist, skipping deletion`);
+        return;
+      }
+
+      const command = new DeleteStackCommand({
+        StackName: stackName,
+      });
+
+      await this.cloudFormationClient.send(command);
+      this.logger.log(`React app infrastructure destroyed for business: ${businessId}`);
+    } catch (error) {
+      this.logger.error(`Error destroying React app infrastructure for business ${businessId}: ${error.message}`);
+      throw error;
+    }
+  }
+
   async createCustomDomain(domain: string): Promise<string> {
     try {
       // This would typically involve domain registration through a domain registrar

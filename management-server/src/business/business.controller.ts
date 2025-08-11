@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, Req, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
 import { BusinessService } from './business.service';
@@ -17,6 +17,44 @@ export class BusinessController {
     return this.businessService.listBusinessesForUser(user.userId, user.email);
   }
 
+  // Step 1: Configuration - Create business with suspended status
+  @Post('configure')
+  async configureBusiness(@Req() req: any, @Body() body: any): Promise<BusinessEntity> {
+    const user = req.user;
+    return this.businessService.configureBusiness(body, user);
+  }
+
+  // Step 2: Payment - Create subscription for configured business
+  @Post(':id/payment')
+  async setupPayment(
+    @Req() req: any,
+    @Param('id') businessId: string,
+    @Body() body: { subscriptionType: 'solo' | 'enterprise'; planKey?: 'basic' | 'premium'; billingInterval?: 'month' | 'year'; currency?: string }
+  ): Promise<{ subscriptionId: string; status: string; clientSecret?: string }> {
+    const user = req.user;
+    return this.businessService.setupPayment(businessId, body, user);
+  }
+
+  // Step 3: Launch - Activate business and deploy infrastructure
+  @Post(':id/launch')
+  async launchBusiness(
+    @Req() req: any,
+    @Param('id') businessId: string
+  ): Promise<BusinessEntity> {
+    const user = req.user;
+    return this.businessService.launchBusiness(businessId, user);
+  }
+
+  // Invitation endpoint - for new users to access their business
+  @Get(':id/invitation')
+  async getInvitation(
+    @Param('id') businessId: string,
+    @Query('email') email: string
+  ): Promise<{ businessId: string; businessName: string; ownerEmail: string; invitationUrl: string }> {
+    return this.businessService.getInvitationInfo(businessId, email);
+  }
+
+  // Legacy endpoint for backward compatibility
   @Post()
   async create(@Body() body: any): Promise<BusinessEntity> {
     return this.businessService.createBusiness(body);
@@ -38,6 +76,7 @@ export class BusinessController {
     return { status: 'ok' };
   }
 
+  // Legacy activation endpoint - now redirects to launch
   @Post(':id/activate')
   async activate(@Param('id') id: string, @Body() body: { subscriptionType: 'solo' | 'enterprise' }): Promise<BusinessEntity> {
     return this.businessService.activateAfterPayment(id, body.subscriptionType || 'solo');

@@ -11,6 +11,13 @@ export interface ShardCreationMessage {
   timestamp: string;
 }
 
+export interface ShardDestructionMessage {
+  businessId: string;
+  locationId?: string; // Optional - if not provided, destroys all locations for business
+  action: 'destroy' | 'destroy_all';
+  timestamp: string;
+}
+
 @Injectable()
 export class SqsService {
   private readonly logger = new Logger(SqsService.name);
@@ -83,6 +90,51 @@ export class SqsService {
     } catch (error) {
       this.logger.error(`Failed to send batch SQS messages: ${error.message}`, error.stack);
       throw new Error(`Failed to send batch shard creation messages: ${error.message}`);
+    }
+  }
+
+  async sendShardDestructionMessage(message: ShardDestructionMessage): Promise<void> {
+    try {
+      if (!this.queueUrl) {
+        this.logger.warn('SQS queue URL not configured, skipping destruction message send');
+        return;
+      }
+
+      const messageAttributes: Record<string, any> = {
+        'MessageType': {
+          DataType: 'String',
+          StringValue: 'SHARD_DESTRUCTION'
+        },
+        'BusinessId': {
+          DataType: 'String',
+          StringValue: message.businessId
+        }
+      };
+
+      // Add locationId if provided
+      if (message.locationId) {
+        messageAttributes['LocationId'] = {
+          DataType: 'String',
+          StringValue: message.locationId
+        };
+      }
+
+      const command = new SendMessageCommand({
+        QueueUrl: this.queueUrl,
+        MessageBody: JSON.stringify(message),
+        MessageAttributes: messageAttributes
+      });
+
+      await this.sqsClient.send(command);
+      
+      if (message.locationId) {
+        this.logger.log(`Shard destruction message sent for business ${message.businessId}, location ${message.locationId}`);
+      } else {
+        this.logger.log(`Shard destruction message sent for all locations of business ${message.businessId}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send SQS destruction message: ${error.message}`, error.stack);
+      throw new Error(`Failed to send shard destruction message: ${error.message}`);
     }
   }
 } 

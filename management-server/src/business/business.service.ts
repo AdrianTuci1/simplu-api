@@ -4,6 +4,9 @@ import { DatabaseService } from '../database/database.service';
 import { BusinessEntity, BusinessLocation, BusinessSettings, BusinessStatus } from './entities/business.entity';
 import { ShardManagementService } from '../shared/services/shard-management.service';
 import { InfrastructureService } from '../infrastructure/infrastructure.service';
+import { PaymentService } from '../payment/payment.service';
+import { UsersService } from '../users/users.service';
+import { EmailService } from '../shared/services/email.service';
 
 @Injectable()
 export class BusinessService {
@@ -13,8 +16,216 @@ export class BusinessService {
     private readonly db: DatabaseService,
     private readonly shardService: ShardManagementService,
     private readonly infraService: InfrastructureService,
+    private readonly paymentService: PaymentService,
+    private readonly usersService: UsersService,
+    private readonly emailService: EmailService,
   ) {}
 
+  // Step 1: Configuration - Create business with suspended status
+  async configureBusiness(input: Partial<BusinessEntity> & { companyName: string; businessType: string }, user: any): Promise<BusinessEntity> {
+    const nowIso = new Date().toISOString();
+
+    const locations: BusinessLocation[] = (input.locations || []).map((l) => ({
+      id: l.id || uuidv4(),
+      name: l.name,
+      address: l.address,
+      active: l.active ?? true,
+      timezone: l.timezone || 'Europe/Bucharest',
+    }));
+
+    if ((input.subscriptionType || 'solo') === 'solo' && locations.length > 1) {
+      throw new BadRequestException('Planul solo permite o singură locație');
+    }
+
+    const settings: BusinessSettings = {
+      currency: input.settings?.currency || 'RON',
+      language: input.settings?.language || 'ro',
+    };
+
+    // Handle owner assignment - if configureForEmail is provided, find or create that user
+    let ownerUserId = user.userId;
+    let ownerEmail = user.email;
+    let isNewUser = false;
+    
+    if (input.configureForEmail && input.configureForEmail !== user.email) {
+      try {
+        const { userId, isNew } = await this.usersService.findOrCreateUserByEmail(input.configureForEmail);
+        ownerUserId = userId;
+        ownerEmail = input.configureForEmail;
+        isNewUser = isNew;
+        
+        if (isNew) {
+          this.logger.log(`Created placeholder user for email ${input.configureForEmail} - they will complete registration later`);
+        }
+      } catch (error) {
+        this.logger.error(`Failed to find/create user for email ${input.configureForEmail}:`, error);
+        throw new BadRequestException(`Cannot configure business for email ${input.configureForEmail}: ${error.message}`);
+      }
+    }
+
+    const business: BusinessEntity = {
+      businessId: uuidv4(),
+      companyName: input.companyName,
+      registrationNumber: input.registrationNumber || '',
+      taxCode: input.taxCode || '',
+      businessType: input.businessType,
+      locations,
+      settings,
+      configureForEmail: input.configureForEmail || '',
+      domainType: input.domainType || 'subdomain',
+      domainLabel: input.domainLabel || '',
+      customTld: input.customTld,
+      clientPageType: input.clientPageType || 'website',
+      subscriptionType: (input.subscriptionType as any) || 'solo',
+      credits: input.credits || { total: 0, available: 0, currency: settings.currency, perLocation: {}, lockedLocations: [] },
+      active: false,
+      status: 'suspended',
+      ownerUserId,
+      ownerEmail,
+      billingEmail: input.billingEmail || ownerEmail,
+      createdByUserId: user.userId,
+      nextPaymentDate: null,
+      paymentStatus: 'unpaid',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      deletedAt: null,
+    };
+
+    const createdBusiness = await this.db.createBusiness(business);
+
+    // Send invitation email if this is a new user
+    if (isNewUser && input.configureForEmail) {
+      try {
+        const invitationUrl = `${this.getBaseUrl()}/businesses/${createdBusiness.businessId}/invitation?email=${encodeURIComponent(input.configureForEmail)}`;
+        await this.emailService.sendBusinessInvitationEmail(
+          input.configureForEmail,
+          input.companyName,
+          createdBusiness.businessId,
+          invitationUrl,
+          user.email
+        );
+        this.logger.log(`Invitation email sent to ${input.configureForEmail} for business ${createdBusiness.businessId}`);
+      } catch (error) {
+        this.logger.error(`Failed to send invitation email to ${input.configureForEmail}:`, error);
+        // Don't fail business creation if email fails
+      }
+    }
+
+    return createdBusiness;
+  }
+
+  private getBaseUrl(): string {
+    // In production, this should come from environment variables
+    return process.env.FRONTEND_BASE_URL || 'https://app.simplu.io';
+  }
+
+  async getInvitationInfo(businessId: string, email: string): Promise<{ businessId: string; businessName: string; ownerEmail: string; invitationUrl: string }> {
+    const business = await this.getBusiness(businessId);
+    
+    // Verify that the email matches the owner email
+    if (business.ownerEmail !== email) {
+      throw new BadRequestException('Invalid invitation link');
+    }
+
+    const invitationUrl = `${this.getBaseUrl()}/businesses/${businessId}/setup?email=${encodeURIComponent(email)}`;
+    
+    return {
+      businessId: business.businessId,
+      businessName: business.companyName,
+      ownerEmail: business.ownerEmail,
+      invitationUrl,
+    };
+  }
+
+  // Step 2: Payment - Create subscription for configured business
+  async setupPayment(
+    businessId: string, 
+    paymentConfig: { subscriptionType: 'solo' | 'enterprise'; planKey?: 'basic' | 'premium'; billingInterval?: 'month' | 'year'; currency?: string },
+    user: any
+  ): Promise<{ subscriptionId: string; status: string; clientSecret?: string }> {
+    const business = await this.getBusiness(businessId);
+    
+    // Verify business ownership - only the owner can setup payment
+    if (business.ownerUserId !== user.userId) {
+      throw new BadRequestException('Only the business owner can setup payment for this business');
+    }
+
+    // Update business with subscription type
+    await this.db.updateBusiness(businessId, {
+      subscriptionType: paymentConfig.subscriptionType,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Determine who should pay:
+    // - If business was configured for someone else (configureForEmail), owner pays
+    // - If business was configured for the creator, creator pays
+    const payingUserId = business.ownerUserId;
+    const payingUserEmail = business.ownerEmail;
+
+    // Create subscription using payment service with the correct user's credentials
+    return this.paymentService.createOrReplaceSubscription({
+      businessId,
+      userId: payingUserId,
+      userEmail: payingUserEmail,
+      planKey: paymentConfig.planKey || 'basic',
+      billingInterval: paymentConfig.billingInterval || 'month',
+      currency: paymentConfig.currency || 'ron',
+      cancelPrevious: true,
+    });
+  }
+
+  // Step 3: Launch - Activate business and deploy infrastructure
+  async launchBusiness(businessId: string, user: any): Promise<BusinessEntity> {
+    const business = await this.getBusiness(businessId);
+    
+    // Verify business ownership or authorization
+    if (business.ownerUserId !== user.userId && business.createdByUserId !== user.userId) {
+      throw new BadRequestException('Unauthorized to launch this business');
+    }
+
+    // Check if business is already active
+    if (business.status === 'active' && business.active === true) {
+      this.logger.warn(`Business ${businessId} is already active, skipping launch`);
+      return business;
+    }
+
+    // Check payment status
+    const subscriptionStatus = await this.paymentService.refreshSubscriptionStatus(businessId);
+    if (subscriptionStatus.status !== 'active' && subscriptionStatus.status !== 'trialing') {
+      throw new BadRequestException('Business subscription is not active. Please complete payment first.');
+    }
+
+    // Mark business as active
+    const updated = await this.db.updateBusiness(businessId, {
+      active: true,
+      status: 'active' as BusinessStatus,
+      paymentStatus: 'active',
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Trigger shard creation for each active location
+    const activeLocations = (updated.locations || []).filter((l) => l.active !== false);
+    await this.shardService.triggerMultipleShardCreations(
+      updated.businessId,
+      activeLocations.map((l) => ({ id: l.id, businessType: updated.businessType })),
+    );
+
+    // Create React app infrastructure (domain may be subdomain/custom)
+    try {
+      await this.infraService.createReactApp(
+        updated.businessId,
+        updated.businessType,
+        updated.domainType === 'subdomain' ? updated.domainLabel : undefined,
+        updated.domainType === 'custom' ? `${updated.domainLabel}${updated.customTld ? '.' + updated.customTld : ''}` : undefined,
+      );
+    } catch (err) {
+      this.logger.warn(`Infra creation failed for business ${updated.businessId}: ${err?.message}`);
+    }
+
+    return updated;
+  }
+
+  // Legacy method for backward compatibility
   async createBusiness(input: Partial<BusinessEntity> & { companyName: string; businessType: string }): Promise<BusinessEntity> {
     const nowIso = new Date().toISOString();
 
@@ -89,7 +300,35 @@ export class BusinessService {
   }
 
   async deleteBusiness(businessId: string): Promise<void> {
-    // In a real implementation, trigger shard + stack deletion here via infra
+    const business = await this.getBusiness(businessId);
+    
+    // Mark business as deleted
+    await this.db.updateBusiness(businessId, {
+      status: 'deleted' as BusinessStatus,
+      active: false,
+      deletedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Send destruction messages to SQS for each location's shard (businessId-locationId)
+    try {
+      const activeLocations = (business.locations || []).filter((l) => l.active !== false);
+      for (const location of activeLocations) {
+        await this.shardService.triggerShardDestruction(businessId, location.id);
+      }
+      this.logger.log(`Triggered shard destruction for ${activeLocations.length} locations of business ${businessId}`);
+    } catch (err) {
+      this.logger.warn(`Failed to trigger shard destruction for business ${businessId}: ${err?.message}`);
+    }
+
+    // Send destruction message to CloudFormation for stack deletion
+    try {
+      await this.infraService.destroyReactApp(businessId);
+    } catch (err) {
+      this.logger.warn(`Failed to trigger infrastructure destruction for business ${businessId}: ${err?.message}`);
+    }
+
+    // Finally delete from database
     await this.db.deleteBusiness(businessId);
   }
 

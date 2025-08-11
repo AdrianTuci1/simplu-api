@@ -58,5 +58,57 @@ export class EmailService {
       // Do not throw; business creation should not fail due to email issues
     }
   }
+
+  async sendBusinessInvitationEmail(
+    toEmail: string, 
+    businessName: string, 
+    businessId: string, 
+    invitationUrl: string,
+    createdByEmail?: string
+  ): Promise<void> {
+    try {
+      if (!this.senderEmail) {
+        this.logger.warn('SES_SENDER_EMAIL not configured; skipping invitation email send');
+        return;
+      }
+
+      const subject = `Invitație pentru ${businessName} - Simplu`;
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Bună,</h2>
+          <p>A fost creat un cont pentru compania <strong>${businessName}</strong> în sistemul Simplu.</p>
+          <p>Pentru a activa contul și a configura plata, te rugăm să:</p>
+          <ol>
+            <li>Accesezi link-ul de mai jos pentru a crea contul</li>
+            <li>Adaugi metoda de plată</li>
+            <li>Activezi abonamentul</li>
+          </ol>
+          <p><a href="${invitationUrl}" style="color: #1a73e8; font-weight: bold;">Creează contul și activează serviciul</a></p>
+          ${createdByEmail ? `<p><small>Contul a fost creat de: ${createdByEmail}</small></p>` : ''}
+          <p>Dacă nu ai solicitat această acțiune, poți ignora acest email.</p>
+          <p>Mulțumim,<br/>Echipa Simplu</p>
+        </div>
+      `;
+
+      const command = new SendEmailCommand({
+        Source: this.senderEmail,
+        Destination: {
+          ToAddresses: [toEmail],
+        },
+        Message: {
+          Subject: { Data: subject, Charset: 'UTF-8' },
+          Body: {
+            Html: { Data: htmlBody, Charset: 'UTF-8' },
+          },
+        },
+      });
+
+      await this.sesClient.send(command);
+      this.logger.log(`Business invitation email sent to ${toEmail} for business ${businessId}`);
+    } catch (error) {
+      this.logger.error(`Failed to send business invitation email to ${toEmail}: ${error.message}`, error.stack);
+      // Do not throw; business creation should not fail due to email issues
+    }
+  }
 }
 

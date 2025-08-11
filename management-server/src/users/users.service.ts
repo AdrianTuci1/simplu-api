@@ -105,5 +105,69 @@ export class UsersService {
       isDefault: pm.id === profile.defaultPaymentMethodId,
     }));
   }
+
+  /**
+   * Find or create a user by email
+   * If user doesn't exist, creates a placeholder profile that will be completed later
+   */
+  async findOrCreateUserByEmail(email: string): Promise<{ userId: string; isNew: boolean }> {
+    // First, try to find existing user by email
+    // Note: This is a simplified search - in production you might want a GSI on email
+    const scanCommand = {
+      TableName: this.usersTable,
+      FilterExpression: 'email = :email',
+      ExpressionAttributeValues: {
+        ':email': { S: email },
+      },
+    };
+
+    try {
+      const { DynamoDBClient, ScanCommand } = await import('@aws-sdk/client-dynamodb');
+      const ddb = new DynamoDBClient({
+        region: this.config.get('AWS_REGION', 'us-east-1'),
+        credentials: { 
+          accessKeyId: this.config.get('AWS_ACCESS_KEY_ID'), 
+          secretAccessKey: this.config.get('AWS_SECRET_ACCESS_KEY') 
+        },
+      });
+
+      const result = await ddb.send(new ScanCommand(scanCommand));
+      
+      if (result.Items && result.Items.length > 0) {
+        // User exists, return the first match
+        const user = result.Items[0];
+        const userId = user.userId?.S || '';
+        return { 
+          userId, 
+          isNew: false 
+        };
+      }
+    } catch (error) {
+      console.warn(`Error searching for user by email ${email}:`, error);
+    }
+
+    // User doesn't exist, create a placeholder profile
+    const { v4: uuidv4 } = await import('uuid');
+    const userId = uuidv4();
+    const now = new Date().toISOString();
+
+    const placeholderProfile: UserProfileEntity = {
+      userId,
+      email,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      await this.doc.send(new PutCommand({ 
+        TableName: this.usersTable, 
+        Item: placeholderProfile 
+      }));
+
+      return { userId, isNew: true };
+    } catch (error) {
+      throw new Error(`Failed to create placeholder user for email ${email}: ${error.message}`);
+    }
+  }
 }
 
