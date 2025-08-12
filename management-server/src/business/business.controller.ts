@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, Req, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, Req, Query, SetMetadata } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
 import { BusinessService } from './business.service';
@@ -45,8 +45,9 @@ export class BusinessController {
     return this.businessService.launchBusiness(businessId, user);
   }
 
-  // Invitation endpoint - for new users to access their business
+  // Invitation endpoint - for new users to access their business (public endpoint)
   @Get(':id/invitation')
+  @SetMetadata('isPublic', true)
   async getInvitation(
     @Param('id') businessId: string,
     @Query('email') email: string

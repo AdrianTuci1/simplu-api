@@ -1,10 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import {
   AdminGetUserCommand,
+  GetUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { cognitoService } from '../../config/cognito.config';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import * as jwt from 'jsonwebtoken';
+import * as jwksClient from 'jwks-rsa';
 
 export interface CognitoUser {
   userId: string;       // Cognito's 'sub' claim
@@ -26,29 +29,43 @@ export interface AuthResult {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private cognitoClient = cognitoService.getClient();
   private config = cognitoService.getConfig();
+  private jwksClient: jwksClient.JwksClient;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) {
+    // Initialize JWKS client for token verification
+    this.jwksClient = jwksClient({
+      jwksUri: `https://cognito-idp.${this.config.region}.amazonaws.com/${this.config.userPoolId}/.well-known/jwks.json`,
+      cache: true,
+      cacheMaxEntries: 5,
+      cacheMaxAge: 600000, // 10 minutes
+    });
+  }
 
   /**
    * Validates a Cognito access token and returns user information
    */
   async validateAccessToken(accessToken: string): Promise<CognitoUser> {
+    this.logger.debug(`Validating access token: ${accessToken.substring(0, 20)}...`);
+    
     try {
       const userInfo = await this.getUserFromToken(accessToken);
 
       if (!userInfo) {
+        this.logger.warn('Token validation failed: No user info returned');
         throw new UnauthorizedException('Invalid access token');
       }
 
+      this.logger.log(`Token validated successfully for user: ${userInfo.userId}`);
       return userInfo;
     } catch (error) {
-      console.error('Token validation error:', error);
-      throw new UnauthorizedException('Invalid or expired token');
+      this.logger.error(`Token validation error: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Invalid or expired token: ${error.message}`);
     }
   }
 
@@ -166,38 +183,83 @@ export class AuthService {
   }
 
   /**
-   * Extracts user information from access token (simplified implementation)
+   * Extracts user information from access token using Cognito validation
    */
   private async getUserFromToken(accessToken: string): Promise<CognitoUser | null> {
+    this.logger.debug('Extracting user from token using Cognito validation...');
+    
     try {
-      // In a real implementation, you would:
       // 1. Verify the JWT signature using Cognito's public keys
-      // 2. Check token expiration
-      // 3. Extract the 'username' claim from the token
-      // 4. Use that username to fetch full user details
+      const decodedToken = await this.verifyToken(accessToken);
+      
+      if (!decodedToken) {
+        this.logger.warn('Token verification failed');
+        return null;
+      }
 
-      // For now, return mock user data for development
-      return this.getMockUser(accessToken);
+      // 2. Extract username from token
+      const username = decodedToken['cognito:username'] || decodedToken.username || decodedToken.sub;
+      
+      if (!username) {
+        this.logger.warn('No username found in token');
+        return null;
+      }
+
+      this.logger.debug(`Username extracted from token: ${username}`);
+
+      // 3. Fetch full user details from Cognito
+      const userInfo = await this.getUserInfo(username);
+      
+      if (!userInfo) {
+        this.logger.warn(`User not found in Cognito: ${username}`);
+        return null;
+      }
+
+      this.logger.debug(`User info retrieved from Cognito: ${userInfo.userId}`);
+      return userInfo;
     } catch (error) {
-      console.error('Error extracting user from token:', error);
+      this.logger.error(`Error extracting user from token: ${error.message}`, error.stack);
       return null;
     }
   }
 
   /**
-   * Mock user for development when Cognito is not available
+   * Verifies JWT token using Cognito's public keys
    */
-  private getMockUser(token: string): CognitoUser {
-    const tokenHash = token.length % 4;
-    
-    return {
-      userId: `user-${tokenHash}`,
-      username: `user${tokenHash}`,
-      email: `user${tokenHash}@example.com`,
-      name: `User ${tokenHash}`,
-      firstName: `User`,
-      lastName: `${tokenHash}`,
-    };
+  private async verifyToken(token: string): Promise<any> {
+    try {
+      // Decode token header to get key ID
+      const decodedHeader = jwt.decode(token, { complete: true });
+      
+      if (!decodedHeader || typeof decodedHeader === 'string') {
+        this.logger.warn('Invalid token format');
+        return null;
+      }
+
+      const kid = decodedHeader.header.kid;
+      
+      if (!kid) {
+        this.logger.warn('No key ID found in token header');
+        return null;
+      }
+
+      // Get the public key
+      const key = await this.jwksClient.getSigningKey(kid);
+      const publicKey = key.getPublicKey();
+
+      // Verify the token
+      const decoded = jwt.verify(token, publicKey, {
+        algorithms: ['RS256'],
+        issuer: `https://cognito-idp.${this.config.region}.amazonaws.com/${this.config.userPoolId}`,
+        audience: this.config.clientId,
+      });
+
+      this.logger.debug('Token verified successfully');
+      return decoded;
+    } catch (error) {
+      this.logger.error(`Token verification failed: ${error.message}`);
+      return null;
+    }
   }
 
 

@@ -9,7 +9,7 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: ['https://app.simplu.io', 'http://localhost:5173'],
+    origin: ['https://app.simplu.io', 'http://localhost:5173', 'https://225fc9422563.ngrok-free.app'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
