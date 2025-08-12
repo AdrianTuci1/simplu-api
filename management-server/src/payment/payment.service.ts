@@ -33,6 +33,205 @@ export class PaymentService {
     await this.stripe.customers.update(customerId, { invoice_settings: { default_payment_method: paymentMethodId } });
   }
 
+  async payWithSavedCard(params: {
+    businessId: string;
+    userId: string;
+    userEmail: string;
+    paymentMethodId: string;
+    planKey?: 'basic' | 'premium';
+    billingInterval?: 'month' | 'year';
+    currency?: string;
+  }): Promise<{ subscriptionId: string; status: string; success: boolean }> {
+    try {
+      const customerId = await this.ensureCustomer(params.userId, params.userEmail);
+      
+      // Verify the payment method belongs to this customer
+      const paymentMethods = await this.listPaymentMethods(customerId);
+      const paymentMethod = paymentMethods.find(pm => pm.id === params.paymentMethodId);
+      if (!paymentMethod) {
+        throw new BadRequestException('Payment method not found or not associated with this account');
+      }
+
+      // Set as default payment method
+      await this.stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: params.paymentMethodId }
+      });
+
+      // Create subscription with the saved payment method
+      const priceId = await this.resolvePriceId({
+        planKey: params.planKey || 'basic',
+        billingInterval: params.billingInterval || 'month',
+        currency: params.currency || 'ron'
+      });
+
+      // Cancel any existing subscription
+      const existing = await this.subscriptionStore.getSubscriptionForBusiness(params.businessId);
+      if (existing) {
+        await this.stripe.subscriptions.cancel(existing.subscriptionId);
+        await this.subscriptionStore.removeSubscriptionForBusiness(params.businessId);
+      }
+
+      // Create new subscription
+      const subscription = await this.stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: priceId }],
+        default_payment_method: params.paymentMethodId,
+        payment_behavior: 'allow_incomplete',
+        expand: ['latest_invoice.payment_intent'],
+      });
+
+      // Store subscription record
+      await this.subscriptionStore.setSubscriptionForBusiness(params.businessId, {
+        businessId: params.businessId,
+        subscriptionId: subscription.id,
+        customerId,
+        priceId,
+        status: subscription.status,
+      });
+
+      // If subscription is active, activate business
+      if (subscription.status === 'active' || subscription.status === 'trialing') {
+        await this.businessService.activateAfterPayment(params.businessId, 'solo');
+      }
+
+      return {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        success: true
+      };
+
+    } catch (error) {
+      this.logger.error(`Failed to pay with saved card for business ${params.businessId}:`, error);
+      throw new BadRequestException(`Payment failed: ${error.message}`);
+    }
+  }
+
+  async handleStripeWebhook(signature: string, payload: any): Promise<{ received: boolean }> {
+    try {
+      const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
+      if (!webhookSecret) {
+        this.logger.error('STRIPE_WEBHOOK_SECRET not configured');
+        throw new BadRequestException('Webhook secret not configured');
+      }
+
+      // Verify webhook signature
+      const event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+      
+      this.logger.log(`Received Stripe webhook: ${event.type}`);
+
+      // Handle different event types
+      switch (event.type) {
+        case 'invoice.payment_succeeded':
+          await this.handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
+          break;
+        
+        case 'invoice.payment_failed':
+          await this.handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+          break;
+        
+        case 'customer.subscription.updated':
+          await this.handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+          break;
+        
+        case 'customer.subscription.deleted':
+          await this.handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+          break;
+        
+        default:
+          this.logger.log(`Unhandled event type: ${event.type}`);
+      }
+
+      return { received: true };
+    } catch (error) {
+      this.logger.error('Webhook error:', error);
+      throw new BadRequestException('Webhook signature verification failed');
+    }
+  }
+
+  private async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
+    if (!invoice.subscription) return;
+    
+    const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription.id;
+    const businessId = await this.findBusinessBySubscriptionId(subscriptionId);
+    
+    if (businessId) {
+      await this.subscriptionStore.setSubscriptionForBusiness(businessId, {
+        businessId,
+        subscriptionId,
+        customerId: invoice.customer as string,
+        priceId: invoice.lines.data[0]?.price?.id || '',
+        status: 'active',
+      });
+      
+      await this.businessService.activateAfterPayment(businessId, 'solo');
+      this.logger.log(`Business ${businessId} activated after successful payment`);
+    }
+  }
+
+  private async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+    if (!invoice.subscription) return;
+    
+    const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription.id;
+    const businessId = await this.findBusinessBySubscriptionId(subscriptionId);
+    
+    if (businessId) {
+      await this.businessService.updatePaymentInfo(businessId, {
+        paymentStatus: 'unpaid',
+        nextPaymentDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days grace period
+      });
+      this.logger.log(`Business ${businessId} payment failed, grace period started`);
+    }
+  }
+
+  private async handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
+    const businessId = await this.findBusinessBySubscriptionId(subscription.id);
+    
+    if (businessId) {
+      await this.subscriptionStore.setSubscriptionForBusiness(businessId, {
+        businessId,
+        subscriptionId: subscription.id,
+        customerId: subscription.customer as string,
+        priceId: subscription.items.data[0]?.price?.id || '',
+        status: subscription.status,
+      });
+
+      if (subscription.status === 'active' || subscription.status === 'trialing') {
+        await this.businessService.activateAfterPayment(businessId, 'solo');
+      } else if (subscription.status === 'past_due' || subscription.status === 'unpaid') {
+        await this.businessService.updatePaymentInfo(businessId, {
+          paymentStatus: 'past_due',
+        });
+      }
+    }
+  }
+
+  private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
+    const businessId = await this.findBusinessBySubscriptionId(subscription.id);
+    
+    if (businessId) {
+      await this.subscriptionStore.removeSubscriptionForBusiness(businessId);
+      await this.businessService.updatePaymentInfo(businessId, {
+        paymentStatus: 'canceled',
+      });
+      this.logger.log(`Subscription deleted for business ${businessId}`);
+    }
+  }
+
+  private async findBusinessBySubscriptionId(subscriptionId: string): Promise<string | null> {
+    // This is a simplified implementation - in a real scenario, you might want to
+    // add a reverse lookup index or query the database more efficiently
+    try {
+      // For now, we'll need to scan through subscriptions to find the business
+      // In production, consider adding a GSI (Global Secondary Index) on subscriptionId
+      const allSubscriptions = await this.subscriptionStore.getAllSubscriptions();
+      const found = allSubscriptions.find(sub => sub.subscriptionId === subscriptionId);
+      return found ? found.businessId : null;
+    } catch (error) {
+      this.logger.error(`Error finding business for subscription ${subscriptionId}:`, error);
+      return null;
+    }
+  }
+
   private async resolvePriceId(options: { 
     priceId?: string; 
     planKey?: 'basic' | 'premium'; 

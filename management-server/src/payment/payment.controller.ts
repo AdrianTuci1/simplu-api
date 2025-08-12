@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, Req, Headers } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
 import { PaymentService } from './payment.service';
@@ -30,6 +30,24 @@ export class PaymentController {
     });
   }
 
+  @Post('business/:id/pay-with-saved-card')
+  async payWithSavedCard(
+    @Req() req: any,
+    @Param('id') businessId: string,
+    @Body() body: { paymentMethodId: string; planKey?: 'basic' | 'premium'; billingInterval?: 'month' | 'year'; currency?: string }
+  ) {
+    const user = req.user;
+    return this.paymentService.payWithSavedCard({
+      businessId,
+      userId: user.userId,
+      userEmail: user.email,
+      paymentMethodId: body.paymentMethodId,
+      planKey: body.planKey || 'basic',
+      billingInterval: body.billingInterval || 'month',
+      currency: body.currency || 'ron',
+    });
+  }
+
   @Get('invoices')
   async listInvoices(@Req() req: any) {
     const user = req.user;
@@ -45,6 +63,21 @@ export class PaymentController {
   @Get('business/:id/subscription/status')
   async refreshSubscriptionStatus(@Param('id') businessId: string) {
     return this.paymentService.refreshSubscriptionStatus(businessId);
+  }
+}
+
+@ApiTags('webhooks')
+@Controller('webhooks')
+export class WebhookController {
+  constructor(private readonly paymentService: PaymentService) {}
+
+  // Stripe webhook endpoint - no auth required
+  @Post('stripe')
+  async handleStripeWebhook(
+    @Headers('stripe-signature') signature: string,
+    @Body() payload: any
+  ) {
+    return this.paymentService.handleStripeWebhook(signature, payload);
   }
 }
 

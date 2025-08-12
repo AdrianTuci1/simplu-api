@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 export interface BusinessSubscriptionRecord {
   businessId: string;
@@ -31,16 +31,21 @@ export class SubscriptionStoreService {
   }
 
   async setSubscriptionForBusiness(businessId: string, record: BusinessSubscriptionRecord): Promise<void> {
-    await this.docClient.send(new PutCommand({ TableName: this.subsTable, Item: { ...record, pk: `business#${businessId}` } }));
+    await this.docClient.send(new PutCommand({ TableName: this.subsTable, Item: { ...record, id: `business#${businessId}` } }));
   }
 
   async getSubscriptionForBusiness(businessId: string): Promise<BusinessSubscriptionRecord | null> {
-    const res = await this.docClient.send(new GetCommand({ TableName: this.subsTable, Key: { pk: `business#${businessId}` } }));
+    const res = await this.docClient.send(new GetCommand({ TableName: this.subsTable, Key: { id: `business#${businessId}` } }));
     return (res.Item as any) || null;
   }
 
   async removeSubscriptionForBusiness(businessId: string): Promise<void> {
-    await this.docClient.send(new DeleteCommand({ TableName: this.subsTable, Key: { pk: `business#${businessId}` } }));
+    await this.docClient.send(new DeleteCommand({ TableName: this.subsTable, Key: { id: `business#${businessId}` } }));
+  }
+
+  async getAllSubscriptions(): Promise<BusinessSubscriptionRecord[]> {
+    const res = await this.docClient.send(new ScanCommand({ TableName: this.subsTable }));
+    return (res.Items as BusinessSubscriptionRecord[]) || [];
   }
 
   // Map user to Stripe customer id
