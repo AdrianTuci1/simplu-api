@@ -247,12 +247,22 @@ export class AuthService {
       const key = await this.jwksClient.getSigningKey(kid);
       const publicKey = key.getPublicKey();
 
-      // Verify the token
+      // Verify the token signature and basic claims
       const decoded = jwt.verify(token, publicKey, {
         algorithms: ['RS256'],
         issuer: `https://cognito-idp.${this.config.region}.amazonaws.com/${this.config.userPoolId}`,
-        audience: this.config.clientId,
       });
+
+      // Check client_id instead of aud
+      if (typeof decoded === 'string') {
+        this.logger.warn('Token decoded as string, expected object');
+        throw new Error('Invalid token format');
+      }
+      
+      if (decoded.client_id !== this.config.clientId) {
+        this.logger.warn(`Invalid client_id: expected ${this.config.clientId}, got ${decoded.client_id}`);
+        throw new Error('Invalid audience: Client ID mismatch.');
+      }
 
       this.logger.debug('Token verified successfully');
       return decoded;
