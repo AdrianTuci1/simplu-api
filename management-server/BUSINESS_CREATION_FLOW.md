@@ -20,7 +20,6 @@ Crearea unui business se face în 3 pași distincti pentru a asigura:
 {
   "companyName": "SRL Exemplu",
   "registrationNumber": "J12/123/2024",
-  "taxCode": "RO12345678",
   "businessType": "dental",
   "locations": [
     {
@@ -39,7 +38,6 @@ Crearea unui business se face în 3 pași distincti pentru a asigura:
   "domainLabel": "numele-firmei",
   "customTld": "ro",
   "clientPageType": "website",
-  "subscriptionType": "solo",
   "billingEmail": "facturi@firma.ro"
 }
 ```
@@ -242,8 +240,7 @@ Management-server **nu creează utilizatori** în Cognito. Aceasta se face prin:
     "country": "RO"
   },
   "entityType": "srl",
-  "registrationNumber": "J12/123/2024",
-  "taxCode": "RO12345678"
+  "registrationNumber": "J12/123/2024"
 }
 ```
 

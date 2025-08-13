@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards, Req, Headers } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, Req, Headers, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
 import { PaymentService } from './payment.service';
@@ -9,6 +9,25 @@ import { PaymentService } from './payment.service';
 @Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
+
+  @Get('plans')
+  async getAvailablePlans() {
+    return this.paymentService.getAvailablePlans();
+  }
+
+  @Get('plans/:planKey/prices')
+  async getPlanPrices(@Param('planKey') planKey: 'basic' | 'premium') {
+    return this.paymentService.getPlanPrices(planKey);
+  }
+
+  @Get('plans/:planKey/price')
+  async getPriceByPlanAndInterval(
+    @Param('planKey') planKey: 'basic' | 'premium',
+    @Query('interval') interval: 'month' | 'year',
+    @Query('currency') currency: string = 'ron'
+  ) {
+    return this.paymentService.getPriceByPlanAndInterval(planKey, interval, currency);
+  }
 
   @Post('business/:id/subscription')
   async createSubscription(
@@ -34,7 +53,13 @@ export class PaymentController {
   async payWithSavedCard(
     @Req() req: any,
     @Param('id') businessId: string,
-    @Body() body: { paymentMethodId: string; planKey?: 'basic' | 'premium'; billingInterval?: 'month' | 'year'; currency?: string }
+    @Body() body: { 
+      paymentMethodId: string; 
+      planKey?: 'basic' | 'premium'; 
+      billingInterval?: 'month' | 'year'; 
+      currency?: string;
+      priceId?: string; // Opțional: dacă se specifică, ignoră planKey și billingInterval
+    }
   ) {
     const user = req.user;
     return this.paymentService.payWithSavedCard({
@@ -45,6 +70,7 @@ export class PaymentController {
       planKey: body.planKey || 'basic',
       billingInterval: body.billingInterval || 'month',
       currency: body.currency || 'ron',
+      priceId: body.priceId,
     });
   }
 

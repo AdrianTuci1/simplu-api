@@ -56,7 +56,50 @@ function makeRequest(method, path, body = null, headers = {}) {
   });
 }
 
-// Teste
+// Teste pentru planuri și prețuri
+async function testAvailablePlans() {
+  console.log('\n📋 Testare obținere planuri disponibile...');
+  
+  try {
+    const response = await makeRequest('GET', '/payments/plans');
+    console.log(`Status: ${response.status}`);
+    console.log('Planuri disponibile:', JSON.stringify(response.data, null, 2));
+    return response.data;
+  } catch (error) {
+    console.error('❌ Eroare la obținerea planurilor:', error.message);
+    return [];
+  }
+}
+
+async function testPlanPrices() {
+  console.log('\n💰 Testare obținere prețuri pentru plan Basic...');
+  
+  try {
+    const response = await makeRequest('GET', '/payments/plans/basic/prices');
+    console.log(`Status: ${response.status}`);
+    console.log('Prețuri Basic:', JSON.stringify(response.data, null, 2));
+    return response.data;
+  } catch (error) {
+    console.error('❌ Eroare la obținerea prețurilor Basic:', error.message);
+    return [];
+  }
+}
+
+async function testSpecificPrice() {
+  console.log('\n🎯 Testare obținere preț specific (Basic lunar)...');
+  
+  try {
+    const response = await makeRequest('GET', '/payments/plans/basic/price?interval=month&currency=ron');
+    console.log(`Status: ${response.status}`);
+    console.log('Preț specific:', JSON.stringify(response.data, null, 2));
+    return response.data;
+  } catch (error) {
+    console.error('❌ Eroare la obținerea prețului specific:', error.message);
+    return null;
+  }
+}
+
+// Teste existente
 async function testPaymentMethods() {
   console.log('\n🔍 Testare listare carduri salvate...');
   
@@ -91,16 +134,26 @@ async function testAttachPaymentMethod() {
   }
 }
 
-async function testPayWithSavedCard(paymentMethodId) {
+async function testPayWithSavedCard(paymentMethodId, priceId = null) {
   console.log('\n💸 Testare plată cu cardul salvat...');
   
   try {
-    const response = await makeRequest('POST', `/payments/business/${BUSINESS_ID}/pay-with-saved-card`, {
+    const body = {
       paymentMethodId,
       planKey: 'basic',
       billingInterval: 'month',
       currency: 'ron'
-    });
+    };
+
+    // Dacă avem priceId, folosește-l în loc de planKey și billingInterval
+    if (priceId) {
+      delete body.planKey;
+      delete body.billingInterval;
+      delete body.currency;
+      body.priceId = priceId;
+    }
+    
+    const response = await makeRequest('POST', `/payments/business/${BUSINESS_ID}/pay-with-saved-card`, body);
     
     console.log(`Status: ${response.status}`);
     console.log('Răspuns:', response.data);
@@ -175,12 +228,23 @@ async function runTests() {
   console.log(`📍 URL: ${BASE_URL}`);
   console.log(`🏢 Business ID: ${BUSINESS_ID}`);
   
-  // Testează endpoint-urile în ordine
+  // Testează endpoint-urile pentru planuri și prețuri
+  await testAvailablePlans();
+  await testPlanPrices();
+  const specificPrice = await testSpecificPrice();
+  
+  // Testează endpoint-urile pentru carduri și plăți
   await testPaymentMethods();
   const paymentMethodId = await testAttachPaymentMethod();
   
   if (paymentMethodId) {
+    // Testează plata cu planKey și billingInterval
     await testPayWithSavedCard(paymentMethodId);
+    
+    // Testează plata cu priceId direct (dacă avem un preț specific)
+    if (specificPrice && specificPrice.id) {
+      await testPayWithSavedCard(paymentMethodId, specificPrice.id);
+    }
   }
   
   await testSubscriptionStatus();
@@ -192,6 +256,7 @@ async function runTests() {
   console.log('- Unele teste pot eșua dacă serverul nu rulează');
   console.log('- Webhook-urile necesită configurarea STRIPE_WEBHOOK_SECRET');
   console.log('- Cardurile de test sunt simulate, nu vor funcționa cu Stripe real');
+  console.log('- Planurile necesită configurarea STRIPE_BASIC_PRODUCT_ID și STRIPE_PREMIUM_PRODUCT_ID');
 }
 
 // Rulare
@@ -200,6 +265,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  testAvailablePlans,
+  testPlanPrices,
+  testSpecificPrice,
   testPaymentMethods,
   testAttachPaymentMethod,
   testPayWithSavedCard,

@@ -23,7 +23,7 @@ export class BusinessService {
   ) {}
 
   // Step 1: Configuration - Create business with suspended status
-  async configureBusiness(input: Partial<BusinessEntity> & { companyName: string; businessType: string }, user: any): Promise<BusinessEntity> {
+  async configureBusiness(input: any, user: any): Promise<BusinessEntity> {
     const nowIso = new Date().toISOString();
 
     const locations: BusinessLocation[] = (input.locations || []).map((l) => ({
@@ -34,7 +34,11 @@ export class BusinessService {
       timezone: l.timezone || 'Europe/Bucharest',
     }));
 
-    if ((input.subscriptionType || 'solo') === 'solo' && locations.length > 1) {
+    // Determine subscription type automatically based on number of locations
+    const subscriptionType = locations.length === 1 ? 'solo' : 'enterprise';
+    
+    // Validate solo plan constraint
+    if (subscriptionType === 'solo' && locations.length > 1) {
       throw new BadRequestException('Planul solo permite o singură locație');
     }
 
@@ -68,7 +72,6 @@ export class BusinessService {
       businessId: uuidv4(),
       companyName: input.companyName,
       registrationNumber: input.registrationNumber || '',
-      taxCode: input.taxCode || '',
       businessType: input.businessType,
       locations,
       settings,
@@ -77,7 +80,7 @@ export class BusinessService {
       domainLabel: input.domainLabel || '',
       customTld: input.customTld,
       clientPageType: input.clientPageType || 'website',
-      subscriptionType: (input.subscriptionType as any) || 'solo',
+      subscriptionType, // Use automatically determined subscription type
       credits: input.credits || { total: 0, available: 0, currency: settings.currency, perLocation: {}, lockedLocations: [] },
       active: false,
       status: 'suspended',
@@ -141,7 +144,7 @@ export class BusinessService {
   // Step 2: Payment - Create subscription for configured business
   async setupPayment(
     businessId: string, 
-    paymentConfig: { subscriptionType: 'solo' | 'enterprise'; planKey?: 'basic' | 'premium'; billingInterval?: 'month' | 'year'; currency?: string },
+    paymentConfig: { planKey?: 'basic' | 'premium'; billingInterval?: 'month' | 'year'; currency?: string },
     user: any
   ): Promise<{ subscriptionId: string; status: string; clientSecret?: string }> {
     const business = await this.getBusiness(businessId);
@@ -151,11 +154,8 @@ export class BusinessService {
       throw new BadRequestException('Only the business owner can setup payment for this business');
     }
 
-    // Update business with subscription type
-    await this.db.updateBusiness(businessId, {
-      subscriptionType: paymentConfig.subscriptionType,
-      updatedAt: new Date().toISOString(),
-    });
+    // Use the automatically determined subscription type from business creation
+    const subscriptionType = business.subscriptionType;
 
     // Determine who should pay:
     // - If business was configured for someone else (configureForEmail), owner pays
@@ -238,7 +238,11 @@ export class BusinessService {
       timezone: l.timezone || 'Europe/Bucharest',
     }));
 
-    if ((input.subscriptionType || 'solo') === 'solo' && locations.length > 1) {
+    // Determine subscription type automatically based on number of locations
+    const subscriptionType = locations.length === 1 ? 'solo' : 'enterprise';
+    
+    // Validate solo plan constraint
+    if (subscriptionType === 'solo' && locations.length > 1) {
       throw new BadRequestException('Planul solo permite o singură locație');
     }
 
@@ -251,7 +255,6 @@ export class BusinessService {
       businessId: uuidv4(),
       companyName: input.companyName,
       registrationNumber: input.registrationNumber || '',
-      taxCode: input.taxCode || '',
       businessType: input.businessType,
       locations,
       settings,
@@ -260,7 +263,7 @@ export class BusinessService {
       domainLabel: input.domainLabel || '',
       customTld: input.customTld,
       clientPageType: input.clientPageType || 'website',
-      subscriptionType: (input.subscriptionType as any) || 'solo',
+      subscriptionType, // Use automatically determined subscription type
       credits: input.credits || { total: 0, available: 0, currency: settings.currency, perLocation: {}, lockedLocations: [] },
       active: false,
       status: 'suspended',
@@ -300,9 +303,16 @@ export class BusinessService {
   }
 
   async updateBusiness(businessId: string, updates: Partial<BusinessEntity>): Promise<BusinessEntity> {
-    if (updates.subscriptionType === 'solo' && updates.locations && updates.locations.length > 1) {
-      throw new BadRequestException('Planul solo permite o singură locație');
+    // If locations are being updated, validate subscription type constraint
+    if (updates.locations) {
+      const subscriptionType = updates.locations.length === 1 ? 'solo' : 'enterprise';
+      if (subscriptionType === 'solo' && updates.locations.length > 1) {
+        throw new BadRequestException('Planul solo permite o singură locație');
+      }
+      // Automatically update subscription type based on location count
+      updates.subscriptionType = subscriptionType;
     }
+    
     return this.db.updateBusiness(businessId, { ...updates, updatedAt: new Date().toISOString() });
   }
 

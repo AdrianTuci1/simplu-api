@@ -25,7 +25,6 @@ export interface BusinessEntity {
   businessId: string;
   companyName: string;
   registrationNumber?: string;
-  taxCode?: string; // CUI
   businessType: string; // dental | gym | hotel
   locations: BusinessLocation[];
   settings: BusinessSettings;

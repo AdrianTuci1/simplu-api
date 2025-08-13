@@ -67,7 +67,6 @@ Body:
 {
   "companyName": "SRL Exemplu",
   "registrationNumber": "J12/123/2024",
-  "taxCode": "RO12345678",
   "businessType": "dental",
   "locations": [
     { "name": "Clinica Centrală", "address": "Str. Clinicii 10", "timezone": "Europe/Bucharest", "active": true }
@@ -78,7 +77,6 @@ Body:
   "domainLabel": "numele-firmei",
   "customTld": "ro",
   "clientPageType": "website",
-  "subscriptionType": "solo",
   "ownerEmail": "owner@firma.ro",
   "billingEmail": "facturi@firma.ro",
   "authorizedEmails": ["coleg@firma.ro"]
@@ -180,7 +178,6 @@ Răspuns:
   "billingAddress": { "company":"SRL", "street":"...", "city":"...", "district":"...", "postalCode":"...", "country":"RO" },
   "entityType": "srl",
   "registrationNumber": "J12/123/2024",
-  "taxCode": "RO12345678",
   "stripeCustomerId": "cus_abc",
   "defaultPaymentMethodId": "pm_123",
   "createdAt": "iso",
@@ -198,8 +195,7 @@ Body (subset):
   "phone": "+40...",
   "billingAddress": { "company":"SRL", "street":"...", "city":"...", "district":"...", "postalCode":"...", "country":"RO" },
   "entityType": "srl",
-  "registrationNumber": "J12/123/2024",
-  "taxCode": "RO12345678"
+  "registrationNumber": "J12/123/2024"
 }
 ```
 

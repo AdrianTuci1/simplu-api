@@ -4,6 +4,23 @@ import { ConfigService } from '@nestjs/config';
 import { SubscriptionStoreService } from './subscription-store.service';
 import { BusinessService } from '../business/business.service';
 
+export interface StripePlan {
+  id: string;
+  name: string;
+  description?: string;
+  prices: StripePrice[];
+}
+
+export interface StripePrice {
+  id: string;
+  currency: string;
+  unitAmount: number;
+  recurring: {
+    interval: 'month' | 'year';
+  };
+  metadata?: Record<string, string>;
+}
+
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -33,6 +50,142 @@ export class PaymentService {
     await this.stripe.customers.update(customerId, { invoice_settings: { default_payment_method: paymentMethodId } });
   }
 
+  /**
+   * Obține toate planurile disponibile cu prețurile lor
+   */
+  async getAvailablePlans(): Promise<StripePlan[]> {
+    try {
+      // Obține produsele configurate
+      const basicProductId = this.configService.get<string>('STRIPE_BASIC_PRODUCT_ID');
+      const premiumProductId = this.configService.get<string>('STRIPE_PREMIUM_PRODUCT_ID');
+
+      const plans: StripePlan[] = [];
+
+      // Procesează produsul Basic
+      if (basicProductId) {
+        const basicPlan = await this.getPlanWithPrices(basicProductId, 'Basic');
+        if (basicPlan) {
+          plans.push(basicPlan);
+        }
+      }
+
+      // Procesează produsul Premium
+      if (premiumProductId) {
+        const premiumPlan = await this.getPlanWithPrices(premiumProductId, 'Premium');
+        if (premiumPlan) {
+          plans.push(premiumPlan);
+        }
+      }
+
+      return plans;
+    } catch (error) {
+      this.logger.error('Error fetching available plans:', error);
+      throw new BadRequestException('Failed to fetch available plans');
+    }
+  }
+
+  /**
+   * Obține un plan cu toate prețurile sale
+   */
+  private async getPlanWithPrices(productId: string, planName: string): Promise<StripePlan | null> {
+    try {
+      // Obține produsul
+      const product = await this.stripe.products.retrieve(productId);
+      
+      // Obține toate prețurile active pentru acest produs
+      const prices = await this.stripe.prices.list({
+        product: productId,
+        active: true,
+        limit: 100,
+      });
+
+      // Filtrează și formatează prețurile
+      const formattedPrices: StripePrice[] = prices.data
+        .filter(price => price.recurring) // Doar prețuri recurente
+        .map(price => ({
+          id: price.id,
+          currency: price.currency,
+          unitAmount: price.unit_amount || 0,
+          recurring: {
+            interval: price.recurring?.interval as 'month' | 'year',
+          },
+          metadata: price.metadata,
+        }))
+        .sort((a, b) => {
+          // Sortează: lunar înainte de anual, apoi după preț
+          if (a.recurring.interval !== b.recurring.interval) {
+            return a.recurring.interval === 'month' ? -1 : 1;
+          }
+          return a.unitAmount - b.unitAmount;
+        });
+
+      return {
+        id: product.id,
+        name: planName,
+        description: product.description,
+        prices: formattedPrices,
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching plan ${planName} (${productId}):`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Obține un preț specific după plan și interval
+   */
+  async getPriceByPlanAndInterval(planKey: 'basic' | 'premium', interval: 'month' | 'year', currency: string = 'ron'): Promise<StripePrice | null> {
+    try {
+      const plans = await this.getAvailablePlans();
+      
+      // Găsește planul
+      const plan = plans.find(p => p.name.toLowerCase() === planKey);
+      if (!plan) {
+        throw new BadRequestException(`Plan ${planKey} not found`);
+      }
+
+      // Găsește prețul pentru intervalul și moneda specificată
+      const price = plan.prices.find(p => 
+        p.recurring.interval === interval && 
+        p.currency.toLowerCase() === currency.toLowerCase()
+      );
+
+      if (!price) {
+        // Fallback: caută orice preț pentru intervalul specificat
+        const fallbackPrice = plan.prices.find(p => p.recurring.interval === interval);
+        if (fallbackPrice) {
+          this.logger.warn(`Price not found for ${planKey} ${interval} ${currency}, using fallback: ${fallbackPrice.currency}`);
+          return fallbackPrice;
+        }
+        throw new BadRequestException(`Price not found for plan ${planKey} with interval ${interval}`);
+      }
+
+      return price;
+    } catch (error) {
+      this.logger.error(`Error getting price for ${planKey} ${interval}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obține toate prețurile disponibile pentru un plan specific
+   */
+  async getPlanPrices(planKey: 'basic' | 'premium'): Promise<StripePrice[]> {
+    try {
+      const plans = await this.getAvailablePlans();
+      const plan = plans.find(p => p.name.toLowerCase() === planKey);
+      
+      if (!plan) {
+        throw new BadRequestException(`Plan ${planKey} not found`);
+      }
+
+      return plan.prices;
+    } catch (error) {
+      this.logger.error(`Error getting prices for plan ${planKey}:`, error);
+      throw error;
+    }
+  }
+
   async payWithSavedCard(params: {
     businessId: string;
     userId: string;
@@ -41,6 +194,7 @@ export class PaymentService {
     planKey?: 'basic' | 'premium';
     billingInterval?: 'month' | 'year';
     currency?: string;
+    priceId?: string; // Opțional: dacă se specifică priceId, ignoră planKey și billingInterval
   }): Promise<{ subscriptionId: string; status: string; success: boolean }> {
     try {
       const customerId = await this.ensureCustomer(params.userId, params.userEmail);
@@ -57,12 +211,20 @@ export class PaymentService {
         invoice_settings: { default_payment_method: params.paymentMethodId }
       });
 
-      // Create subscription with the saved payment method
-      const priceId = await this.resolvePriceId({
-        planKey: params.planKey || 'basic',
-        billingInterval: params.billingInterval || 'month',
-        currency: params.currency || 'ron'
-      });
+      // Determine price ID
+      let priceId: string;
+      if (params.priceId) {
+        // Use provided price ID directly
+        priceId = params.priceId;
+      } else {
+        // Get price ID from plan and interval
+        const price = await this.getPriceByPlanAndInterval(
+          params.planKey || 'basic',
+          params.billingInterval || 'month',
+          params.currency || 'ron'
+        );
+        priceId = price.id;
+      }
 
       // Cancel any existing subscription
       const existing = await this.subscriptionStore.getSubscriptionForBusiness(params.businessId);
@@ -218,18 +380,7 @@ export class PaymentService {
   }
 
   private async findBusinessBySubscriptionId(subscriptionId: string): Promise<string | null> {
-    // This is a simplified implementation - in a real scenario, you might want to
-    // add a reverse lookup index or query the database more efficiently
-    try {
-      // For now, we'll need to scan through subscriptions to find the business
-      // In production, consider adding a GSI (Global Secondary Index) on subscriptionId
-      const allSubscriptions = await this.subscriptionStore.getAllSubscriptions();
-      const found = allSubscriptions.find(sub => sub.subscriptionId === subscriptionId);
-      return found ? found.businessId : null;
-    } catch (error) {
-      this.logger.error(`Error finding business for subscription ${subscriptionId}:`, error);
-      return null;
-    }
+    return this.subscriptionStore.findBusinessBySubscriptionId(subscriptionId);
   }
 
   private async resolvePriceId(options: { 

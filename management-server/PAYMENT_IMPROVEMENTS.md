@@ -7,10 +7,118 @@ Sistemul de plăți a fost îmbunătățit pentru a oferi o experiență mai bun
 1. **Plăți cu cardul salvat** - Posibilitatea de a plăti direct din interfață cu cardurile salvate
 2. **Webhook-uri Stripe** - Actualizări automate ale statusului business-ului și tabelului de abonamente
 3. **Gestionarea cardurilor salvate** - API-uri pentru atașarea și listarea cardurilor de plată
+4. **Planuri și prețuri dinamice** - Obținerea planurilor și prețurilor direct din Stripe
 
 ## Noi Endpoint-uri
 
-### 1. Plăți cu Cardul Salvat
+### 1. Obținerea Planurilor Disponibile
+
+```http
+GET /payments/plans
+Authorization: Bearer <token>
+```
+
+**Răspuns:**
+```json
+[
+  {
+    "id": "prod_basic123",
+    "name": "Basic",
+    "description": "Planul de bază pentru business-uri mici",
+    "prices": [
+      {
+        "id": "price_basic_monthly",
+        "currency": "ron",
+        "unitAmount": 9900,
+        "recurring": {
+          "interval": "month"
+        }
+      },
+      {
+        "id": "price_basic_yearly",
+        "currency": "ron",
+        "unitAmount": 99000,
+        "recurring": {
+          "interval": "year"
+        }
+      }
+    ]
+  },
+  {
+    "id": "prod_premium456",
+    "name": "Premium",
+    "description": "Planul premium cu funcționalități avansate",
+    "prices": [
+      {
+        "id": "price_premium_monthly",
+        "currency": "ron",
+        "unitAmount": 19900,
+        "recurring": {
+          "interval": "month"
+        }
+      },
+      {
+        "id": "price_premium_yearly",
+        "currency": "ron",
+        "unitAmount": 199000,
+        "recurring": {
+          "interval": "year"
+        }
+      }
+    ]
+  }
+]
+```
+
+### 2. Obținerea Prețurilor pentru un Plan Specific
+
+```http
+GET /payments/plans/basic/prices
+Authorization: Bearer <token>
+```
+
+**Răspuns:**
+```json
+[
+  {
+    "id": "price_basic_monthly",
+    "currency": "ron",
+    "unitAmount": 9900,
+    "recurring": {
+      "interval": "month"
+    }
+  },
+  {
+    "id": "price_basic_yearly",
+    "currency": "ron",
+    "unitAmount": 99000,
+    "recurring": {
+      "interval": "year"
+    }
+  }
+]
+```
+
+### 3. Obținerea unui Preț Specific
+
+```http
+GET /payments/plans/basic/price?interval=month&currency=ron
+Authorization: Bearer <token>
+```
+
+**Răspuns:**
+```json
+{
+  "id": "price_basic_monthly",
+  "currency": "ron",
+  "unitAmount": 9900,
+  "recurring": {
+    "interval": "month"
+  }
+}
+```
+
+### 4. Plăți cu Cardul Salvat
 
 ```http
 POST /payments/business/:id/pay-with-saved-card
@@ -25,6 +133,14 @@ Content-Type: application/json
 }
 ```
 
+**Sau cu priceId direct:**
+```json
+{
+  "paymentMethodId": "pm_1234567890",
+  "priceId": "price_basic_monthly"
+}
+```
+
 **Răspuns:**
 ```json
 {
@@ -34,7 +150,7 @@ Content-Type: application/json
 }
 ```
 
-### 2. Listarea Cardurilor Salvate
+### 5. Listarea Cardurilor Salvate
 
 ```http
 GET /users/me/payment-methods
@@ -62,7 +178,7 @@ Authorization: Bearer <token>
 ]
 ```
 
-### 3. Atașarea unui Card Nou
+### 6. Atașarea unui Card Nou
 
 ```http
 POST /users/me/payment-methods
@@ -81,7 +197,7 @@ Content-Type: application/json
 }
 ```
 
-### 4. Webhook Stripe (Pentru Actualizări Automate)
+### 7. Webhook Stripe (Pentru Actualizări Automate)
 
 ```http
 POST /webhooks/stripe
@@ -101,41 +217,55 @@ Stripe-Signature: <signature>
 }
 ```
 
-## Configurare Webhook Stripe
+## Configurare Stripe
 
-### 1. În Dashboard-ul Stripe
-
-1. Mergi la **Developers > Webhooks**
-2. Creează un nou webhook cu URL-ul: `https://your-domain.com/webhooks/stripe`
-3. Selectează următoarele evenimente:
-   - `invoice.payment_succeeded`
-   - `invoice.payment_failed`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
-4. Copiază **Signing secret** și adaugă-l în `.env` ca `STRIPE_WEBHOOK_SECRET`
-
-### 2. Variabile de Mediu
+### 1. Variabile de Mediu
 
 Adaugă în fișierul `.env`:
 
 ```bash
-# Stripe Webhook
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+
+# Product IDs (opțional - dacă nu sunt configurate, se folosesc planKey)
+STRIPE_BASIC_PRODUCT_ID=prod_basic123
+STRIPE_PREMIUM_PRODUCT_ID=prod_premium456
 ```
+
+### 2. Configurare în Stripe Dashboard
+
+1. **Creează produsele** în Stripe Dashboard:
+   - Basic Plan (prod_basic123)
+   - Premium Plan (prod_premium456)
+
+2. **Adaugă prețurile** pentru fiecare produs:
+   - Basic Monthly: 99 RON/lună
+   - Basic Yearly: 990 RON/an
+   - Premium Monthly: 199 RON/lună
+   - Premium Yearly: 1990 RON/an
+
+3. **Configurează webhook-urile**:
+   - URL: `https://your-domain.com/webhooks/stripe`
+   - Evenimente: `invoice.payment_succeeded`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`
 
 ## Fluxul de Plăți Îmbunătățit
 
 ### 1. Prima Plată (Card Nou)
-1. Utilizatorul introduce datele cardului în frontend
-2. Frontend-ul creează un `PaymentMethod` în Stripe
-3. Se apelează `POST /users/me/payment-methods` pentru a atașa cardul
-4. Se apelează `POST /payments/business/:id/pay-with-saved-card` pentru a plăti
-5. Business-ul se activează automat dacă plata reușește
+1. Frontend-ul obține planurile disponibile prin `GET /payments/plans`
+2. Utilizatorul selectează un plan și interval
+3. Utilizatorul introduce datele cardului în frontend
+4. Frontend-ul creează un `PaymentMethod` în Stripe
+5. Se apelează `POST /users/me/payment-methods` pentru a atașa cardul
+6. Se apelează `POST /payments/business/:id/pay-with-saved-card` cu `priceId` sau `planKey` + `billingInterval`
+7. Business-ul se activează automat dacă plata reușește
 
 ### 2. Plăți Următoare (Card Salvat)
-1. Utilizatorul selectează un card salvat din interfață
-2. Se apelează direct `POST /payments/business/:id/pay-with-saved-card`
-3. Business-ul se activează automat
+1. Frontend-ul obține planurile disponibile prin `GET /payments/plans`
+2. Utilizatorul selectează un plan și interval
+3. Utilizatorul selectează un card salvat din interfață
+4. Se apelează direct `POST /payments/business/:id/pay-with-saved-card`
+5. Business-ul se activează automat
 
 ### 3. Actualizări Automate
 1. Stripe trimite webhook-uri la fiecare schimbare de status
@@ -169,6 +299,7 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 1. **Experiență Utilizator Îmbunătățită**
    - Plăți rapide cu cardurile salvate
    - Nu mai este nevoie să reintroduci datele cardului
+   - Planuri și prețuri dinamice din Stripe
 
 2. **Actualizări Automate**
    - Statusul business-ului se actualizează în timp real
@@ -177,6 +308,7 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 3. **Gestionare Mai Bună a Plăților**
    - Perioadă de grație pentru plățile eșuate
    - Actualizări automate ale statusului de plată
+   - Flexibilitate în gestionarea planurilor
 
 4. **Securitate**
    - Verificarea semnăturii webhook-urilor
@@ -184,7 +316,24 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 
 ## Implementare Frontend
 
-### 1. Salvarea Cardului
+### 1. Obținerea Planurilor
+
+```javascript
+// Obține toate planurile disponibile
+const plans = await fetch('/payments/plans', {
+  headers: { 'Authorization': `Bearer ${token}` }
+}).then(r => r.json());
+
+// Afișează planurile în interfață
+plans.forEach(plan => {
+  console.log(`Plan: ${plan.name}`);
+  plan.prices.forEach(price => {
+    console.log(`  ${price.recurring.interval}: ${price.unitAmount / 100} ${price.currency.toUpperCase()}`);
+  });
+});
+```
+
+### 2. Salvarea Cardului
 
 ```javascript
 // Creează PaymentMethod în Stripe
@@ -201,7 +350,7 @@ await fetch('/users/me/payment-methods', {
 });
 ```
 
-### 2. Listarea Cardurilor Salvate
+### 3. Listarea Cardurilor Salvate
 
 ```javascript
 const paymentMethods = await fetch('/users/me/payment-methods', {
@@ -214,9 +363,10 @@ paymentMethods.forEach(pm => {
 });
 ```
 
-### 3. Plata cu Cardul Salvat
+### 4. Plata cu Cardul Salvat
 
 ```javascript
+// Opțiunea 1: Cu planKey și billingInterval
 await fetch(`/payments/business/${businessId}/pay-with-saved-card`, {
   method: 'POST',
   headers: { 'Authorization': `Bearer ${token}` },
@@ -224,6 +374,16 @@ await fetch(`/payments/business/${businessId}/pay-with-saved-card`, {
     paymentMethodId: selectedCardId,
     planKey: 'basic',
     billingInterval: 'month'
+  })
+});
+
+// Opțiunea 2: Cu priceId direct
+await fetch(`/payments/business/${businessId}/pay-with-saved-card`, {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${token}` },
+  body: JSON.stringify({
+    paymentMethodId: selectedCardId,
+    priceId: 'price_basic_monthly'
   })
 });
 ```
@@ -235,6 +395,13 @@ await fetch(`/payments/business/${businessId}/pay-with-saved-card`, {
 1. **Webhook Events**: Toate evenimentele webhook sunt logate
 2. **Payment Failures**: Erorile de plată sunt logate cu detalii
 3. **Business Activation**: Activarea business-urilor este logată
+4. **Plan Fetching**: Obținerea planurilor din Stripe este logată
+5. **DynamoDB Operations**: Operațiunile cu tabelul business-subscriptions sunt logate
+6. **GSI Usage**: Avertismente când se folosește scan în loc de GSI
+
+### Tabelul Business-Subscriptions
+
+Tabelul `business-subscriptions` trebuie configurat cu un GSI (Global Secondary Index) pe `subscriptionId` pentru căutări eficiente. Vezi `DYNAMODB_SUBSCRIPTIONS_SETUP.md` pentru instrucțiuni complete.
 
 ### Testare Webhook-uri
 
@@ -248,7 +415,7 @@ stripe listen --forward-to localhost:3001/webhooks/stripe
 
 1. **Compatibilitate**: Toate endpoint-urile vechi funcționează în continuare
 2. **Webhook-uri**: Trebuie configurate manual în Stripe Dashboard
-3. **Variabile de Mediu**: Adaugă `STRIPE_WEBHOOK_SECRET` în `.env`
+3. **Variabile de Mediu**: Adaugă `STRIPE_WEBHOOK_SECRET` și opțional `STRIPE_BASIC_PRODUCT_ID`, `STRIPE_PREMIUM_PRODUCT_ID` în `.env`
 
 ## Securitate
 
@@ -258,6 +425,11 @@ stripe listen --forward-to localhost:3001/webhooks/stripe
 4. **HTTPS Required**: Toate comunicările trebuie să fie pe HTTPS
 
 ## Structura Endpoint-urilor
+
+### Planuri și Prețuri (PaymentController)
+- `GET /payments/plans` - Toate planurile disponibile
+- `GET /payments/plans/:planKey/prices` - Prețurile pentru un plan
+- `GET /payments/plans/:planKey/price` - Un preț specific
 
 ### Gestionarea Cardurilor (UsersController)
 - `GET /users/me/payment-methods` - Listarea cardurilor salvate

@@ -1,8 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, Req, Query, SetMetadata } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
 import { BusinessService } from './business.service';
 import { BusinessEntity } from './entities/business.entity';
+import { ConfigureBusinessDto, SetupPaymentDto } from './dto/business-config.dto';
 
 @ApiTags('business')
 @ApiBearerAuth()
@@ -19,17 +20,27 @@ export class BusinessController {
 
   // Step 1: Configuration - Create business with suspended status
   @Post('configure')
-  async configureBusiness(@Req() req: any, @Body() body: any): Promise<BusinessEntity> {
+  @ApiOperation({ 
+    summary: 'Configure business', 
+    description: 'Create a new business with suspended status. Subscription type is automatically determined based on number of locations (1 location = solo, 2+ locations = enterprise).' 
+  })
+  @ApiResponse({ status: 201, description: 'Business configured successfully' })
+  async configureBusiness(@Req() req: any, @Body() body: ConfigureBusinessDto): Promise<BusinessEntity> {
     const user = req.user;
     return this.businessService.configureBusiness(body, user);
   }
 
   // Step 2: Payment - Create subscription for configured business
   @Post(':id/payment')
+  @ApiOperation({ 
+    summary: 'Setup payment', 
+    description: 'Create subscription for configured business. Only plan, billing interval and currency need to be specified. Subscription type is automatically determined from business configuration.' 
+  })
+  @ApiResponse({ status: 201, description: 'Payment setup successfully' })
   async setupPayment(
     @Req() req: any,
     @Param('id') businessId: string,
-    @Body() body: { subscriptionType: 'solo' | 'enterprise'; planKey?: 'basic' | 'premium'; billingInterval?: 'month' | 'year'; currency?: string }
+    @Body() body: SetupPaymentDto
   ): Promise<{ subscriptionId: string; status: string; clientSecret?: string }> {
     const user = req.user;
     return this.businessService.setupPayment(businessId, body, user);
@@ -79,8 +90,13 @@ export class BusinessController {
 
   // Legacy activation endpoint - now redirects to launch
   @Post(':id/activate')
-  async activate(@Param('id') id: string, @Body() body: { subscriptionType: 'solo' | 'enterprise' }): Promise<BusinessEntity> {
-    return this.businessService.activateAfterPayment(id, body.subscriptionType || 'solo');
+  @ApiOperation({ 
+    summary: 'Activate business (legacy)', 
+    description: 'Legacy endpoint for activating business. Subscription type is automatically determined from business configuration.' 
+  })
+  async activate(@Param('id') id: string): Promise<BusinessEntity> {
+    const business = await this.businessService.getBusiness(id);
+    return this.businessService.activateAfterPayment(id, business.subscriptionType);
   }
 
   @Post(':id/credits/allocate')
