@@ -253,7 +253,9 @@ export class PaymentService {
 
       // If subscription is active, activate business
       if (subscription.status === 'active' || subscription.status === 'trialing') {
-        await this.businessService.activateAfterPayment(params.businessId, 'solo');
+        // Note: launchBusiness requires user object, but in payment context we don't have it
+        // The business will be activated through the launch endpoint when user initiates it
+        this.logger.log(`Payment successful for business ${params.businessId}, ready for launch`);
       }
 
       return {
@@ -325,8 +327,9 @@ export class PaymentService {
         status: 'active',
       });
       
-      await this.businessService.activateAfterPayment(businessId, 'solo');
-      this.logger.log(`Business ${businessId} activated after successful payment`);
+      // Note: launchBusiness requires user object, but in webhook context we don't have it
+      // The business will be activated through the launch endpoint when user initiates it
+      this.logger.log(`Payment webhook received for business ${businessId}, ready for launch`);
     }
   }
 
@@ -358,7 +361,9 @@ export class PaymentService {
       });
 
       if (subscription.status === 'active' || subscription.status === 'trialing') {
-        await this.businessService.activateAfterPayment(businessId, 'solo');
+        // Note: launchBusiness requires user object, but in webhook context we don't have it
+        // The business will be activated through the launch endpoint when user initiates it
+        this.logger.log(`Subscription updated for business ${businessId}, ready for launch`);
       } else if (subscription.status === 'past_due' || subscription.status === 'unpaid') {
         await this.businessService.updatePaymentInfo(businessId, {
           paymentStatus: 'past_due',
@@ -441,9 +446,10 @@ export class PaymentService {
       status: sub.status,
     });
 
-    // Activate business optimistically after status becomes active, the frontend should confirm PI
+    // Note: launchBusiness requires user object, but in payment context we don't have it
+    // The business will be activated through the launch endpoint when user initiates it
     if (sub.status === 'active' || sub.status === 'trialing') {
-      await this.businessService.activateAfterPayment(params.businessId, 'solo');
+      this.logger.log(`Subscription created for business ${params.businessId}, ready for launch`);
     }
 
     return { subscriptionId: sub.id, status: sub.status, clientSecret: paymentIntent?.client_secret || undefined };
@@ -487,7 +493,9 @@ export class PaymentService {
       priceId: (sub.items.data[0]?.price?.id as string) || mapping.priceId,
     });
     if (sub.status === 'active' || sub.status === 'trialing') {
-      await this.businessService.activateAfterPayment(businessId, 'solo');
+      // Note: launchBusiness requires user object, but in refresh context we don't have it
+      // The business will be activated through the launch endpoint when user initiates it
+      this.logger.log(`Subscription refreshed for business ${businessId}, ready for launch`);
     }
     return { businessId, subscriptionId: sub.id, status: sub.status };
   }

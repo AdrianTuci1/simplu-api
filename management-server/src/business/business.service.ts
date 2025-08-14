@@ -176,6 +176,8 @@ export class BusinessService {
   }
 
   // Step 3: Launch - Activate business and deploy infrastructure
+
+  // TODO: EDIT THIS ( LAUNCH )
   async launchBusiness(businessId: string, user: any): Promise<BusinessEntity> {
     const business = await this.getBusiness(businessId);
     
@@ -349,39 +351,8 @@ export class BusinessService {
     await this.db.deleteBusiness(businessId);
   }
 
-  async activateAfterPayment(businessId: string, subscriptionType: 'solo' | 'enterprise'): Promise<BusinessEntity> {
-    const business = await this.getBusiness(businessId);
 
-    // Mark active and set status
-    const updated = await this.db.updateBusiness(businessId, {
-      active: true,
-      status: 'active' as BusinessStatus,
-      subscriptionType,
-      paymentStatus: 'active',
-      updatedAt: new Date().toISOString(),
-    });
 
-    // Trigger shard creation for each active location
-    const activeLocations = (updated.locations || []).filter((l) => l.active !== false);
-    await this.shardService.triggerMultipleShardCreations(
-      updated.businessId,
-      activeLocations.map((l) => ({ id: l.id, businessType: updated.businessType })),
-    );
-
-    // Create React app infrastructure (domain may be subdomain/custom)
-    try {
-      await this.infraService.createReactApp(
-        updated.businessId,
-        updated.businessType,
-        updated.domainType === 'subdomain' ? updated.domainLabel : undefined,
-        updated.domainType === 'custom' ? `${updated.domainLabel}${updated.customTld ? '.' + updated.customTld : ''}` : undefined,
-      );
-    } catch (err) {
-      this.logger.warn(`Infra creation failed for business ${updated.businessId}: ${err?.message}`);
-    }
-
-    return updated;
-  }
 
   async allocateCredits(businessId: string, locationId: string | null, amount: number, lockLocationUse?: boolean): Promise<BusinessEntity> {
     if (amount <= 0) throw new BadRequestException('Amount must be > 0');

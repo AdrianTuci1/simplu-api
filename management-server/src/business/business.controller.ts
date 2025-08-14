@@ -88,16 +88,7 @@ export class BusinessController {
     return { status: 'ok' };
   }
 
-  // Legacy activation endpoint - now redirects to launch
-  @Post(':id/activate')
-  @ApiOperation({ 
-    summary: 'Activate business (legacy)', 
-    description: 'Legacy endpoint for activating business. Subscription type is automatically determined from business configuration.' 
-  })
-  async activate(@Param('id') id: string): Promise<BusinessEntity> {
-    const business = await this.businessService.getBusiness(id);
-    return this.businessService.activateAfterPayment(id, business.subscriptionType);
-  }
+
 
   @Post(':id/credits/allocate')
   async allocateCredits(

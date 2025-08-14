@@ -94,6 +94,20 @@ The business creation and subscription flow has been improved to automatically d
 - If location count changes from 1 to 2+, subscription type changes from `solo` to `enterprise`
 - If location count changes from 2+ to 1, subscription type changes from `enterprise` to `solo`
 
+## Business Visibility
+
+### All Statuses Are Visible
+- **Suspended businesses** (configured but not paid) are visible in `GET /businesses`
+- **Active businesses** (paid and launched) are visible
+- **Deleted businesses** (soft deleted) are also visible but marked as deleted
+
+### User Access Types
+- **Owner**: Can see, configure payment, and launch business
+- **Creator**: Can see and manage business (admin creating for client)
+- **Authorized Email**: Can see business if email is in authorized list
+
+This ensures users can always see their configured businesses and proceed with payment when ready.
+
 ## Migration Notes
 
 ### For Existing Businesses
