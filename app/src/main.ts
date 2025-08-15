@@ -4,7 +4,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { swaggerConfig } from './config/swagger.config';
-import { KinesisSetup } from './utils/kinesis-setup';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -29,18 +28,7 @@ async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix('api');
 
-  // Setup Kinesis stream if needed
-  try {
-    const kinesisSetup = new KinesisSetup(configService);
-    await kinesisSetup.ensureStreamExists();
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-    console.warn('Warning: Could not setup Kinesis stream:', errorMessage);
-    console.warn(
-      'The application will continue, but resource operations may fail.',
-    );
-  }
+  // Kinesis streams are managed externally - no setup needed
 
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port);

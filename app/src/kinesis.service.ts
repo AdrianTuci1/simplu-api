@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { KinesisClient, PutRecordCommand } from '@aws-sdk/client-kinesis';
 
 export interface ResourceOperation {
-  operation: 'create' | 'update' | 'patch' | 'delete' | 'list';
+  operation: 'create' | 'update' | 'patch' | 'delete' | 'read' | 'list';
   businessId: string;
   locationId: string;
   resourceType: string;

@@ -7,9 +7,10 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   Headers,
-  UseGuards,
+  Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,266 +21,320 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { ResourcesService } from './resources.service';
-import { CognitoAuthGuard } from '../auth/guards/cognito-auth.guard';
-import { StandardResponse } from './dto/standard-response.dto';
-import { ResourceRequest } from './dto/resource-request.dto';
+import { ResourceQueryService, ResourceQuery } from './services/resource-query.service';
+import { ResourceType } from './types/base-resource';
+
+interface ResourceRequest {
+  data?: any;
+  resourceId?: string;
+}
+
+interface StandardResponse {
+  success: boolean;
+  message: string;
+  requestId: string;
+  timestamp: string;
+}
 
 @ApiTags('Resources')
 @Controller('resources')
-@UseGuards(CognitoAuthGuard)
 export class ResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) {}
-
-  @Get(':businessId-:locationId')
-  @ApiOperation({ summary: 'Get resources by business and location' })
-  @ApiResponse({
-    status: 200,
-    description: 'Resources retrieved successfully',
-    type: StandardResponse,
-  })
-  @ApiParam({ name: 'businessId', description: 'Business ID' })
-  @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiQuery({
-    name: 'resourceType',
-    required: true,
-    description: 'Type of resource',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page',
-  })
-  @ApiHeader({
-    name: 'X-Business-ID',
-    required: true,
-    description: 'Business ID header',
-  })
-  @ApiHeader({
-    name: 'X-Location-ID',
-    required: true,
-    description: 'Location ID header',
-  })
-  @ApiHeader({
-    name: 'X-Resource-Type',
-    required: true,
-    description: 'Resource type header',
-  })
-  async getResources(
-    @Param('businessId') businessId: string,
-    @Param('locationId') locationId: string,
-    @Query('resourceType') resourceType: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-    @Query() filters: Record<string, any>,
-    @Headers('X-Business-ID') headerBusinessId: string,
-    @Headers('X-Location-ID') headerLocationId: string,
-    @Headers('X-Resource-Type') headerResourceType: string,
-  ): Promise<StandardResponse> {
-    // Validate that URL params match headers
-    if (
-      headerBusinessId !== businessId ||
-      headerLocationId !== locationId ||
-      headerResourceType !== resourceType
-    ) {
-      throw new Error('URL parameters must match headers');
-    }
-
-    return this.resourcesService.getResources({
-      businessId,
-      locationId,
-      resourceType,
-      page: Number(page),
-      limit: Number(limit),
-      filters,
-    });
-  }
+  constructor(
+    private readonly resourcesService: ResourcesService,
+    private readonly resourceQueryService: ResourceQueryService,
+  ) { }
 
   @Post(':businessId-:locationId')
-  @ApiOperation({ summary: 'Create resource' })
-  @ApiResponse({
-    status: 201,
-    description: 'Resource created successfully',
-    type: StandardResponse,
-  })
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Create resource - sends to stream for processing' })
+  @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiHeader({
-    name: 'X-Business-ID',
-    required: true,
-    description: 'Business ID header',
-  })
-  @ApiHeader({
-    name: 'X-Location-ID',
-    required: true,
-    description: 'Location ID header',
-  })
-  @ApiHeader({
-    name: 'X-Resource-Type',
-    required: true,
-    description: 'Resource type header',
-  })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async createResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Body() resourceRequest: ResourceRequest,
-    @Headers('X-Business-ID') headerBusinessId: string,
-    @Headers('X-Location-ID') headerLocationId: string,
-    @Headers('X-Resource-Type') headerResourceType: string,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
-    // Validate that URL params match headers
-    if (headerBusinessId !== businessId || headerLocationId !== locationId) {
-      throw new Error('URL parameters must match headers');
-    }
-
-    return this.resourcesService.createResource({
+    return this.resourcesService.processResourceOperation({
+      operation: 'create',
       businessId,
       locationId,
-      resourceType: headerResourceType,
-      operation: resourceRequest.operation || 'create',
+      resourceType,
       data: resourceRequest.data,
     });
   }
 
-  @Put(':businessId-:locationId')
-  @ApiOperation({ summary: 'Update resource (full replacement)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Resource updated successfully',
-    type: StandardResponse,
-  })
+  @Put(':businessId-:locationId/:resourceId')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Update resource - sends to stream for processing' })
+  @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiHeader({
-    name: 'X-Business-ID',
-    required: true,
-    description: 'Business ID header',
-  })
-  @ApiHeader({
-    name: 'X-Location-ID',
-    required: true,
-    description: 'Location ID header',
-  })
-  @ApiHeader({
-    name: 'X-Resource-Type',
-    required: true,
-    description: 'Resource type header',
-  })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async updateResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
+    @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceRequest,
-    @Headers('X-Business-ID') headerBusinessId: string,
-    @Headers('X-Location-ID') headerLocationId: string,
-    @Headers('X-Resource-Type') headerResourceType: string,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
-    // Validate that URL params match headers
-    if (headerBusinessId !== businessId || headerLocationId !== locationId) {
-      throw new Error('URL parameters must match headers');
-    }
-
-    return this.resourcesService.updateResource({
+    return this.resourcesService.processResourceOperation({
+      operation: 'update',
       businessId,
       locationId,
-      resourceType: headerResourceType,
-      operation: 'update',
+      resourceType,
+      resourceId,
       data: resourceRequest.data,
     });
   }
 
-  @Patch(':businessId-:locationId')
-  @ApiOperation({ summary: 'Partially update resource' })
-  @ApiResponse({
-    status: 200,
-    description: 'Resource updated successfully',
-    type: StandardResponse,
-  })
+  @Patch(':businessId-:locationId/:resourceId')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Patch resource - sends to stream for processing' })
+  @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiHeader({
-    name: 'X-Business-ID',
-    required: true,
-    description: 'Business ID header',
-  })
-  @ApiHeader({
-    name: 'X-Location-ID',
-    required: true,
-    description: 'Location ID header',
-  })
-  @ApiHeader({
-    name: 'X-Resource-Type',
-    required: true,
-    description: 'Resource type header',
-  })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async patchResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
+    @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceRequest,
-    @Headers('X-Business-ID') headerBusinessId: string,
-    @Headers('X-Location-ID') headerLocationId: string,
-    @Headers('X-Resource-Type') headerResourceType: string,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
-    // Validate that URL params match headers
-    if (headerBusinessId !== businessId || headerLocationId !== locationId) {
-      throw new Error('URL parameters must match headers');
-    }
-
-    return this.resourcesService.patchResource({
+    return this.resourcesService.processResourceOperation({
+      operation: 'patch',
       businessId,
       locationId,
-      resourceType: headerResourceType,
-      operation: 'patch',
+      resourceType,
+      resourceId,
       data: resourceRequest.data,
     });
   }
 
-  @Delete(':businessId-:locationId')
-  @ApiOperation({ summary: 'Delete resource' })
-  @ApiResponse({
-    status: 200,
-    description: 'Resource deleted successfully',
-    type: StandardResponse,
-  })
+  @Delete(':businessId-:locationId/:resourceId')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Delete resource - sends to stream for processing' })
+  @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiHeader({
-    name: 'X-Business-ID',
-    required: true,
-    description: 'Business ID header',
-  })
-  @ApiHeader({
-    name: 'X-Location-ID',
-    required: true,
-    description: 'Location ID header',
-  })
-  @ApiHeader({
-    name: 'X-Resource-Type',
-    required: true,
-    description: 'Resource type header',
-  })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async deleteResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Headers('X-Business-ID') headerBusinessId: string,
-    @Headers('X-Location-ID') headerLocationId: string,
-    @Headers('X-Resource-Type') headerResourceType: string,
+    @Param('resourceId') resourceId: string,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
-    // Validate that URL params match headers
-    if (headerBusinessId !== businessId || headerLocationId !== locationId) {
-      throw new Error('URL parameters must match headers');
-    }
-
-    return this.resourcesService.deleteResource({
+    return this.resourcesService.processResourceOperation({
+      operation: 'delete',
       businessId,
       locationId,
-      resourceType: headerResourceType,
-      operation: 'delete',
+      resourceType,
+      resourceId,
     });
   }
+
+  // GET endpoints - read directly from database (RDS or Citrus)
+
+  @Get(':businessId-:locationId/:resourceType/:resourceId')
+  @ApiOperation({ summary: 'Get resource by ID - reads from database' })
+  @ApiResponse({ status: 200, description: 'Resource retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  async getResourceById(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const resource = await this.resourceQueryService.getResourceById(
+      businessId,
+      locationId,
+      resourceId,
+    );
+
+    if (!resource) {
+      return {
+        success: false,
+        message: 'Resource not found',
+        meta: {
+          businessId,
+          locationId,
+          resourceType,
+          resourceId,
+          timestamp: new Date().toISOString(),
+          operation: 'read',
+        },
+      };
+    }
+
+    return {
+      success: true,
+      data: resource,
+      meta: {
+        businessId,
+        locationId,
+        resourceType,
+        resourceId,
+        timestamp: new Date().toISOString(),
+        operation: 'read',
+      },
+    };
+  }
+
+  @Get(':businessId-:locationId/:resourceType')
+  @ApiOperation({ summary: 'Query resources with filters - reads from database' })
+  @ApiResponse({ status: 200, description: 'Resources retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiQuery({ name: 'sortBy', required: false, description: 'Sort field' })
+  @ApiQuery({ name: 'sortOrder', required: false, description: 'Sort order (ASC/DESC)' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'name', required: false, description: 'Name search (partial match)' })
+  @ApiQuery({ name: 'isActive', required: false, description: 'Active status filter (true/false)' })
+  async queryResources(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('name') name?: string,
+    @Query('isActive') isActive?: string,
+    @Query() allFilters?: any,
+  ) {
+    const query: ResourceQuery = {
+      resourceType,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+      sortBy,
+      sortOrder,
+      filters: {
+        startDate,
+        endDate,
+        name,
+        isActive: isActive ? isActive === 'true' : undefined,
+        customFilters: allFilters,
+      },
+    };
+
+    const result = await this.resourceQueryService.queryResources(
+      businessId,
+      locationId,
+      query,
+    );
+
+    return {
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+      meta: {
+        businessId,
+        locationId,
+        resourceType,
+        timestamp: new Date().toISOString(),
+        operation: 'query',
+      },
+    };
+  }
+
+  @Get(':businessId-:locationId/stats')
+  @ApiOperation({ summary: 'Get resource statistics - reads from database' })
+  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiQuery({ name: 'resourceType', required: false, description: 'Resource type filter' })
+  async getResourceStats(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Query('resourceType') resourceType?: ResourceType,
+  ) {
+    const stats = await this.resourceQueryService.getResourceStats(
+      businessId,
+      locationId,
+      resourceType,
+    );
+
+    return {
+      success: true,
+      data: stats,
+      meta: {
+        businessId,
+        locationId,
+        resourceType,
+        timestamp: new Date().toISOString(),
+        operation: 'stats',
+      },
+    };
+  }
+
+  // Additional endpoint for date range queries
+  @Get(':businessId-:locationId/:resourceType/date-range')
+  @ApiOperation({ summary: 'Get resources by date range - optimized for time-based queries' })
+  @ApiResponse({ status: 200, description: 'Resources retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiQuery({ name: 'startDate', required: true, description: 'Start date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: true, description: 'End date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  async getResourcesByDateRange(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    const offset = (pageNum - 1) * limitNum;
+
+    const resources = await this.resourceQueryService.getResourcesByDateRange(
+      businessId,
+      locationId,
+      resourceType,
+      startDate,
+      endDate,
+      limitNum,
+      offset,
+    );
+
+    return {
+      success: true,
+      data: resources,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: resources.length,
+        pages: Math.ceil(resources.length / limitNum),
+      },
+      meta: {
+        businessId,
+        locationId,
+        resourceType,
+        startDate,
+        endDate,
+        timestamp: new Date().toISOString(),
+        operation: 'date-range-query',
+      },
+    };
+  }
+
 }
