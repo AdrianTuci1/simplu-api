@@ -1,18 +1,45 @@
 import { Injectable } from '@nestjs/common';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
-import { KinesisService } from '../../kinesis/kinesis.service';
+import { DatabaseService } from './database.service';
 import { NotificationService } from '../../notification/notification.service';
 
 @Injectable()
 export class ResourceDataService {
 
   constructor(
-    private readonly kinesisService: KinesisService,
+    private readonly databaseService: DatabaseService,
     private readonly notificationService: NotificationService,
   ) { }
 
   /**
-   * Create a resource and send to Kinesis stream
+   * Extract business date from resource data for indexing
+   */
+  private extractBusinessDate(data: any, resourceType: string): string {
+    // Try common date fields based on resource type and data structure
+    const dateFields = [
+      'date',
+      'appointmentDate', 
+      'startDate',
+      'reservationDate',
+      'checkInDate',
+      'eventDate',
+      'scheduledDate'
+    ];
+
+    for (const field of dateFields) {
+      if (data[field]) {
+        // Ensure it's in YYYY-MM-DD format
+        const date = new Date(data[field]);
+        return date.toISOString().split('T')[0];
+      }
+    }
+
+    // Fallback to current date if no business date found
+    return new Date().toISOString().split('T')[0];
+  }
+
+  /**
+   * Create a resource and save to database
    */
   async createResource(
     businessId: string,
@@ -25,7 +52,7 @@ export class ResourceDataService {
       console.log(`Using shard ${shardConnection.shardId} for creating ${resourceType}`);
 
       // Generate resource ID
-      const resourceId = `${resourceType}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const resourceId = `${resourceType}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
       // Prepare resource data
       const resourceData = {
@@ -37,16 +64,19 @@ export class ResourceDataService {
         shardId: shardConnection.shardId,
       };
 
-      // Send to Kinesis stream for processing
-      await this.kinesisService.sendToStream('resources-stream', {
-        operation: 'create',
-        resourceType,
+      // Extract business date for indexing
+      const businessDate = this.extractBusinessDate(data, resourceType);
+
+      // Save directly to database
+      await this.databaseService.saveResource(
         businessId,
         locationId,
-        shardId: shardConnection.shardId,
-        data: resourceData,
-        timestamp: new Date().toISOString(),
-      });
+        resourceType,
+        resourceId,
+        resourceData,
+        'create',
+        businessDate
+      );
 
       // Send notification to Elixir
       await this.notificationService.notifyResourceCreated({
@@ -58,7 +88,7 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      console.log(`Created ${resourceType} with ID: ${resourceId} and sent to Kinesis`);
+      console.log(`Created ${resourceType} with ID: ${resourceId} and saved to database`);
       return resourceData;
     } catch (error) {
       console.error(`Error creating ${resourceType}:`, error);
@@ -67,7 +97,7 @@ export class ResourceDataService {
   }
 
   /**
-   * Update a resource and send to Kinesis stream
+   * Update a resource and save to database
    */
   async updateResource(
     businessId: string,
@@ -90,17 +120,19 @@ export class ResourceDataService {
         shardId: shardConnection.shardId,
       };
 
-      // Send to Kinesis stream for processing
-      await this.kinesisService.sendToStream('resources-stream', {
-        operation: 'update',
-        resourceType,
+      // Extract business date for indexing
+      const businessDate = this.extractBusinessDate(data, resourceType);
+
+      // Save directly to database
+      await this.databaseService.saveResource(
         businessId,
         locationId,
+        resourceType,
         resourceId,
-        shardId: shardConnection.shardId,
-        data: resourceData,
-        timestamp: new Date().toISOString(),
-      });
+        resourceData,
+        'update',
+        businessDate
+      );
 
       // Send notification to Elixir
       await this.notificationService.notifyResourceUpdated({
@@ -112,7 +144,7 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      console.log(`Updated ${resourceType} with ID: ${resourceId} and sent to Kinesis`);
+      console.log(`Updated ${resourceType} with ID: ${resourceId} and saved to database`);
       return resourceData;
     } catch (error) {
       console.error(`Error updating ${resourceType}:`, error);
@@ -121,7 +153,7 @@ export class ResourceDataService {
   }
 
   /**
-   * Delete a resource and send to Kinesis stream
+   * Delete a resource from database
    */
   async deleteResource(
     businessId: string,
@@ -133,16 +165,8 @@ export class ResourceDataService {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
       console.log(`Using shard ${shardConnection.shardId} for deleting ${resourceType}`);
 
-      // Send to Kinesis stream for processing
-      await this.kinesisService.sendToStream('resources-stream', {
-        operation: 'delete',
-        resourceType,
-        businessId,
-        locationId,
-        resourceId,
-        shardId: shardConnection.shardId,
-        timestamp: new Date().toISOString(),
-      });
+      // Delete directly from database
+      await this.databaseService.deleteResource(businessId, locationId, resourceId);
 
       // Send notification to Elixir
       await this.notificationService.notifyResourceDeleted({
@@ -153,7 +177,7 @@ export class ResourceDataService {
         shardId: shardConnection.shardId,
       });
 
-      console.log(`Deleted ${resourceType} with ID: ${resourceId} and sent to Kinesis`);
+      console.log(`Deleted ${resourceType} with ID: ${resourceId} from database`);
       return true;
     } catch (error) {
       console.error(`Error deleting ${resourceType}:`, error);
@@ -162,7 +186,7 @@ export class ResourceDataService {
   }
 
   /**
-   * Patch a resource (partial update) and send to Kinesis stream
+   * Patch a resource (partial update) and save to database
    */
   async patchResource(
     businessId: string,
@@ -175,27 +199,33 @@ export class ResourceDataService {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
       console.log(`Using shard ${shardConnection.shardId} for patching ${resourceType}`);
 
+      // Get existing resource to merge with patch data
+      const existingResource = await this.databaseService.getResource(businessId, locationId, resourceId);
+
       // Prepare patched resource data
       const resourceData = {
-        id: resourceId,
+        ...existingResource?.data,
         ...data,
+        id: resourceId,
         updatedAt: new Date().toISOString(),
         businessId,
         locationId,
         shardId: shardConnection.shardId,
       };
 
-      // Send to Kinesis stream for processing
-      await this.kinesisService.sendToStream('resources-stream', {
-        operation: 'patch',
-        resourceType,
+      // Extract business date for indexing (use existing date if patching)
+      const businessDate = this.extractBusinessDate(data, resourceType) || existingResource?.date;
+
+      // Save directly to database
+      await this.databaseService.saveResource(
         businessId,
         locationId,
+        resourceType,
         resourceId,
-        shardId: shardConnection.shardId,
-        data: resourceData,
-        timestamp: new Date().toISOString(),
-      });
+        resourceData,
+        'patch',
+        businessDate
+      );
 
       // Send notification to Elixir
       await this.notificationService.notifyResourcePatched({
@@ -207,7 +237,7 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      console.log(`Patched ${resourceType} with ID: ${resourceId} and sent to Kinesis`);
+      console.log(`Patched ${resourceType} with ID: ${resourceId} and saved to database`);
       return resourceData;
     } catch (error) {
       console.error(`Error patching ${resourceType}:`, error);

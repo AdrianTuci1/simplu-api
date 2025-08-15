@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class ResourceDataService {
   private readonly logger = new Logger(ResourceDataService.name);
 
-  constructor(private readonly kinesisService: KinesisService) {}
+  constructor(private readonly kinesisService: KinesisService) { }
 
   /**
    * Send create resource operation to Kinesis

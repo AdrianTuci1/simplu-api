@@ -6,8 +6,6 @@ import {
   IsNumber,
   IsDateString,
   IsArray,
-  ValidateNested,
-  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 

@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Put,
   Patch,
@@ -7,6 +8,7 @@ import {
   Body,
   Param,
   Headers,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,15 +16,20 @@ import {
   ApiResponse,
   ApiHeader,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { ResourcesService } from './resources.service';
+import { ResourceQueryService } from './services/resource-query.service';
 import { StandardResponse } from './dto/standard-response.dto';
-import { ResourceRequest } from './dto/resource-request.dto';
+import { ResourceRequest, ResourceQuery } from './dto/resource-request.dto';
 
 @ApiTags('Resources')
 @Controller('resources')
 export class ResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) {}
+  constructor(
+    private readonly resourcesService: ResourcesService,
+    private readonly resourceQueryService: ResourceQueryService,
+  ) {}
 
   @Post(':businessId-:locationId')
   @ApiOperation({ summary: 'Create resource' })
@@ -206,5 +213,105 @@ export class ResourcesController {
       operation: 'delete',
       data: resourceRequest.data,
     });
+  }
+
+  @Get(':businessId-:locationId/query')
+  @ApiOperation({ summary: 'Query resources with filters' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resources retrieved successfully',
+  })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiQuery({ name: 'resourceType', required: false, description: 'Resource type filter' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  async queryResources(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Query('resourceType') resourceType?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query() filters?: any,
+  ) {
+    const query: ResourceQuery = {
+      resourceType: resourceType || '',
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+      filters,
+    };
+
+    const result = await this.resourceQueryService.queryResources(businessId, locationId, query);
+    
+    return {
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+      meta: {
+        businessId,
+        locationId,
+        resourceType,
+        timestamp: new Date().toISOString(),
+        operation: 'query',
+      },
+    };
+  }
+
+  @Get(':businessId-:locationId/:resourceId')
+  @ApiOperation({ summary: 'Get resource by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resource retrieved successfully',
+  })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  async getResourceById(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const resource = await this.resourceQueryService.getResourceById(businessId, locationId, resourceId);
+    
+    return {
+      success: true,
+      data: resource,
+      meta: {
+        businessId,
+        locationId,
+        resourceId,
+        timestamp: new Date().toISOString(),
+        operation: 'get',
+      },
+    };
+  }
+
+  @Get(':businessId-:locationId/stats')
+  @ApiOperation({ summary: 'Get resource statistics' })
+  @ApiResponse({
+    status: 200,
+    description: 'Statistics retrieved successfully',
+  })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiQuery({ name: 'resourceType', required: false, description: 'Resource type filter' })
+  async getResourceStats(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Query('resourceType') resourceType?: string,
+  ) {
+    const stats = await this.resourceQueryService.getResourceStats(businessId, locationId, resourceType);
+    
+    return {
+      success: true,
+      data: stats,
+      meta: {
+        businessId,
+        locationId,
+        resourceType,
+        timestamp: new Date().toISOString(),
+        operation: 'stats',
+      },
+    };
   }
 }
