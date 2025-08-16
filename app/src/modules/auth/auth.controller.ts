@@ -1,134 +1,221 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Headers,
-  UnauthorizedException,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiHeader,
-  ApiBody,
-} from '@nestjs/swagger';
-import { AuthService, CognitoUser } from './auth.service';
-import { Step1AuthRequest, Step1AuthResponse } from './dto/auth-step1.dto';
-import { Step2AuthRequest, Step2AuthResponse } from './dto/auth-step2.dto';
+import { Controller, Get, Post, Body, UseGuards, Request, HttpException, HttpStatus, Param } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { AuthService, AuthenticatedUser } from './auth.service';
+import { LambdaAuthorizerGuard } from './guards/lambda-authorizer.guard';
+import { LambdaAuthorizerResponse } from './interfaces';
+import { Public, CurrentUser } from './decorators';
+import { PermissionService } from '../resources/services/permission.service';
+import { ResourceType, ResourceAction } from '../resources/types/base-resource';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly permissionService: PermissionService,
+  ) {}
 
-  @Get('validate')
-  @ApiOperation({ summary: 'Validate access token and get user info' })
-  @ApiHeader({
-    name: 'Authorization',
-    description: 'Bearer token from AWS Cognito',
-    required: true,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Token is valid, returns user information',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Invalid or expired token',
-  })
-  async validateToken(
-    @Headers('authorization') authorization: string,
-  ): Promise<CognitoUser> {
-    if (!authorization || !authorization.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Bearer token required');
+  @Post('validate-lambda-authorizer')
+  @ApiOperation({ summary: 'Validate Lambda authorizer response' })
+  @ApiResponse({ status: 200, description: 'Lambda authorizer response is valid' })
+  @ApiResponse({ status: 401, description: 'Invalid Lambda authorizer response' })
+  async validateLambdaAuthorizer(@Body() authorizerResponse: LambdaAuthorizerResponse) {
+    try {
+      const user = await this.authService.validateLambdaAuthorizerResponse(authorizerResponse);
+      return {
+        success: true,
+        user: {
+          userId: user.userId,
+          userName: user.userName,
+          email: user.email,
+          businessId: user.businessId,
+          roles: user.roles,
+          currentLocationId: user.currentLocationId,
+        },
+      };
+    } catch (error) {
+      throw new HttpException('Invalid Lambda authorizer response', HttpStatus.UNAUTHORIZED);
+    }
+  }
+
+  @Get('profile')
+  @UseGuards(LambdaAuthorizerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'User profile retrieved successfully' })
+  async getProfile(@CurrentUser() user: AuthenticatedUser) {
+    return {
+      success: true,
+      user: {
+        userId: user.userId,
+        userName: user.userName,
+        email: user.email,
+        businessId: user.businessId,
+        roles: user.roles,
+        currentLocationId: user.currentLocationId,
+      },
+    };
+  }
+
+  @Get('roles')
+  @UseGuards(LambdaAuthorizerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user roles for all locations' })
+  @ApiResponse({ status: 200, description: 'User roles retrieved successfully' })
+  async getUserRoles(@CurrentUser() user: AuthenticatedUser) {
+    return {
+      success: true,
+      roles: user.roles,
+    };
+  }
+
+  @Get('roles/:locationId')
+  @UseGuards(LambdaAuthorizerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user role for specific location' })
+  @ApiResponse({ status: 200, description: 'User role retrieved successfully' })
+  async getUserRoleForLocation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: any,
+  ) {
+    const locationId = req.params.locationId;
+    const role = this.authService.getUserRoleForLocation(user, locationId);
+    
+    if (!role) {
+      throw new HttpException('User has no role for this location', HttpStatus.FORBIDDEN);
     }
 
-    const token = authorization.substring(7);
-    return this.authService.validateAccessToken(token);
+    return {
+      success: true,
+      role,
+    };
   }
 
-  @Get('user')
-  @ApiOperation({ summary: 'Get current user information' })
-  @ApiHeader({
-    name: 'Authorization',
-    description: 'Bearer token from AWS Cognito',
-    required: true,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User information retrieved successfully',
-  })
-  async getCurrentUser(
-    @Headers('authorization') authorization: string,
-  ): Promise<CognitoUser> {
-    if (!authorization || !authorization.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Bearer token required');
+  @Get('permissions/:locationId')
+  @UseGuards(LambdaAuthorizerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user permissions for specific location' })
+  @ApiResponse({ status: 200, description: 'User permissions retrieved successfully' })
+  async getUserPermissions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('locationId') locationId: string,
+  ) {
+    const permissions = await this.permissionService.getUserPermissions(user, locationId);
+    
+    return {
+      success: true,
+      locationId,
+      permissions,
+      totalPermissions: permissions.length,
+    };
+  }
+
+  @Get('permissions')
+  @UseGuards(LambdaAuthorizerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user permissions for all locations' })
+  @ApiResponse({ status: 200, description: 'User permissions retrieved successfully' })
+  async getUserPermissionsAllLocations(@CurrentUser() user: AuthenticatedUser) {
+    const permissionsByLocation = await this.permissionService.getUserPermissionsAllLocations(user);
+    
+    return {
+      success: true,
+      permissionsByLocation,
+      totalLocations: Object.keys(permissionsByLocation).length,
+    };
+  }
+
+  @Post('check-permission/:locationId/:resourceType/:action')
+  @UseGuards(LambdaAuthorizerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Check if user has specific permission' })
+  @ApiResponse({ status: 200, description: 'Permission check completed' })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  async checkPermission(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Param('action') action: ResourceAction,
+  ) {
+    try {
+      await this.permissionService.checkPermission(user, locationId, resourceType, action);
+      
+      return {
+        success: true,
+        message: `Permission granted: ${resourceType}:${action}`,
+        locationId,
+        resourceType,
+        action,
+        permission: `${resourceType}:${action}`,
+      };
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.FORBIDDEN);
     }
-
-    const token = authorization.substring(7);
-    return this.authService.validateAccessToken(token);
   }
 
-  @Post('step1')
-  @ApiOperation({
-    summary: 'Step 1: Create authorization envelope and get redirect URL',
-    description:
-      'Gateway validates user token and creates an authorization envelope with temporary code. Returns redirect URL for the target client service.',
-  })
-  @ApiBody({ type: Step1AuthRequest })
-  @ApiResponse({
-    status: 200,
-    description: 'Authorization envelope created successfully',
-    type: Step1AuthResponse,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Invalid or expired token',
-  })
-  async step1Authorization(
-    @Body() request: Step1AuthRequest,
-  ): Promise<Step1AuthResponse> {
-    if (
-      !request.authorization ||
-      !request.authorization.startsWith('Bearer ')
-    ) {
-      throw new UnauthorizedException('Bearer token required');
+  @Post('test-permissions/:locationId')
+  @UseGuards(LambdaAuthorizerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Test multiple permissions for a location' })
+  @ApiResponse({ status: 200, description: 'Permission tests completed' })
+  async testPermissions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('locationId') locationId: string,
+    @Body() body: { permissions: Array<{ resourceType: ResourceType; action: ResourceAction }> },
+  ) {
+    const results: Array<{
+      permission: string;
+      granted: boolean;
+      error: string | null;
+    }> = [];
+    
+    for (const permission of body.permissions) {
+      try {
+        await this.permissionService.checkPermission(
+          user, 
+          locationId, 
+          permission.resourceType, 
+          permission.action
+        );
+        
+        results.push({
+          permission: `${permission.resourceType}:${permission.action}`,
+          granted: true,
+          error: null,
+        });
+      } catch (error) {
+        results.push({
+          permission: `${permission.resourceType}:${permission.action}`,
+          granted: false,
+          error: error.message,
+        });
+      }
     }
-
-    const token = request.authorization.substring(7);
-    return this.authService.createAuthorizationEnvelope(
-      token,
-      request.clientId,
-    );
+    
+    const grantedCount = results.filter(r => r.granted).length;
+    const deniedCount = results.filter(r => !r.granted).length;
+    
+    return {
+      success: true,
+      locationId,
+      results,
+      summary: {
+        total: results.length,
+        granted: grantedCount,
+        denied: deniedCount,
+      },
+    };
   }
 
-  @Post('step2')
-  @ApiOperation({
-    summary:
-      'Step 2: Authorize with business access and get user-specific data',
-    description:
-      'Client uses envelope ID, auth code, and business ID to get authorization and user-specific business data.',
-  })
-  @ApiBody({ type: Step2AuthRequest })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Authorization successful, returns user business data and access token',
-    type: Step2AuthResponse,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Invalid envelope, auth code, or unauthorized for business',
-  })
-  async step2Authorization(
-    @Body() request: Step2AuthRequest,
-  ): Promise<Step2AuthResponse> {
-    return this.authService.authorizeWithBusinessAccess(
-      request.envelopeId,
-      request.authCode,
-      request.businessId,
-      request.locationId,
-    );
+  @Get('health')
+  @Public()
+  @ApiOperation({ summary: 'Health check endpoint' })
+  @ApiResponse({ status: 200, description: 'Service is healthy' })
+  async healthCheck() {
+    return {
+      success: true,
+      message: 'Auth service is healthy',
+      timestamp: new Date().toISOString(),
+    };
   }
-}
+} 

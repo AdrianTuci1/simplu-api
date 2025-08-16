@@ -48,4 +48,23 @@ export default () => ({
     password: process.env.REDIS_PASSWORD,
     db: parseInt(process.env.REDIS_DB || '0', 10),
   },
+
+  // Lambda Authorizer Configuration
+  lambdaAuthorizer: {
+    enabled: process.env.LAMBDA_AUTHORIZER_ENABLED !== 'false', // Default: true
+    bypassForDevelopment: process.env.LAMBDA_AUTHORIZER_BYPASS === 'true', // Default: false
+    mockUser: process.env.LAMBDA_AUTHORIZER_MOCK_USER === 'true' ? {
+      userId: process.env.LAMBDA_AUTHORIZER_MOCK_USER_ID || 'mock-user-123',
+      userName: process.env.LAMBDA_AUTHORIZER_MOCK_USER_NAME || 'mock.user@example.com',
+      businessId: process.env.LAMBDA_AUTHORIZER_MOCK_BUSINESS_ID || 'mock-business-456',
+      roles: JSON.parse(process.env.LAMBDA_AUTHORIZER_MOCK_ROLES || JSON.stringify([
+        {
+          locationId: 'mock-location-789',
+          locationName: 'Mock Location',
+          role: 'admin',
+          permissions: ['read', 'write', 'delete']
+        }
+      ]))
+    } : null,
+  },
 });

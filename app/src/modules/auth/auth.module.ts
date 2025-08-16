@@ -1,31 +1,14 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { AuthEnvelopeService } from './services/auth-envelope.service';
-import { CognitoAuthGuard } from './guards/cognito-auth.guard';
-import { RedisModule } from '../redis/redis.module';
-import { BusinessInfoModule } from '../business-info/business-info.module';
+import { LambdaAuthorizerGuard } from './guards/lambda-authorizer.guard';
+import { PermissionService } from '../resources/services/permission.service';
+import { ResourceQueryService } from '../resources/services/resource-query.service';
 
 @Module({
-  imports: [
-    ConfigModule,
-    RedisModule,
-    BusinessInfoModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get('jwt.secret', 'fallback-secret'),
-        signOptions: {
-          expiresIn: configService.get('jwt.expiresIn', '1h'),
-        },
-      }),
-      inject: [ConfigService],
-    }),
-  ],
   controllers: [AuthController],
-  providers: [AuthService, AuthEnvelopeService, CognitoAuthGuard],
-  exports: [AuthService, AuthEnvelopeService, CognitoAuthGuard],
+  providers: [AuthService, LambdaAuthorizerGuard, PermissionService, ResourceQueryService],
+  exports: [AuthService, LambdaAuthorizerGuard, PermissionService],
+  imports: [ConfigService],
 })
-export class AuthModule {}
+export class AuthModule {} 
