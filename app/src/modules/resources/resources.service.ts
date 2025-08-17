@@ -39,7 +39,7 @@ export class ResourcesService {
 
       // Check user permissions
       if (request.userId) {
-        await this.permissionService.checkPermission(
+        await this.permissionService.checkPermissionLegacy(
           request.userId,
           request.resourceType,
           request.operation

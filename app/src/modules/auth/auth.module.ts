@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { LambdaAuthorizerGuard } from './guards/lambda-authorizer.guard';
@@ -9,6 +10,6 @@ import { ResourceQueryService } from '../resources/services/resource-query.servi
   controllers: [AuthController],
   providers: [AuthService, LambdaAuthorizerGuard, PermissionService, ResourceQueryService],
   exports: [AuthService, LambdaAuthorizerGuard, PermissionService],
-  imports: [ConfigService],
+  imports: [ConfigModule],
 })
 export class AuthModule {} 
