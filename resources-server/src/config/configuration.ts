@@ -12,8 +12,6 @@ export default () => ({
   // Kinesis Configuration
   kinesis: {
     streamName: process.env.KINESIS_STREAM_NAME || 'resources-stream',
-    elixirStreamName: process.env.ELIXIR_STREAM_NAME || 'elixir-notifications',
-    consumerStreamName: process.env.KINESIS_CONSUMER_STREAM_NAME || 'resources-consumer-stream',
   },
   
   // Database Configuration - supports both Citrus and RDS

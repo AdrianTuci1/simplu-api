@@ -63,6 +63,11 @@ export class KinesisErrorHandlerService {
       'InvalidSignatureException',
       'ExpiredTokenException',
       'TokenRefreshRequired',
+      'UnrecognizedClientException',
+      'InvalidClientTokenId',
+      'SignatureDoesNotMatch',
+      'InvalidAccessKeyId',
+      'InvalidToken',
     ];
 
     const connectionErrorMessages = [
@@ -75,6 +80,10 @@ export class KinesisErrorHandlerService {
       'access denied',
       'signature',
       'token',
+      'security token',
+      'invalid token',
+      'unrecognized client',
+      'invalid access key',
     ];
 
     // Check error code

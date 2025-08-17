@@ -77,6 +77,10 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('AWS region not configured, using default: us-east-1');
     }
 
+    if (!accessKeyId || !secretAccessKey) {
+      this.logger.warn('AWS credentials not fully configured. Kinesis operations may fail.');
+    }
+
     this.kinesisClient = new KinesisClient({
       region: region || 'us-east-1',
       credentials: {
@@ -89,6 +93,15 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   async startPolling() {
     if (this.isPolling) {
       this.logger.warn('Kinesis polling is already running');
+      return;
+    }
+
+    // Check if credentials are configured
+    const accessKeyId = this.configService.get<string>('aws.accessKeyId');
+    const secretAccessKey = this.configService.get<string>('aws.secretAccessKey');
+    
+    if (!accessKeyId || !secretAccessKey) {
+      this.logger.error('AWS credentials not configured. Skipping Kinesis consumer startup.');
       return;
     }
 
