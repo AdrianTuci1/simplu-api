@@ -5,12 +5,14 @@ import { KinesisModule } from './modules/kinesis/kinesis.module';
 import { HealthModule } from './modules/health/health.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { SqsModule } from './modules/sqs/sqs.module';
+import configuration from './config/configuration';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      load: [configuration],
     }),
     ResourcesModule,
     KinesisModule,

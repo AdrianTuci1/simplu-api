@@ -1,18 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { KinesisClient, PutRecordCommand } from '@aws-sdk/client-kinesis';
+import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
 
 @Injectable()
 export class KinesisService {
   private readonly logger = new Logger(KinesisService.name);
   private readonly kinesisClient: KinesisClient;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly errorHandler: KinesisErrorHandlerService,
+  ) {
+    const region = this.configService.get<string>('aws.region');
+    const accessKeyId = this.configService.get<string>('aws.accessKeyId');
+    const secretAccessKey = this.configService.get<string>('aws.secretAccessKey');
+
+    if (!region) {
+      this.logger.warn('AWS region not configured, using default: us-east-1');
+    }
+
     this.kinesisClient = new KinesisClient({
-      region: this.configService.get<string>('aws.region'),
+      region: region || 'us-east-1',
       credentials: {
-        accessKeyId: this.configService.get<string>('aws.accessKeyId'),
-        secretAccessKey: this.configService.get<string>('aws.secretAccessKey'),
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
       },
     });
   }
@@ -32,8 +44,9 @@ export class KinesisService {
       const result = await this.kinesisClient.send(command);
 
       this.logger.log(`Successfully sent data to stream ${streamName}, sequence: ${result.SequenceNumber}`);
+      this.errorHandler.handleSuccess('KinesisService.sendToStream');
     } catch (error) {
-      this.logger.error(`Failed to send data to stream ${streamName}:`, error);
+      this.errorHandler.handleConnectionError(error, 'KinesisService.sendToStream');
       throw error;
     }
   }

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { KinesisClient, GetRecordsCommand, GetShardIteratorCommand, DescribeStreamCommand, ListShardsCommand } from '@aws-sdk/client-kinesis';
 import { DatabaseService } from './database.service';
 import { NotificationService } from '../../notification/notification.service';
+import { KinesisErrorHandlerService } from '../../kinesis/kinesis-error-handler.service';
 
 export interface KinesisResourceMessage {
   operation: 'create' | 'update' | 'delete' | 'patch';
@@ -27,6 +28,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly databaseService: DatabaseService,
     private readonly notificationService: NotificationService,
+    private readonly errorHandler: KinesisErrorHandlerService,
   ) {
     this.initializeKinesisClient();
   }
@@ -67,13 +69,19 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private initializeKinesisClient() {
-    const awsConfig = this.configService.get('aws');
-    
+    const region = this.configService.get<string>('aws.region');
+    const accessKeyId = this.configService.get<string>('aws.accessKeyId');
+    const secretAccessKey = this.configService.get<string>('aws.secretAccessKey');
+
+    if (!region) {
+      this.logger.warn('AWS region not configured, using default: us-east-1');
+    }
+
     this.kinesisClient = new KinesisClient({
-      region: awsConfig.region,
+      region: region || 'us-east-1',
       credentials: {
-        accessKeyId: awsConfig.accessKeyId,
-        secretAccessKey: awsConfig.secretAccessKey,
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
       },
     });
   }
@@ -94,8 +102,9 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       }, 1000); // Poll every second
       
       this.logger.log('Kinesis consumer polling started successfully');
+      this.errorHandler.handleSuccess('KinesisConsumerService.startPolling');
     } catch (error) {
-      this.logger.error('Failed to start Kinesis polling:', error);
+      this.errorHandler.handleConnectionError(error, 'KinesisConsumerService.startPolling');
       this.isPolling = false;
     }
   }
@@ -141,8 +150,9 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       }
       
       this.logger.log(`Initialized ${this.shardIterators.size} shard iterators`);
+      this.errorHandler.handleSuccess('KinesisConsumerService.initializeShardIterators');
     } catch (error) {
-      this.logger.error('Failed to initialize shard iterators:', error);
+      this.errorHandler.handleConnectionError(error, 'KinesisConsumerService.initializeShardIterators');
       throw error;
     }
   }
@@ -179,13 +189,13 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
         }
         
       } catch (error) {
-        this.logger.error(`Error polling shard ${shardId}:`, error);
+        this.errorHandler.handleConnectionError(error, `KinesisConsumerService.pollForRecords.shard.${shardId}`);
         
         // Try to reinitialize this shard iterator
         try {
           await this.reinitializeShardIterator(shardId);
         } catch (reinitError) {
-          this.logger.error(`Failed to reinitialize shard ${shardId}:`, reinitError);
+          this.errorHandler.handleConnectionError(reinitError, `KinesisConsumerService.reinitializeShardIterator.${shardId}`);
         }
       }
     }
@@ -194,16 +204,22 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   private async reinitializeShardIterator(shardId: string) {
     const streamName = this.configService.get<string>('kinesis.consumerStreamName');
     
-    const getIteratorCommand = new GetShardIteratorCommand({
-      StreamName: streamName,
-      ShardId: shardId,
-      ShardIteratorType: 'LATEST',
-    });
-    
-    const iteratorResponse = await this.kinesisClient.send(getIteratorCommand);
-    if (iteratorResponse.ShardIterator) {
-      this.shardIterators.set(shardId, iteratorResponse.ShardIterator);
-      this.logger.log(`Reinitialized shard iterator for ${shardId}`);
+    try {
+      const getIteratorCommand = new GetShardIteratorCommand({
+        StreamName: streamName,
+        ShardId: shardId,
+        ShardIteratorType: 'LATEST',
+      });
+      
+      const iteratorResponse = await this.kinesisClient.send(getIteratorCommand);
+      if (iteratorResponse.ShardIterator) {
+        this.shardIterators.set(shardId, iteratorResponse.ShardIterator);
+        this.logger.log(`Reinitialized shard iterator for ${shardId}`);
+        this.errorHandler.handleSuccess(`KinesisConsumerService.reinitializeShardIterator.${shardId}`);
+      }
+    } catch (error) {
+      this.errorHandler.handleConnectionError(error, `KinesisConsumerService.reinitializeShardIterator.${shardId}`);
+      throw error;
     }
   }
 
