@@ -24,9 +24,9 @@ S-a implementat un sistem centralizat de gestionare a erorilor prin `KinesisErro
 
 ### 2. Detectarea erorilor de conexiune
 Erorile sunt detectate ca fiind de conexiune dacă:
-- **Code**: `NetworkingError`, `TimeoutError`, `CredentialsError`, `UnauthorizedOperation`, etc.
+- **Code**: `NetworkingError`, `TimeoutError`, `CredentialsError`, `UnauthorizedOperation`, `UnrecognizedClientException`, `InvalidClientTokenId`, etc.
 - **Name**: Aceleași coduri ca mai sus
-- **Message**: Conține cuvinte cheie ca "connect", "connection", "timeout", "network", "credentials", etc.
+- **Message**: Conține cuvinte cheie ca "connect", "connection", "timeout", "network", "credentials", "security token", "invalid token", etc.
 
 ### 3. Context pentru debugging
 Fiecare eroare include contextul în care a apărut:
@@ -63,6 +63,8 @@ this.errorHandler.handleConnectionError(error, 'KinesisService.sendToStream');
 2. **Debugging mai ușor** cu context specific
 3. **Logs mai curate** fără spam de erori
 4. **Recuperare automată** când conexiunea se restabilește
+5. **Verificare credențiale** înainte de operațiuni Kinesis
+6. **Prevenirea pornirii** când credențialele nu sunt configurate
 
 ## Testare
 

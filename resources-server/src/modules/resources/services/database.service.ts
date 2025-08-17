@@ -36,15 +36,22 @@ export class DatabaseService {
 
     private async initializeConnections() {
         const dbType = this.configService.get<string>('database.type');
+        
+        this.logger.log(`Initializing database connections for type: ${dbType}`);
 
         if (dbType === 'rds') {
             await this.initializeRDS();
+        } else if (dbType === 'citrus') {
+            this.logger.log('Citrus sharding enabled - connections will be initialized on-demand');
+        } else {
+            this.logger.warn(`Unknown database type: ${dbType}, defaulting to citrus`);
         }
-        // Citrus connections are initialized on-demand
     }
 
     private async initializeRDS() {
         const rdsConfig = this.configService.get('database.rds');
+
+        this.logger.log(`Initializing RDS connection to ${rdsConfig.host}:${rdsConfig.port}/${rdsConfig.database}`);
 
         this.rdsPool = new Pool({
             host: rdsConfig.host,
@@ -58,9 +65,18 @@ export class DatabaseService {
             connectionTimeoutMillis: 2000,
         });
 
+        // Test connection
+        try {
+            await this.rdsPool.query('SELECT 1');
+            this.logger.log(`✅ RDS connection successful to ${rdsConfig.host}:${rdsConfig.port}/${rdsConfig.database}`);
+        } catch (error) {
+            this.logger.error(`❌ RDS connection failed to ${rdsConfig.host}:${rdsConfig.port}/${rdsConfig.database}:`, error);
+            throw error;
+        }
+
         // Create tables if they don't exist
         await this.createRDSTables();
-        this.logger.log('RDS connection initialized');
+        this.logger.log('RDS tables created/verified successfully');
     }
 
     private async createRDSTables() {
@@ -107,6 +123,8 @@ export class DatabaseService {
             const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
 
             if (!this.citrusConnections.has(shardConnection.shardId)) {
+                this.logger.log(`Initializing Citrus connection to shard ${shardConnection.shardId}`);
+
                 const pool = new Pool({
                     connectionString: shardConnection.connectionString,
                     max: 10,
@@ -114,8 +132,20 @@ export class DatabaseService {
                     connectionTimeoutMillis: 2000,
                 });
 
+                // Test connection
+                try {
+                    await pool.query('SELECT 1');
+                    this.logger.log(`✅ Citrus connection successful to shard ${shardConnection.shardId}`);
+                } catch (error) {
+                    this.logger.error(`❌ Citrus connection failed to shard ${shardConnection.shardId}:`, error);
+                    throw error;
+                }
+
                 this.citrusConnections.set(shardConnection.shardId, pool);
                 await this.createCitrusTables(pool);
+                this.logger.log(`Citrus tables created/verified successfully for shard ${shardConnection.shardId}`);
+            } else {
+                this.logger.log(`Using existing Citrus connection to shard ${shardConnection.shardId}`);
             }
 
             return {
@@ -212,7 +242,7 @@ export class DatabaseService {
 
         const result = await connection.pool.query(query, values);
 
-        this.logger.log(`Saved resource ${resourceId} to ${connection.type} database`);
+        this.logger.log(`✅ Saved resource ${resourceId} to ${connection.type} database${connection.shardId ? ` (shard: ${connection.shardId})` : ''}`);
         return result.rows[0];
     }
 
@@ -228,7 +258,7 @@ export class DatabaseService {
 
         const result = await connection.pool.query(query, [recordId]);
 
-        this.logger.log(`Deleted resource ${resourceId} from ${connection.type} database`);
+        this.logger.log(`✅ Deleted resource ${resourceId} from ${connection.type} database${connection.shardId ? ` (shard: ${connection.shardId})` : ''}`);
         return result.rowCount > 0;
     }
 
@@ -316,14 +346,19 @@ export class DatabaseService {
     }
 
     async closeConnections() {
+        this.logger.log('Closing database connections...');
+
         if (this.rdsPool) {
             await this.rdsPool.end();
+            this.logger.log('✅ RDS connection closed');
         }
 
         for (const [shardId, pool] of this.citrusConnections) {
             await pool.end();
+            this.logger.log(`✅ Citrus connection closed for shard ${shardId}`);
         }
 
         this.citrusConnections.clear();
+        this.logger.log('All database connections closed successfully');
     }
 }
