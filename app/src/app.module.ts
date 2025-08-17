@@ -20,20 +20,31 @@ class CustomNamingStrategy extends DefaultNamingStrategy {
       isGlobal: true,
       load: [configuration],
     }),
+    // TypeORM configuration for RDS
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get('database.host'),
-        port: configService.get('database.port'),
-        username: configService.get('database.username'),
-        password: configService.get('database.password'),
-        database: configService.get('database.database'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: process.env.NODE_ENV !== 'production',
-        logging: process.env.NODE_ENV !== 'production',
-        namingStrategy: new CustomNamingStrategy(),
-      }),
+      useFactory: (configService: ConfigService) => {
+        const rdsConfig = configService.get('database.rds');
+        return {
+          type: 'postgres',
+          host: rdsConfig.host,
+          port: rdsConfig.port,
+          username: rdsConfig.username,
+          password: rdsConfig.password,
+          database: rdsConfig.database,
+          ssl: rdsConfig.ssl ? { rejectUnauthorized: false } : false,
+          synchronize: rdsConfig.synchronize,
+          logging: rdsConfig.logging,
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          namingStrategy: new CustomNamingStrategy(),
+          // Additional connection options
+          extra: {
+            connectionTimeoutMillis: 10000,
+            idleTimeoutMillis: 30000,
+            max: 20,
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     AuthModule,

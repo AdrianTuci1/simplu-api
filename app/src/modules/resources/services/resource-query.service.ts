@@ -74,6 +74,33 @@ export class ResourceQueryService {
     }
 
     /**
+     * Determines whether to use Citrus or RDS for GET operations
+     * This allows switching between Citrus and RDS for read operations only
+     */
+    private shouldUseCitrusForRead(): boolean {
+        // Check if there's a specific environment variable to force RDS for reads
+        const forceRDSForReads = process.env.FORCE_RDS_FOR_READS === 'true';
+        
+        if (forceRDSForReads) {
+            this.logger.log('Forcing RDS for read operations due to FORCE_RDS_FOR_READS=true');
+            return false;
+        }
+
+        // Check if there's a specific environment variable to force Citrus for reads
+        const forceCitrusForReads = process.env.FORCE_CITRUS_FOR_READS === 'true';
+        
+        if (forceCitrusForReads) {
+            this.logger.log('Forcing Citrus for read operations due to FORCE_CITRUS_FOR_READS=true');
+            return true;
+        }
+
+        // Default behavior: use the configured database type
+        const useCitrus = this.databaseConfig.type === 'citrus';
+        this.logger.log(`Using ${useCitrus ? 'Citrus' : 'RDS'} for read operations (default behavior)`);
+        return useCitrus;
+    }
+
+    /**
      * Query resources with advanced filtering and pagination
      */
     async queryResources(
@@ -91,7 +118,7 @@ export class ResourceQueryService {
 
             let resources: ResourceRecord[];
 
-            if (this.databaseConfig.type === 'citrus') {
+            if (this.shouldUseCitrusForRead()) {
                 resources = await this.queryResourcesFromCitrus(
                     businessId,
                     locationId,
@@ -153,7 +180,7 @@ export class ResourceQueryService {
         try {
             let resource: ResourceRecord | null;
 
-            if (this.databaseConfig.type === 'citrus') {
+            if (this.shouldUseCitrusForRead()) {
                 resource = await this.getResourceFromCitrus(businessId, locationId, resourceId);
             } else {
                 resource = await this.getResourceFromRDS(businessId, locationId, resourceId);
@@ -185,7 +212,7 @@ export class ResourceQueryService {
         try {
             let resources: ResourceRecord[];
 
-            if (this.databaseConfig.type === 'citrus') {
+            if (this.shouldUseCitrusForRead()) {
                 resources = await this.getResourcesByTypeFromCitrus(
                     businessId,
                     locationId,
@@ -226,7 +253,7 @@ export class ResourceQueryService {
         try {
             let resources: ResourceRecord[];
 
-            if (this.databaseConfig.type === 'citrus') {
+            if (this.shouldUseCitrusForRead()) {
                 resources = await this.getResourcesByDateRangeFromCitrus(
                     businessId,
                     locationId,
@@ -267,7 +294,7 @@ export class ResourceQueryService {
         try {
             let resources: ResourceRecord[];
 
-            if (this.databaseConfig.type === 'citrus') {
+            if (this.shouldUseCitrusForRead()) {
                 resources = await this.getResourcesByTypeFromCitrus(
                     businessId,
                     locationId,

@@ -137,7 +137,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async initializeShardIterators() {
-    const streamName = this.configService.get<string>('kinesis.consumerStreamName');
+    const streamName = this.configService.get<string>('kinesis.streamName');
     
     try {
       // Get stream description
@@ -153,7 +153,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
         const getIteratorCommand = new GetShardIteratorCommand({
           StreamName: streamName,
           ShardId: shard.ShardId,
-          ShardIteratorType: 'LATEST', // Start from latest records
+          ShardIteratorType: 'TRIM_HORIZON', // Start from the beginning of the stream
         });
         
         const iteratorResponse = await this.kinesisClient.send(getIteratorCommand);
@@ -215,13 +215,13 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async reinitializeShardIterator(shardId: string) {
-    const streamName = this.configService.get<string>('kinesis.consumerStreamName');
+    const streamName = this.configService.get<string>('kinesis.streamName');
     
     try {
       const getIteratorCommand = new GetShardIteratorCommand({
         StreamName: streamName,
         ShardId: shardId,
-        ShardIteratorType: 'LATEST',
+        ShardIteratorType: 'TRIM_HORIZON',
       });
       
       const iteratorResponse = await this.kinesisClient.send(getIteratorCommand);

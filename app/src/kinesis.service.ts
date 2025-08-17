@@ -38,17 +38,27 @@ export class KinesisService {
     const awsConfig = this.configService.get<AwsConfig>('aws');
     const kinesisConfig = this.configService.get<KinesisConfig>('kinesis');
 
-    this.kinesisClient = new KinesisClient({
-      region: awsConfig?.region || 'us-east-1',
-      ...(awsConfig?.accessKeyId &&
-        awsConfig?.secretAccessKey && {
-          credentials: {
-            accessKeyId: awsConfig.accessKeyId,
-            secretAccessKey: awsConfig.secretAccessKey,
-          },
-        }),
-    });
+    // Log configuration for debugging
+    this.logger.log(`AWS Region: ${awsConfig?.region || 'us-east-1'}`);
+    this.logger.log(`AWS Access Key ID: ${awsConfig?.accessKeyId ? 'Set' : 'Not set'}`);
+    this.logger.log(`AWS Secret Access Key: ${awsConfig?.secretAccessKey ? 'Set' : 'Not set'}`);
 
+    const clientConfig: any = {
+      region: awsConfig?.region || 'us-east-1',
+    };
+
+    // Only add credentials if both are provided
+    if (awsConfig?.accessKeyId && awsConfig?.secretAccessKey) {
+      clientConfig.credentials = {
+        accessKeyId: awsConfig.accessKeyId,
+        secretAccessKey: awsConfig.secretAccessKey,
+      };
+      this.logger.log('Using explicit AWS credentials');
+    } else {
+      this.logger.log('Using default AWS credential provider chain (IAM roles, environment, etc.)');
+    }
+
+    this.kinesisClient = new KinesisClient(clientConfig);
     this.streamName = kinesisConfig?.streamName || 'resources-operations';
   }
 
