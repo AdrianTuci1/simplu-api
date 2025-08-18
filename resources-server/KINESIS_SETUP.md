@@ -6,20 +6,14 @@ Resources-server este configurat să primească date din stream-ul Kinesis `reso
 
 ### Servicii Kinesis
 
-1. **KinesisService** - Pentru trimiterea datelor către stream
-2. **KinesisConsumerService** - Pentru primirea datelor din stream
-3. **KinesisErrorHandlerService** - Pentru gestionarea centralizată a erorilor
+1. **KinesisConsumerService** - Pentru primirea datelor din stream
 
-### Dependențe circulare
-
-Pentru a evita dependențele circulare între `KinesisModule` și `ResourcesModule`:
+### Configurația simplificată
 
 - `AppModule` importă atât `ResourcesModule` cât și `KinesisModule` separat
-- `ResourcesModule` nu importă `KinesisModule`
-- `KinesisModule` nu importă `ResourcesModule`
-- `KinesisConsumerService` doar loghează mesajele (nu le procesează prin ResourcesService)
-
-**Notă:** Această configurație evită dependențele circulare, dar `KinesisConsumerService` nu procesează încă mesajele prin `ResourcesService`.
+- `KinesisModule` conține doar `KinesisConsumerService` (consumer)
+- `KinesisModule` nu trimite date către stream, doar consumă
+- `KinesisConsumerService` loghează mesajele primite din stream
 
 ### Configurația de mediu
 

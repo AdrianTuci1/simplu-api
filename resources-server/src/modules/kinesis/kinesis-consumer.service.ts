@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { KinesisClient, GetRecordsCommand, GetShardIteratorCommand, DescribeStreamCommand, ListShardsCommand } from '@aws-sdk/client-kinesis';
-import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
 
 export interface KinesisResourceMessage {
   operation: 'create' | 'update' | 'delete' | 'patch';
@@ -25,7 +24,6 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly errorHandler: KinesisErrorHandlerService,
   ) {
     this.initializeKinesisClient();
   }
@@ -47,31 +45,27 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('AWS region not configured, using default: us-east-1');
     }
 
-    if (!accessKeyId || !secretAccessKey) {
-      this.logger.warn('AWS credentials not fully configured. Kinesis operations may fail.');
+    const clientConfig: any = {
+      region: region || 'us-east-1',
+    };
+
+    // Only add credentials if both are provided
+    if (accessKeyId && secretAccessKey) {
+      clientConfig.credentials = {
+        accessKeyId,
+        secretAccessKey,
+      };
+      this.logger.log('Using explicit AWS credentials from config');
+    } else {
+      this.logger.log('Using AWS credential provider chain (IAM roles, environment, etc.)');
     }
 
-    this.kinesisClient = new KinesisClient({
-      region: region || 'us-east-1',
-      credentials: {
-        accessKeyId: accessKeyId || '',
-        secretAccessKey: secretAccessKey || '',
-      },
-    });
+    this.kinesisClient = new KinesisClient(clientConfig);
   }
 
   async startPolling() {
     if (this.isPolling) {
       this.logger.warn('Kinesis polling is already running');
-      return;
-    }
-
-    // Check if credentials are configured
-    const accessKeyId = this.configService.get<string>('aws.accessKeyId');
-    const secretAccessKey = this.configService.get<string>('aws.secretAccessKey');
-    
-    if (!accessKeyId || !secretAccessKey) {
-      this.logger.error('AWS credentials not configured. Skipping Kinesis consumer startup.');
       return;
     }
 
@@ -85,9 +79,8 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       }, 1000); // Poll every second
       
       this.logger.log('Kinesis consumer polling started successfully');
-      this.errorHandler.handleSuccess('KinesisConsumerService.startPolling');
     } catch (error) {
-      this.errorHandler.handleConnectionError(error, 'KinesisConsumerService.startPolling');
+      this.logger.error('Error starting Kinesis consumer:', error);
       this.isPolling = false;
     }
   }
@@ -133,9 +126,8 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       }
       
       this.logger.log(`Initialized ${this.shardIterators.size} shard iterators`);
-      this.errorHandler.handleSuccess('KinesisConsumerService.initializeShardIterators');
     } catch (error) {
-      this.errorHandler.handleConnectionError(error, 'KinesisConsumerService.initializeShardIterators');
+      this.logger.error('Error initializing shard iterators:', error);
       throw error;
     }
   }
@@ -179,13 +171,13 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
         }
         
       } catch (error) {
-        this.errorHandler.handleConnectionError(error, `KinesisConsumerService.pollForRecords.shard.${shardId}`);
+        this.logger.error(`Error polling shard ${shardId}:`, error);
         
         // Try to reinitialize this shard iterator
         try {
           await this.reinitializeShardIterator(shardId);
         } catch (reinitError) {
-          this.errorHandler.handleConnectionError(reinitError, `KinesisConsumerService.reinitializeShardIterator.${shardId}`);
+          this.logger.error(`Error reinitializing shard iterator for ${shardId}:`, reinitError);
         }
       }
     }
@@ -205,10 +197,9 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       if (iteratorResponse.ShardIterator) {
         this.shardIterators.set(shardId, iteratorResponse.ShardIterator);
         this.logger.log(`Reinitialized shard iterator for ${shardId}`);
-        this.errorHandler.handleSuccess(`KinesisConsumerService.reinitializeShardIterator.${shardId}`);
       }
     } catch (error) {
-      this.errorHandler.handleConnectionError(error, `KinesisConsumerService.reinitializeShardIterator.${shardId}`);
+      this.logger.error(`Error reinitializing shard iterator for ${shardId}:`, error);
       throw error;
     }
   }
@@ -244,9 +235,6 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Sample data fields:`, sampleData);
       }
       
-      // TODO: Process the message through ResourcesService when circular dependency is resolved
-      this.logger.log(`Would process ${message.operation} operation for ${message.resourceType} through ResourcesService`);
-      
       this.logger.log(`Successfully processed ${message.operation} operation for ${message.resourceType}`);
       
     } catch (error) {
@@ -255,6 +243,4 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       this.logger.error('Raw record data:', Buffer.from(record.Data).toString('utf-8'));
     }
   }
-
-
 }
