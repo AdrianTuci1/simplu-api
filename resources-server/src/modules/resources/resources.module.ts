@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ResourcesController } from './resources.controller';
 import { ResourcesService } from './resources.service';
@@ -11,7 +11,7 @@ import { NotificationModule } from '../notification/notification.module';
 @Module({
   imports: [
     ConfigModule,
-    KinesisModule,
+    forwardRef(() => KinesisModule),
     NotificationModule,
   ],
   controllers: [ResourcesController],

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { KinesisClient, GetRecordsCommand, GetShardIteratorCommand, DescribeStreamCommand, ListShardsCommand } from '@aws-sdk/client-kinesis';
 import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
@@ -27,6 +27,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly configService: ConfigService,
     private readonly errorHandler: KinesisErrorHandlerService,
+    @Inject(forwardRef(() => ResourcesService))
     private readonly resourcesService: ResourcesService,
   ) {
     this.initializeKinesisClient();

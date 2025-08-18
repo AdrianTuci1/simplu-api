@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { KinesisService } from './kinesis.service';
 import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
@@ -6,7 +6,7 @@ import { KinesisConsumerService } from './kinesis-consumer.service';
 import { ResourcesModule } from '../resources/resources.module';
 
 @Module({
-  imports: [ConfigModule, ResourcesModule],
+  imports: [ConfigModule, forwardRef(() => ResourcesModule)],
   providers: [
     KinesisService, 
     KinesisErrorHandlerService,

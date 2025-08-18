@@ -10,6 +10,14 @@ Resources-server este configurat să primească date din stream-ul Kinesis `reso
 2. **KinesisConsumerService** - Pentru primirea datelor din stream
 3. **KinesisErrorHandlerService** - Pentru gestionarea centralizată a erorilor
 
+### Dependențe circulare
+
+Pentru a evita dependențele circulare între `KinesisModule` și `ResourcesModule`, se folosește `forwardRef()`:
+
+- `KinesisModule` importă `ResourcesModule` cu `forwardRef(() => ResourcesModule)`
+- `ResourcesModule` importă `KinesisModule` cu `forwardRef(() => KinesisModule)`
+- `KinesisConsumerService` injectează `ResourcesService` cu `@Inject(forwardRef(() => ResourcesService))`
+
 ### Configurația de mediu
 
 ```env
@@ -124,3 +132,8 @@ Pentru a verifica dacă consumer-ul funcționează:
 - Verifică dacă stream-ul are shard-uri active
 - Verifică logurile pentru erori de conexiune
 - Verifică dacă mesajele sunt trimise cu structura corectă
+
+**Eroare: "UndefinedModuleException" sau "circular dependency"**
+- Verifică că `forwardRef()` este folosit corect în ambele module
+- Verifică că `@Inject(forwardRef(() => ResourcesService))` este folosit în `KinesisConsumerService`
+- Asigură-te că toate importurile sunt corecte
