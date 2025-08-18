@@ -42,6 +42,10 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`- AWS Access Key ID: ${accessKeyId ? 'Configured' : 'Not configured (using IAM roles)'}`);
     this.logger.log(`- Database Type: ${this.configService.get<string>('database.type') || 'citrus'}`);
     
+    // Additional debug logging
+    this.logger.log(`- Raw AWS_REGION env: ${process.env.AWS_REGION}`);
+    this.logger.log(`- Raw KINESIS_STREAM_NAME env: ${process.env.KINESIS_STREAM_NAME}`);
+    
     await this.startPolling();
   }
 
@@ -118,13 +122,14 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
 
   private async initializeShardIterators() {
     const streamName = this.configService.get<string>('kinesis.streamName');
+    const region = this.configService.get<string>('aws.region');
     
-    this.logger.log(`Attempting to connect to Kinesis stream: ${streamName}`);
+    this.logger.log(`Attempting to connect to Kinesis stream: ${streamName} in region: ${region}`);
     
     try {
       // Get stream description
       const describeCommand = new DescribeStreamCommand({ StreamName: streamName });
-      this.logger.log(`Sending DescribeStreamCommand for stream: ${streamName}`);
+      this.logger.log(`Sending DescribeStreamCommand for stream: ${streamName} in region: ${region}`);
       const streamDescription = await this.kinesisClient.send(describeCommand);
       
       // Get all shards
