@@ -11,7 +11,6 @@ import { NotificationModule } from '../notification/notification.module';
 @Module({
   imports: [
     ConfigModule,
-    forwardRef(() => KinesisModule),
     NotificationModule,
   ],
   controllers: [ResourcesController],

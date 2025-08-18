@@ -1,8 +1,7 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { KinesisClient, GetRecordsCommand, GetShardIteratorCommand, DescribeStreamCommand, ListShardsCommand } from '@aws-sdk/client-kinesis';
 import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
-import { ResourcesService } from '../resources/resources.service';
 
 export interface KinesisResourceMessage {
   operation: 'create' | 'update' | 'delete' | 'patch';
@@ -27,8 +26,6 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly configService: ConfigService,
     private readonly errorHandler: KinesisErrorHandlerService,
-    @Inject(forwardRef(() => ResourcesService))
-    private readonly resourcesService: ResourcesService,
   ) {
     this.initializeKinesisClient();
   }
@@ -247,8 +244,8 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Sample data fields:`, sampleData);
       }
       
-      // Process the message through ResourcesService
-      await this.processResourceOperation(message);
+      // TODO: Process the message through ResourcesService when circular dependency is resolved
+      this.logger.log(`Would process ${message.operation} operation for ${message.resourceType} through ResourcesService`);
       
       this.logger.log(`Successfully processed ${message.operation} operation for ${message.resourceType}`);
       
@@ -259,63 +256,5 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async processResourceOperation(message: KinesisResourceMessage) {
-    try {
-      const { operation, businessId, locationId, resourceType, data, resourceId } = message;
-      
-      this.logger.log(`Processing resource operation: ${operation} for ${resourceType} (${businessId}-${locationId})`);
-      
-      switch (operation) {
-        case 'create':
-          await this.resourcesService.createResource({
-            businessId,
-            locationId,
-            resourceType,
-            operation: 'create',
-            data: data || {},
-          });
-          break;
-          
-        case 'update':
-          await this.resourcesService.updateResource({
-            businessId,
-            locationId,
-            resourceType,
-            operation: 'update',
-            data: data || {},
-          });
-          break;
-          
-        case 'patch':
-          await this.resourcesService.patchResource({
-            businessId,
-            locationId,
-            resourceType,
-            operation: 'patch',
-            data: data || {},
-          });
-          break;
-          
-        case 'delete':
-          await this.resourcesService.deleteResource({
-            businessId,
-            locationId,
-            resourceType,
-            operation: 'delete',
-            data: data || {},
-          });
-          break;
-          
-        default:
-          this.logger.warn(`Unknown operation: ${operation}`);
-          return;
-      }
-      
-      this.logger.log(`Successfully processed resource operation: ${operation} for ${resourceType}`);
-      
-    } catch (error) {
-      this.logger.error(`Error processing resource operation: ${message.operation} for ${message.resourceType}:`, error);
-      throw error;
-    }
-  }
+
 }

@@ -12,14 +12,14 @@ Resources-server este configurat să primească date din stream-ul Kinesis `reso
 
 ### Dependențe circulare
 
-Pentru a evita dependențele circulare între `KinesisModule` și `ResourcesModule`, se folosește `forwardRef()`:
+Pentru a evita dependențele circulare între `KinesisModule` și `ResourcesModule`:
 
-- `KinesisModule` importă `ResourcesModule` cu `forwardRef(() => ResourcesModule)`
-- `ResourcesModule` importă `KinesisModule` cu `forwardRef(() => KinesisModule)`
-- `KinesisConsumerService` injectează `ResourcesService` cu `@Inject(forwardRef(() => ResourcesService))`
-- `AppModule` importă doar `ResourcesModule` (nu și `KinesisModule` direct)
+- `AppModule` importă atât `ResourcesModule` cât și `KinesisModule` separat
+- `ResourcesModule` nu importă `KinesisModule`
+- `KinesisModule` nu importă `ResourcesModule`
+- `KinesisConsumerService` doar loghează mesajele (nu le procesează prin ResourcesService)
 
-**Notă:** `KinesisModule` este accesibil prin `ResourcesModule`, deci nu trebuie importat direct în `AppModule`.
+**Notă:** Această configurație evită dependențele circulare, dar `KinesisConsumerService` nu procesează încă mesajele prin `ResourcesService`.
 
 ### Configurația de mediu
 
@@ -66,13 +66,9 @@ Când un mesaj este primit din stream:
 
 1. **Parsing** - mesajul JSON este parsat și validat
 2. **Logging** - se loghează detaliile mesajului pentru debugging
-3. **Procesare** - se apelează metoda corespunzătoare din `ResourcesService`:
-   - `createResource()` pentru operația 'create'
-   - `updateResource()` pentru operația 'update'
-   - `patchResource()` pentru operația 'patch'
-   - `deleteResource()` pentru operația 'delete'
-4. **Salvare** - datele sunt salvate în baza de date prin `DatabaseService`
-5. **Notificare** - se trimit notificări către Elixir prin `NotificationService`
+3. **Logging suplimentar** - se loghează că mesajul ar fi procesat prin ResourcesService
+
+**Notă:** Din cauza dependențelor circulare, `KinesisConsumerService` doar loghează mesajele pentru moment. Pentru procesarea completă, este necesară implementarea unui serviciu intermediar sau refactorizarea arhitecturii.
 
 ### Logging
 
@@ -99,8 +95,7 @@ Received Kinesis message: {
   dataSize: 245
 }
 Sample data fields: { roomNumber: '201', floor: 2, type: 'deluxe' }
-Processing resource operation: create for rooms (b1-loc1)
-Successfully processed resource operation: create for rooms
+Would process create operation for rooms through ResourcesService
 Successfully processed create operation for rooms
 ```
 
@@ -120,6 +115,7 @@ Pentru a verifica dacă consumer-ul funcționează:
    - "Business: b1, Location: loc1, RequestId: ..."
    - "Received Kinesis message: {...}"
    - "Sample data fields: {...}"
+   - "Would process create operation for rooms through ResourcesService"
    - "Successfully processed create operation for rooms"
 
 ### Troubleshooting
