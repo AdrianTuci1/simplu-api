@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
 import { DatabaseService } from './database.service';
 import { NotificationService } from '../../notification/notification.service';
 
 @Injectable()
 export class ResourceDataService {
+  private readonly logger = new Logger(ResourceDataService.name);
 
   constructor(
     private readonly databaseService: DatabaseService,
@@ -49,7 +50,7 @@ export class ResourceDataService {
   ): Promise<any> {
     try {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
-      console.log(`Using shard ${shardConnection.shardId} for creating ${resourceType}`);
+      this.logger.log(`Using shard ${shardConnection.shardId} for creating ${resourceType}`);
 
       // Generate resource ID
       const resourceId = `${resourceType}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
@@ -88,10 +89,10 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      console.log(`Created ${resourceType} with ID: ${resourceId} and saved to database`);
+      this.logger.log(`Created ${resourceType} with ID: ${resourceId} and saved to database`);
       return resourceData;
     } catch (error) {
-      console.error(`Error creating ${resourceType}:`, error);
+      this.logger.error(`Error creating ${resourceType}:`, error);
       throw error;
     }
   }
@@ -108,7 +109,7 @@ export class ResourceDataService {
   ): Promise<any> {
     try {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
-      console.log(`Using shard ${shardConnection.shardId} for updating ${resourceType}`);
+      this.logger.log(`Using shard ${shardConnection.shardId} for updating ${resourceType}`);
 
       // Prepare updated resource data
       const resourceData = {
@@ -144,10 +145,10 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      console.log(`Updated ${resourceType} with ID: ${resourceId} and saved to database`);
+      this.logger.log(`Updated ${resourceType} with ID: ${resourceId} and saved to database`);
       return resourceData;
     } catch (error) {
-      console.error(`Error updating ${resourceType}:`, error);
+      this.logger.error(`Error updating ${resourceType}:`, error);
       throw error;
     }
   }
@@ -163,7 +164,7 @@ export class ResourceDataService {
   ): Promise<boolean> {
     try {
       const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
-      console.log(`Using shard ${shardConnection.shardId} for deleting ${resourceType}`);
+      this.logger.log(`Using shard ${shardConnection.shardId} for deleting ${resourceType}`);
 
       // Delete directly from database
       await this.databaseService.deleteResource(businessId, locationId, resourceId);
@@ -177,10 +178,10 @@ export class ResourceDataService {
         shardId: shardConnection.shardId,
       });
 
-      console.log(`Deleted ${resourceType} with ID: ${resourceId} from database`);
+      this.logger.log(`Deleted ${resourceType} with ID: ${resourceId} from database`);
       return true;
     } catch (error) {
-      console.error(`Error deleting ${resourceType}:`, error);
+      this.logger.error(`Error deleting ${resourceType}:`, error);
       throw error;
     }
   }

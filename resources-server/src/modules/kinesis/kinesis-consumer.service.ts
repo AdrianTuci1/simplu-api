@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import { KinesisClient, GetRecordsCommand, GetShardIteratorCommand, DescribeStreamCommand, ListShardsCommand } from '@aws-sdk/client-kinesis';
 import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
+import { ResourcesService } from '../resources/resources.service';
 
 export interface KinesisResourceMessage {
   operation: 'create' | 'update' | 'delete' | 'patch';
@@ -12,6 +13,7 @@ export interface KinesisResourceMessage {
   shardId?: string;
   data?: any;
   timestamp: string;
+  requestId?: string;
 }
 
 @Injectable()
@@ -25,6 +27,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly configService: ConfigService,
     private readonly errorHandler: KinesisErrorHandlerService,
+    private readonly resourcesService: ResourcesService,
   ) {
     this.initializeKinesisClient();
   }
@@ -159,6 +162,13 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
           for (const record of response.Records) {
             await this.processRecord(record);
           }
+          
+          this.logger.log(`Completed processing ${response.Records.length} records from shard ${shardId}`);
+        } else {
+          // Log less frequently when no records are found
+          if (Math.random() < 0.1) { // Log only 10% of the time
+            this.logger.debug(`No new records found in shard ${shardId}`);
+          }
         }
         
         // Update shard iterator for next poll
@@ -211,21 +221,100 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       const message: KinesisResourceMessage = data;
       
       this.logger.log(`Processing ${message.operation} operation for ${message.resourceType}`);
+      this.logger.log(`Business: ${message.businessId}, Location: ${message.locationId}, RequestId: ${message.requestId}`);
       
-      // For now, just log the message. The actual processing will be handled by the resources module
-      // when it receives the message through the notification system
+      // Log detailed message information
       this.logger.log('Received Kinesis message:', {
         operation: message.operation,
         resourceType: message.resourceType,
         businessId: message.businessId,
         locationId: message.locationId,
         resourceId: message.resourceId,
+        requestId: message.requestId,
         timestamp: message.timestamp,
+        dataKeys: message.data ? Object.keys(message.data) : [],
+        dataSize: message.data ? JSON.stringify(message.data).length : 0,
       });
+      
+      // Log sample data for debugging (first few fields)
+      if (message.data) {
+        const sampleData = {};
+        const keys = Object.keys(message.data);
+        for (let i = 0; i < Math.min(3, keys.length); i++) {
+          sampleData[keys[i]] = message.data[keys[i]];
+        }
+        this.logger.log(`Sample data fields:`, sampleData);
+      }
+      
+      // Process the message through ResourcesService
+      await this.processResourceOperation(message);
+      
+      this.logger.log(`Successfully processed ${message.operation} operation for ${message.resourceType}`);
       
     } catch (error) {
       this.logger.error('Error processing Kinesis record:', error);
       this.logger.error('Record data:', record);
+      this.logger.error('Raw record data:', Buffer.from(record.Data).toString('utf-8'));
+    }
+  }
+
+  private async processResourceOperation(message: KinesisResourceMessage) {
+    try {
+      const { operation, businessId, locationId, resourceType, data, resourceId } = message;
+      
+      this.logger.log(`Processing resource operation: ${operation} for ${resourceType} (${businessId}-${locationId})`);
+      
+      switch (operation) {
+        case 'create':
+          await this.resourcesService.createResource({
+            businessId,
+            locationId,
+            resourceType,
+            operation: 'create',
+            data: data || {},
+          });
+          break;
+          
+        case 'update':
+          await this.resourcesService.updateResource({
+            businessId,
+            locationId,
+            resourceType,
+            operation: 'update',
+            data: data || {},
+          });
+          break;
+          
+        case 'patch':
+          await this.resourcesService.patchResource({
+            businessId,
+            locationId,
+            resourceType,
+            operation: 'patch',
+            data: data || {},
+          });
+          break;
+          
+        case 'delete':
+          await this.resourcesService.deleteResource({
+            businessId,
+            locationId,
+            resourceType,
+            operation: 'delete',
+            data: data || {},
+          });
+          break;
+          
+        default:
+          this.logger.warn(`Unknown operation: ${operation}`);
+          return;
+      }
+      
+      this.logger.log(`Successfully processed resource operation: ${operation} for ${resourceType}`);
+      
+    } catch (error) {
+      this.logger.error(`Error processing resource operation: ${message.operation} for ${message.resourceType}:`, error);
+      throw error;
     }
   }
 }

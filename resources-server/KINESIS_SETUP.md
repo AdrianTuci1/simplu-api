@@ -46,8 +46,22 @@ interface KinesisResourceMessage {
 1. **Se inițializează automat** la pornirea aplicației
 2. **Polling continuu** - verifică stream-ul la fiecare secundă
 3. **Gestionarea shard-urilor** - inițializează și gestionează iteratorii pentru toate shard-urile
-4. **Procesarea mesajelor** - parsează și loghează mesajele primite
+4. **Procesarea mesajelor** - parsează și procesează mesajele prin ResourcesService
 5. **Gestionarea erorilor** - folosește `KinesisErrorHandlerService` pentru erori centralizate
+
+### Procesarea datelor
+
+Când un mesaj este primit din stream:
+
+1. **Parsing** - mesajul JSON este parsat și validat
+2. **Logging** - se loghează detaliile mesajului pentru debugging
+3. **Procesare** - se apelează metoda corespunzătoare din `ResourcesService`:
+   - `createResource()` pentru operația 'create'
+   - `updateResource()` pentru operația 'update'
+   - `patchResource()` pentru operația 'patch'
+   - `deleteResource()` pentru operația 'delete'
+4. **Salvare** - datele sunt salvate în baza de date prin `DatabaseService`
+5. **Notificare** - se trimit notificări către Elixir prin `NotificationService`
 
 ### Logging
 
@@ -55,8 +69,29 @@ Consumer-ul va loga:
 - Începerea polling-ului
 - Numărul de shard-uri inițializate
 - Numărul de înregistrări procesate per shard
-- Detaliile mesajelor primite
+- Detaliile mesajelor primite (inclusiv requestId, businessId, locationId)
+- Sample data pentru debugging (primele 3 câmpuri)
 - Erorile de conexiune și procesare
+
+**Exemplu de log pentru mesaj primit:**
+```
+Processing create operation for rooms
+Business: b1, Location: loc1, RequestId: 49ce66c6-5fa8-498d-9abf-90893a00a424
+Received Kinesis message: {
+  operation: 'create',
+  resourceType: 'rooms',
+  businessId: 'b1',
+  locationId: 'loc1',
+  requestId: '49ce66c6-5fa8-498d-9abf-90893a00a424',
+  timestamp: '2025-08-17T22:55:42.237Z',
+  dataKeys: ['roomNumber', 'floor', 'type', ...],
+  dataSize: 245
+}
+Sample data fields: { roomNumber: '201', floor: 2, type: 'deluxe' }
+Processing resource operation: create for rooms (b1-loc1)
+Successfully processed resource operation: create for rooms
+Successfully processed create operation for rooms
+```
 
 ### Verificarea funcționării
 
@@ -70,7 +105,11 @@ Pentru a verifica dacă consumer-ul funcționează:
 
 3. Trimite un mesaj de test către stream și verifică logurile pentru:
    - "Processing X records from shard Y"
+   - "Processing create operation for rooms"
+   - "Business: b1, Location: loc1, RequestId: ..."
    - "Received Kinesis message: {...}"
+   - "Sample data fields: {...}"
+   - "Successfully processed create operation for rooms"
 
 ### Troubleshooting
 

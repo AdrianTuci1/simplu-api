@@ -9,6 +9,7 @@ import {
   Param,
   Headers,
   Query,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,6 +27,8 @@ import { ResourceRequest, ResourceQuery } from './dto/resource-request.dto';
 @ApiTags('Resources')
 @Controller('resources')
 export class ResourcesController {
+  private readonly logger = new Logger(ResourcesController.name);
+
   constructor(
     private readonly resourcesService: ResourcesService,
     private readonly resourceQueryService: ResourceQueryService,
@@ -63,18 +66,24 @@ export class ResourcesController {
     @Headers('X-Location-ID') headerLocationId: string,
     @Headers('X-Resource-Type') headerResourceType: string,
   ): Promise<StandardResponse> {
+    this.logger.log(`Received CREATE request for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    
     // Validate that URL params match headers
     if (headerBusinessId !== businessId || headerLocationId !== locationId) {
+      this.logger.error(`Header validation failed: URL params (${businessId}-${locationId}) don't match headers (${headerBusinessId}-${headerLocationId})`);
       throw new Error('URL parameters must match headers');
     }
 
-    return this.resourcesService.createResource({
+    const result = await this.resourcesService.createResource({
       businessId,
       locationId,
       resourceType: headerResourceType,
       operation: resourceRequest.operation || 'create',
       data: resourceRequest.data,
     });
+
+    this.logger.log(`Successfully created resource for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    return result;
   }
 
   @Put(':businessId-:locationId')
@@ -109,18 +118,24 @@ export class ResourcesController {
     @Headers('X-Location-ID') headerLocationId: string,
     @Headers('X-Resource-Type') headerResourceType: string,
   ): Promise<StandardResponse> {
+    this.logger.log(`Received UPDATE request for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    
     // Validate that URL params match headers
     if (headerBusinessId !== businessId || headerLocationId !== locationId) {
+      this.logger.error(`Header validation failed: URL params (${businessId}-${locationId}) don't match headers (${headerBusinessId}-${headerLocationId})`);
       throw new Error('URL parameters must match headers');
     }
 
-    return this.resourcesService.updateResource({
+    const result = await this.resourcesService.updateResource({
       businessId,
       locationId,
       resourceType: headerResourceType,
       operation: 'update',
       data: resourceRequest.data,
     });
+
+    this.logger.log(`Successfully updated resource for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    return result;
   }
 
   @Patch(':businessId-:locationId')
@@ -155,18 +170,24 @@ export class ResourcesController {
     @Headers('X-Location-ID') headerLocationId: string,
     @Headers('X-Resource-Type') headerResourceType: string,
   ): Promise<StandardResponse> {
+    this.logger.log(`Received PATCH request for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    
     // Validate that URL params match headers
     if (headerBusinessId !== businessId || headerLocationId !== locationId) {
+      this.logger.error(`Header validation failed: URL params (${businessId}-${locationId}) don't match headers (${headerBusinessId}-${headerLocationId})`);
       throw new Error('URL parameters must match headers');
     }
 
-    return this.resourcesService.patchResource({
+    const result = await this.resourcesService.patchResource({
       businessId,
       locationId,
       resourceType: headerResourceType,
       operation: 'patch',
       data: resourceRequest.data,
     });
+
+    this.logger.log(`Successfully patched resource for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    return result;
   }
 
   @Delete(':businessId-:locationId')
@@ -201,18 +222,24 @@ export class ResourcesController {
     @Headers('X-Location-ID') headerLocationId: string,
     @Headers('X-Resource-Type') headerResourceType: string,
   ): Promise<StandardResponse> {
+    this.logger.log(`Received DELETE request for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    
     // Validate that URL parameters must match headers
     if (headerBusinessId !== businessId || headerLocationId !== locationId) {
+      this.logger.error(`Header validation failed: URL params (${businessId}-${locationId}) don't match headers (${headerBusinessId}-${headerLocationId})`);
       throw new Error('URL parameters must match headers');
     }
 
-    return this.resourcesService.deleteResource({
+    const result = await this.resourcesService.deleteResource({
       businessId,
       locationId,
       resourceType: headerResourceType,
       operation: 'delete',
       data: resourceRequest.data,
     });
+
+    this.logger.log(`Successfully deleted resource for business: ${businessId}, location: ${locationId}, resourceType: ${headerResourceType}`);
+    return result;
   }
 
   @Get(':businessId-:locationId/query')
