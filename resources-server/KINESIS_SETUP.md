@@ -27,6 +27,16 @@ AWS_SECRET_ACCESS_KEY=your-secret-access-key
 KINESIS_STREAM_NAME=resources-stream
 ```
 
+### Autentificarea AWS
+
+Consumer-ul suportă multiple metode de autentificare AWS:
+
+1. **Credențiale explicite** - prin variabilele de mediu `AWS_ACCESS_KEY_ID` și `AWS_SECRET_ACCESS_KEY`
+2. **IAM Roles** - pentru instanțe EC2 sau containere
+3. **AWS Credential Provider Chain** - verifică automat multiple surse de credențiale
+
+Consumer-ul va încerca să folosească credential provider chain-ul AWS dacă credențialele explicite nu sunt configurate.
+
 ### Structura mesajelor
 
 Mesajele din stream trebuie să aibă următoarea structură:
@@ -116,10 +126,14 @@ Pentru a verifica dacă consumer-ul funcționează:
 
 **Eroare: "AWS credentials not configured"**
 - Verifică variabilele de mediu `AWS_ACCESS_KEY_ID` și `AWS_SECRET_ACCESS_KEY`
+- Sau asigură-te că folosești IAM roles sau alte metode de autentificare AWS
+- Consumer-ul va încerca să folosească credential provider chain-ul AWS
 
-**Eroare: "Failed to describe stream"**
+**Eroare: "ResourceNotFoundException" sau "Failed to describe stream"**
 - Verifică dacă stream-ul `resources-stream` există în AWS Kinesis
+- Verifică că stream-ul este în aceeași regiune AWS configurată
 - Verifică permisiunile AWS pentru accesul la Kinesis
+- Verifică că variabila `KINESIS_STREAM_NAME` este configurată corect în `.env`
 
 **Nu se primesc mesaje**
 - Verifică dacă stream-ul are shard-uri active
@@ -127,7 +141,5 @@ Pentru a verifica dacă consumer-ul funcționează:
 - Verifică dacă mesajele sunt trimise cu structura corectă
 
 **Eroare: "UndefinedModuleException" sau "circular dependency"**
-- Verifică că `forwardRef()` este folosit corect în ambele module
-- Verifică că `@Inject(forwardRef(() => ResourcesService))` este folosit în `KinesisConsumerService`
-- Asigură-te că `AppModule` importă doar `ResourcesModule`, nu și `KinesisModule` direct
 - Verifică că toate importurile sunt corecte
+- Asigură-te că `AppModule` importă atât `ResourcesModule` cât și `KinesisModule`

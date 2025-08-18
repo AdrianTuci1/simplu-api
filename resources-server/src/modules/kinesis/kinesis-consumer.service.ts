@@ -29,6 +29,16 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    // Log configuration for debugging
+    const region = this.configService.get<string>('aws.region');
+    const streamName = this.configService.get<string>('kinesis.streamName');
+    const accessKeyId = this.configService.get<string>('aws.accessKeyId');
+    
+    this.logger.log(`Kinesis Consumer Configuration:`);
+    this.logger.log(`- AWS Region: ${region || 'us-east-1'}`);
+    this.logger.log(`- Stream Name: ${streamName || 'resources-stream'}`);
+    this.logger.log(`- AWS Access Key ID: ${accessKeyId ? 'Configured' : 'Not configured (using IAM roles)'}`);
+    
     await this.startPolling();
   }
 
@@ -69,6 +79,9 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const streamName = this.configService.get<string>('kinesis.streamName');
+    this.logger.log(`Starting Kinesis consumer polling for stream: ${streamName}`);
+
     this.isPolling = true;
     this.logger.log('Starting Kinesis consumer polling...');
 
@@ -81,6 +94,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Kinesis consumer polling started successfully');
     } catch (error) {
       this.logger.error('Error starting Kinesis consumer:', error);
+      this.logger.error(`Stream name being used: ${streamName}`);
       this.isPolling = false;
     }
   }
@@ -102,9 +116,12 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
   private async initializeShardIterators() {
     const streamName = this.configService.get<string>('kinesis.streamName');
     
+    this.logger.log(`Attempting to connect to Kinesis stream: ${streamName}`);
+    
     try {
       // Get stream description
       const describeCommand = new DescribeStreamCommand({ StreamName: streamName });
+      this.logger.log(`Sending DescribeStreamCommand for stream: ${streamName}`);
       const streamDescription = await this.kinesisClient.send(describeCommand);
       
       // Get all shards
