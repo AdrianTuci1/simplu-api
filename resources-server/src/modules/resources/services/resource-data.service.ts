@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
 import { DatabaseService } from './database.service';
 import { NotificationService } from '../../notification/notification.service';
@@ -10,6 +11,7 @@ export class ResourceDataService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly notificationService: NotificationService,
+    private readonly configService: ConfigService,
   ) { }
 
   /**
@@ -40,6 +42,27 @@ export class ResourceDataService {
   }
 
   /**
+   * Get shard information based on database type
+   */
+  private async getShardInfo(businessId: string, locationId: string): Promise<{ shardId: string | null; isRDS: boolean }> {
+    const dbType = this.configService.get<string>('database.type');
+    
+    if (dbType === 'rds') {
+      // For RDS, we don't need a shard - the primary key is businessId-locationId-resourceId
+      return { shardId: null, isRDS: true };
+    } else {
+      // For Citrus, get the shard from the sharding service
+      try {
+        const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
+        return { shardId: shardConnection.shardId, isRDS: false };
+      } catch (error) {
+        this.logger.error(`Failed to get shard for business ${businessId} location ${locationId}:`, error);
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Create a resource and save to database
    */
   async createResource(
@@ -49,8 +72,13 @@ export class ResourceDataService {
     data: any,
   ): Promise<any> {
     try {
-      const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
-      this.logger.log(`Using shard ${shardConnection.shardId} for creating ${resourceType}`);
+      const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
+      
+      if (isRDS) {
+        this.logger.log(`Creating ${resourceType} in RDS mode`);
+      } else {
+        this.logger.log(`Using shard ${shardId} for creating ${resourceType}`);
+      }
 
       // Generate resource ID
       const resourceId = `${resourceType}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
@@ -62,7 +90,7 @@ export class ResourceDataService {
         createdAt: new Date().toISOString(),
         businessId,
         locationId,
-        shardId: shardConnection.shardId,
+        shardId: shardId,
       };
 
       // Extract business date for indexing
@@ -85,7 +113,7 @@ export class ResourceDataService {
         businessId,
         locationId,
         resourceId,
-        shardId: shardConnection.shardId,
+        shardId: shardId,
         data: resourceData,
       });
 
@@ -108,8 +136,13 @@ export class ResourceDataService {
     data: any,
   ): Promise<any> {
     try {
-      const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
-      this.logger.log(`Using shard ${shardConnection.shardId} for updating ${resourceType}`);
+      const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
+      
+      if (isRDS) {
+        this.logger.log(`Updating ${resourceType} in RDS mode`);
+      } else {
+        this.logger.log(`Using shard ${shardId} for updating ${resourceType}`);
+      }
 
       // Prepare updated resource data
       const resourceData = {
@@ -118,7 +151,7 @@ export class ResourceDataService {
         updatedAt: new Date().toISOString(),
         businessId,
         locationId,
-        shardId: shardConnection.shardId,
+        shardId: shardId,
       };
 
       // Extract business date for indexing
@@ -141,7 +174,7 @@ export class ResourceDataService {
         businessId,
         locationId,
         resourceId,
-        shardId: shardConnection.shardId,
+        shardId: shardId,
         data: resourceData,
       });
 
@@ -163,8 +196,13 @@ export class ResourceDataService {
     resourceId: string,
   ): Promise<boolean> {
     try {
-      const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
-      this.logger.log(`Using shard ${shardConnection.shardId} for deleting ${resourceType}`);
+      const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
+      
+      if (isRDS) {
+        this.logger.log(`Deleting ${resourceType} in RDS mode`);
+      } else {
+        this.logger.log(`Using shard ${shardId} for deleting ${resourceType}`);
+      }
 
       // Delete directly from database
       await this.databaseService.deleteResource(businessId, locationId, resourceId);
@@ -175,7 +213,7 @@ export class ResourceDataService {
         businessId,
         locationId,
         resourceId,
-        shardId: shardConnection.shardId,
+        shardId: shardId,
       });
 
       this.logger.log(`Deleted ${resourceType} with ID: ${resourceId} from database`);
@@ -197,8 +235,13 @@ export class ResourceDataService {
     data: any,
   ): Promise<any> {
     try {
-      const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
-      console.log(`Using shard ${shardConnection.shardId} for patching ${resourceType}`);
+      const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
+      
+      if (isRDS) {
+        this.logger.log(`Patching ${resourceType} in RDS mode`);
+      } else {
+        this.logger.log(`Using shard ${shardId} for patching ${resourceType}`);
+      }
 
       // Get existing resource to merge with patch data
       const existingResource = await this.databaseService.getResource(businessId, locationId, resourceId);
@@ -211,7 +254,7 @@ export class ResourceDataService {
         updatedAt: new Date().toISOString(),
         businessId,
         locationId,
-        shardId: shardConnection.shardId,
+        shardId: shardId,
       };
 
       // Extract business date for indexing (use existing date if patching)
@@ -234,14 +277,14 @@ export class ResourceDataService {
         businessId,
         locationId,
         resourceId,
-        shardId: shardConnection.shardId,
+        shardId: shardId,
         data: resourceData,
       });
 
-      console.log(`Patched ${resourceType} with ID: ${resourceId} and saved to database`);
+      this.logger.log(`Patched ${resourceType} with ID: ${resourceId} and saved to database`);
       return resourceData;
     } catch (error) {
-      console.error(`Error patching ${resourceType}:`, error);
+      this.logger.error(`Error patching ${resourceType}:`, error);
       throw error;
     }
   }

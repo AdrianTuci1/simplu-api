@@ -27,7 +27,7 @@ export class ResourcesService {
       // Validate required parameters
       this.validateRequiredParams(businessId, locationId, resourceType);
 
-      // Create resource and send to Kinesis stream
+      // Create resource
       const result = await this.resourceDataService.createResource(
         businessId,
         locationId,
@@ -65,7 +65,7 @@ export class ResourcesService {
         throw new BadRequestException('Resource ID is required for update operation');
       }
 
-      // Update resource and send to Kinesis stream
+      // Update resource
       const result = await this.resourceDataService.updateResource(
         businessId,
         locationId,
@@ -104,7 +104,7 @@ export class ResourcesService {
         throw new BadRequestException('Resource ID is required for delete operation');
       }
 
-      // Delete resource and send to Kinesis stream
+      // Delete resource
       const result = await this.resourceDataService.deleteResource(
         businessId,
         locationId,
@@ -141,7 +141,7 @@ export class ResourcesService {
         throw new BadRequestException('Resource ID is required for patch operation');
       }
 
-      // Patch resource and send to Kinesis stream
+      // Patch resource
       const result = await this.resourceDataService.patchResource(
         businessId,
         locationId,

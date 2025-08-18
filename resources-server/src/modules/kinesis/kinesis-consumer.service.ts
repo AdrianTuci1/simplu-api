@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { KinesisClient, GetRecordsCommand, GetShardIteratorCommand, DescribeStreamCommand, ListShardsCommand } from '@aws-sdk/client-kinesis';
+import { ResourceDataService } from '../resources/services/resource-data.service';
 
 export interface KinesisResourceMessage {
   operation: 'create' | 'update' | 'delete' | 'patch';
@@ -24,6 +25,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly resourceDataService: ResourceDataService,
   ) {
     this.initializeKinesisClient();
   }
@@ -38,6 +40,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`- AWS Region: ${region || 'us-east-1'}`);
     this.logger.log(`- Stream Name: ${streamName || 'resources-stream'}`);
     this.logger.log(`- AWS Access Key ID: ${accessKeyId ? 'Configured' : 'Not configured (using IAM roles)'}`);
+    this.logger.log(`- Database Type: ${this.configService.get<string>('database.type') || 'citrus'}`);
     
     await this.startPolling();
   }
@@ -229,28 +232,8 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`Processing ${message.operation} operation for ${message.resourceType}`);
       this.logger.log(`Business: ${message.businessId}, Location: ${message.locationId}, RequestId: ${message.requestId}`);
       
-      // Log detailed message information
-      this.logger.log('Received Kinesis message:', {
-        operation: message.operation,
-        resourceType: message.resourceType,
-        businessId: message.businessId,
-        locationId: message.locationId,
-        resourceId: message.resourceId,
-        requestId: message.requestId,
-        timestamp: message.timestamp,
-        dataKeys: message.data ? Object.keys(message.data) : [],
-        dataSize: message.data ? JSON.stringify(message.data).length : 0,
-      });
-      
-      // Log sample data for debugging (first few fields)
-      if (message.data) {
-        const sampleData = {};
-        const keys = Object.keys(message.data);
-        for (let i = 0; i < Math.min(3, keys.length); i++) {
-          sampleData[keys[i]] = message.data[keys[i]];
-        }
-        this.logger.log(`Sample data fields:`, sampleData);
-      }
+      // Process the message based on operation type
+      await this.executeResourceOperation(message);
       
       this.logger.log(`Successfully processed ${message.operation} operation for ${message.resourceType}`);
       
@@ -258,6 +241,68 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       this.logger.error('Error processing Kinesis record:', error);
       this.logger.error('Record data:', record);
       this.logger.error('Raw record data:', Buffer.from(record.Data).toString('utf-8'));
+    }
+  }
+
+  private async executeResourceOperation(message: KinesisResourceMessage) {
+    const { operation, businessId, locationId, resourceType, resourceId, data } = message;
+
+    try {
+      switch (operation) {
+        case 'create':
+          await this.resourceDataService.createResource(
+            businessId,
+            locationId,
+            resourceType,
+            data || {}
+          );
+          break;
+
+        case 'update':
+          if (!resourceId) {
+            throw new Error('Resource ID is required for update operation');
+          }
+          await this.resourceDataService.updateResource(
+            businessId,
+            locationId,
+            resourceType,
+            resourceId,
+            data || {}
+          );
+          break;
+
+        case 'patch':
+          if (!resourceId) {
+            throw new Error('Resource ID is required for patch operation');
+          }
+          await this.resourceDataService.patchResource(
+            businessId,
+            locationId,
+            resourceType,
+            resourceId,
+            data || {}
+          );
+          break;
+
+        case 'delete':
+          if (!resourceId) {
+            throw new Error('Resource ID is required for delete operation');
+          }
+          await this.resourceDataService.deleteResource(
+            businessId,
+            locationId,
+            resourceType,
+            resourceId
+          );
+          break;
+
+        default:
+          this.logger.warn(`Unknown operation type: ${operation}`);
+          break;
+      }
+    } catch (error) {
+      this.logger.error(`Error executing ${operation} operation for ${resourceType}:`, error);
+      throw error;
     }
   }
 }

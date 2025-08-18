@@ -109,7 +109,9 @@ Pentru a verifica dacă consumer-ul funcționează:
 
 1. Asigură-te că AWS credentials sunt configurate
 2. Verifică logurile la pornirea aplicației pentru mesajele:
-   - "Starting Kinesis consumer polling..."
+   - "Kinesis Consumer Configuration:"
+   - "Starting Kinesis consumer polling for stream: resources-stream"
+   - "Attempting to connect to Kinesis stream: resources-stream"
    - "Kinesis consumer polling started successfully"
    - "Initialized X shard iterators"
 
@@ -119,8 +121,21 @@ Pentru a verifica dacă consumer-ul funcționează:
    - "Business: b1, Location: loc1, RequestId: ..."
    - "Received Kinesis message: {...}"
    - "Sample data fields: {...}"
-   - "Would process create operation for rooms through ResourcesService"
    - "Successfully processed create operation for rooms"
+
+### Verificarea stream-ului
+
+Pentru a verifica dacă stream-ul există:
+
+1. **AWS CLI:**
+   ```bash
+   aws kinesis describe-stream --stream-name resources-stream --region us-east-1
+   ```
+
+2. **AWS Console:**
+   - Mergi la AWS Kinesis Console
+   - Verifică că stream-ul `resources-stream` există
+   - Verifică că este în regiunea corectă (us-east-1)
 
 ### Troubleshooting
 

@@ -4,7 +4,6 @@ import { ResourcesController } from './resources.controller';
 import { ResourcesService } from './resources.service';
 import { ResourceDataService } from './services/resource-data.service';
 import { DatabaseService } from './services/database.service';
-import { ResourceQueryService } from './services/resource-query.service';
 import { NotificationModule } from '../notification/notification.module';
 
 @Module({
@@ -17,12 +16,11 @@ import { NotificationModule } from '../notification/notification.module';
     ResourcesService,
     ResourceDataService,
     DatabaseService,
-    ResourceQueryService,
   ],
   exports: [
     ResourcesService,
+    ResourceDataService,
     DatabaseService,
-    ResourceQueryService,
   ],
 })
 export class ResourcesModule {}
