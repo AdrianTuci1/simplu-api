@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { KinesisService } from './kinesis.service';
 import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
