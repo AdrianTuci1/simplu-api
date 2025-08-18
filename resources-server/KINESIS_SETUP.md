@@ -17,6 +17,9 @@ Pentru a evita dependențele circulare între `KinesisModule` și `ResourcesModu
 - `KinesisModule` importă `ResourcesModule` cu `forwardRef(() => ResourcesModule)`
 - `ResourcesModule` importă `KinesisModule` cu `forwardRef(() => KinesisModule)`
 - `KinesisConsumerService` injectează `ResourcesService` cu `@Inject(forwardRef(() => ResourcesService))`
+- `AppModule` importă doar `ResourcesModule` (nu și `KinesisModule` direct)
+
+**Notă:** `KinesisModule` este accesibil prin `ResourcesModule`, deci nu trebuie importat direct în `AppModule`.
 
 ### Configurația de mediu
 
@@ -136,4 +139,5 @@ Pentru a verifica dacă consumer-ul funcționează:
 **Eroare: "UndefinedModuleException" sau "circular dependency"**
 - Verifică că `forwardRef()` este folosit corect în ambele module
 - Verifică că `@Inject(forwardRef(() => ResourcesService))` este folosit în `KinesisConsumerService`
-- Asigură-te că toate importurile sunt corecte
+- Asigură-te că `AppModule` importă doar `ResourcesModule`, nu și `KinesisModule` direct
+- Verifică că toate importurile sunt corecte
