@@ -94,14 +94,5 @@ export class KinesisService {
     });
   }
 
-  /**
-   * Send notification to Elixir
-   */
-  async sendElixirNotification(notificationData: any): Promise<void> {
-    const streamName = this.configService.get<string>('kinesis.elixirStreamName', 'elixir-notifications');
-    await this.sendToStream(streamName, {
-      ...notificationData,
-      timestamp: new Date().toISOString(),
-    });
-  }
+
 } 

@@ -1,9 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { KinesisClient, GetRecordsCommand, GetShardIteratorCommand, DescribeStreamCommand, ListShardsCommand } from '@aws-sdk/client-kinesis';
-import { DatabaseService } from './database.service';
-import { NotificationService } from '../../notification/notification.service';
-import { KinesisErrorHandlerService } from '../../kinesis/kinesis-error-handler.service';
+import { KinesisErrorHandlerService } from './kinesis-error-handler.service';
 
 export interface KinesisResourceMessage {
   operation: 'create' | 'update' | 'delete' | 'patch';
@@ -26,38 +24,9 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly databaseService: DatabaseService,
-    private readonly notificationService: NotificationService,
     private readonly errorHandler: KinesisErrorHandlerService,
   ) {
     this.initializeKinesisClient();
-  }
-
-  /**
-   * Extract business date from resource data for indexing
-   */
-  private extractBusinessDate(data: any, resourceType: string): string {
-    // Try common date fields based on resource type and data structure
-    const dateFields = [
-      'date',
-      'appointmentDate', 
-      'startDate',
-      'reservationDate',
-      'checkInDate',
-      'eventDate',
-      'scheduledDate'
-    ];
-
-    for (const field of dateFields) {
-      if (data[field]) {
-        // Ensure it's in YYYY-MM-DD format
-        const date = new Date(data[field]);
-        return date.toISOString().split('T')[0];
-      }
-    }
-
-    // Fallback to current date if no business date found
-    return new Date().toISOString().split('T')[0];
   }
 
   async onModuleInit() {
@@ -243,158 +212,20 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       
       this.logger.log(`Processing ${message.operation} operation for ${message.resourceType}`);
       
-      await this.handleResourceOperation(message);
+      // For now, just log the message. The actual processing will be handled by the resources module
+      // when it receives the message through the notification system
+      this.logger.log('Received Kinesis message:', {
+        operation: message.operation,
+        resourceType: message.resourceType,
+        businessId: message.businessId,
+        locationId: message.locationId,
+        resourceId: message.resourceId,
+        timestamp: message.timestamp,
+      });
       
     } catch (error) {
       this.logger.error('Error processing Kinesis record:', error);
       this.logger.error('Record data:', record);
     }
-  }
-
-  private async handleResourceOperation(message: KinesisResourceMessage) {
-    const { operation, resourceType, businessId, locationId, resourceId, data } = message;
-    
-    try {
-      switch (operation) {
-        case 'create':
-          await this.handleCreateOperation(businessId, locationId, resourceType, resourceId || data.id, data);
-          break;
-          
-        case 'update':
-          await this.handleUpdateOperation(businessId, locationId, resourceType, resourceId, data);
-          break;
-          
-        case 'patch':
-          await this.handlePatchOperation(businessId, locationId, resourceType, resourceId, data);
-          break;
-          
-        case 'delete':
-          await this.handleDeleteOperation(businessId, locationId, resourceType, resourceId);
-          break;
-          
-        default:
-          this.logger.warn(`Unknown operation: ${operation}`);
-      }
-      
-      // Send success notification to Elixir
-      await this.notificationService.notifyElixir({
-        type: 'resource_processed',
-        operation,
-        resourceType,
-        businessId,
-        locationId,
-        resourceId,
-        success: true,
-        timestamp: new Date().toISOString(),
-      });
-      
-    } catch (error) {
-      this.logger.error(`Error handling ${operation} operation:`, error);
-      
-      // Send error notification to Elixir
-      await this.notificationService.notifyElixir({
-        type: 'resource_error',
-        operation,
-        resourceType,
-        businessId,
-        locationId,
-        resourceId,
-        success: false,
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  private async handleCreateOperation(
-    businessId: string,
-    locationId: string,
-    resourceType: string,
-    resourceId: string,
-    data: any,
-  ) {
-    // Extract business date for indexing
-    const businessDate = this.extractBusinessDate(data, resourceType);
-    
-    await this.databaseService.saveResource(
-      businessId,
-      locationId,
-      resourceType,
-      resourceId,
-      data,
-      'create',
-      businessDate,
-    );
-    
-    this.logger.log(`Created resource ${resourceId} of type ${resourceType}`);
-  }
-
-  private async handleUpdateOperation(
-    businessId: string,
-    locationId: string,
-    resourceType: string,
-    resourceId: string,
-    data: any,
-  ) {
-    // Extract business date for indexing
-    const businessDate = this.extractBusinessDate(data, resourceType);
-    
-    await this.databaseService.saveResource(
-      businessId,
-      locationId,
-      resourceType,
-      resourceId,
-      data,
-      'update',
-      businessDate,
-    );
-    
-    this.logger.log(`Updated resource ${resourceId} of type ${resourceType}`);
-  }
-
-  private async handlePatchOperation(
-    businessId: string,
-    locationId: string,
-    resourceType: string,
-    resourceId: string,
-    data: any,
-  ) {
-    // For patch operations, we might want to merge with existing data
-    const existingResource = await this.databaseService.getResource(businessId, locationId, resourceId);
-    
-    let mergedData = data;
-    if (existingResource && existingResource.data) {
-      mergedData = {
-        ...existingResource.data,
-        ...data,
-        updatedAt: new Date().toISOString(),
-      };
-    }
-    
-    // Extract business date for indexing (use existing date if patching and no new date provided)
-    const businessDate = this.extractBusinessDate(data, resourceType) || existingResource?.date;
-    
-    await this.databaseService.saveResource(
-      businessId,
-      locationId,
-      resourceType,
-      resourceId,
-      mergedData,
-      'patch',
-      businessDate,
-    );
-    
-    this.logger.log(`Patched resource ${resourceId} of type ${resourceType}`);
-  }
-
-  private async handleDeleteOperation(
-    businessId: string,
-    locationId: string,
-    resourceType: string,
-    resourceId: string,
-  ) {
-    await this.databaseService.deleteResource(businessId, locationId, resourceId);
-    
-    this.logger.log(`Deleted resource ${resourceId} of type ${resourceType}`);
   }
 }
