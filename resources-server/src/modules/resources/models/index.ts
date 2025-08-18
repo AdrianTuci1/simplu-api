@@ -1,5 +1,8 @@
 // Main models index - exports all organized models
 
+// Entity models
+export * from './resource.entity';
+
 // Common models
 export * from './common';
 

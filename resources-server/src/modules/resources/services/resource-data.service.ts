@@ -1,14 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
 import { DatabaseService } from './database.service';
 import { NotificationService } from '../../notification/notification.service';
+import { ResourceEntity } from '../models/resource.entity';
 
 @Injectable()
 export class ResourceDataService {
   private readonly logger = new Logger(ResourceDataService.name);
 
   constructor(
+    @InjectRepository(ResourceEntity)
+    private readonly resourceRepository: Repository<ResourceEntity>,
     private readonly databaseService: DatabaseService,
     private readonly notificationService: NotificationService,
     private readonly configService: ConfigService,
@@ -75,7 +80,7 @@ export class ResourceDataService {
       const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
       
       if (isRDS) {
-        this.logger.log(`Creating ${resourceType} in RDS mode`);
+        this.logger.log(`Creating ${resourceType} in RDS mode using TypeORM`);
       } else {
         this.logger.log(`Using shard ${shardId} for creating ${resourceType}`);
       }
@@ -83,29 +88,34 @@ export class ResourceDataService {
       // Generate resource ID
       const resourceId = `${resourceType}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
-      // Prepare resource data
-      const resourceData = {
-        id: resourceId,
-        ...data,
-        createdAt: new Date().toISOString(),
-        businessId,
-        locationId,
-        shardId: shardId,
-      };
-
       // Extract business date for indexing
       const businessDate = this.extractBusinessDate(data, resourceType);
 
-      // Save directly to database
-      await this.databaseService.saveResource(
+      // Create resource entity
+      const resourceEntity = this.resourceRepository.create({
+        id: resourceId,
         businessId,
         locationId,
         resourceType,
         resourceId,
-        resourceData,
-        'create',
-        businessDate
-      );
+        data: data,
+        date: businessDate,
+        operation: 'create',
+        shardId: shardId,
+      });
+
+      // Save using TypeORM repository
+      const savedResource = await this.resourceRepository.save(resourceEntity);
+
+      // Prepare response data
+      const resourceData = {
+        id: resourceId,
+        ...data,
+        createdAt: savedResource.createdAt.toISOString(),
+        businessId,
+        locationId,
+        shardId: shardId,
+      };
 
       // Send notification to Elixir
       await this.notificationService.notifyResourceCreated({
@@ -117,7 +127,7 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      this.logger.log(`Created ${resourceType} with ID: ${resourceId} and saved to database`);
+      this.logger.log(`Created ${resourceType} with ID: ${resourceId} and saved to database using TypeORM`);
       return resourceData;
     } catch (error) {
       this.logger.error(`Error creating ${resourceType}:`, error);
@@ -139,34 +149,43 @@ export class ResourceDataService {
       const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
       
       if (isRDS) {
-        this.logger.log(`Updating ${resourceType} in RDS mode`);
+        this.logger.log(`Updating ${resourceType} in RDS mode using TypeORM`);
       } else {
         this.logger.log(`Using shard ${shardId} for updating ${resourceType}`);
       }
 
-      // Prepare updated resource data
+      // Extract business date for indexing
+      const businessDate = this.extractBusinessDate(data, resourceType);
+
+      // Find existing resource
+      const existingResource = await this.resourceRepository.findOne({
+        where: { id: resourceId }
+      });
+
+      if (!existingResource) {
+        throw new Error(`Resource with ID ${resourceId} not found`);
+      }
+
+      // Update resource entity
+      Object.assign(existingResource, {
+        data: data,
+        date: businessDate,
+        operation: 'update',
+        shardId: shardId,
+      });
+
+      // Save using TypeORM repository
+      const savedResource = await this.resourceRepository.save(existingResource);
+
+      // Prepare response data
       const resourceData = {
         id: resourceId,
         ...data,
-        updatedAt: new Date().toISOString(),
+        updatedAt: savedResource.updatedAt.toISOString(),
         businessId,
         locationId,
         shardId: shardId,
       };
-
-      // Extract business date for indexing
-      const businessDate = this.extractBusinessDate(data, resourceType);
-
-      // Save directly to database
-      await this.databaseService.saveResource(
-        businessId,
-        locationId,
-        resourceType,
-        resourceId,
-        resourceData,
-        'update',
-        businessDate
-      );
 
       // Send notification to Elixir
       await this.notificationService.notifyResourceUpdated({
@@ -178,7 +197,7 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      this.logger.log(`Updated ${resourceType} with ID: ${resourceId} and saved to database`);
+      this.logger.log(`Updated ${resourceType} with ID: ${resourceId} and saved to database using TypeORM`);
       return resourceData;
     } catch (error) {
       this.logger.error(`Error updating ${resourceType}:`, error);
@@ -199,13 +218,21 @@ export class ResourceDataService {
       const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
       
       if (isRDS) {
-        this.logger.log(`Deleting ${resourceType} in RDS mode`);
+        this.logger.log(`Deleting ${resourceType} in RDS mode using TypeORM`);
       } else {
         this.logger.log(`Using shard ${shardId} for deleting ${resourceType}`);
       }
 
-      // Delete directly from database
-      await this.databaseService.deleteResource(businessId, locationId, resourceId);
+      // Find and delete using TypeORM repository
+      const existingResource = await this.resourceRepository.findOne({
+        where: { id: resourceId }
+      });
+
+      if (!existingResource) {
+        throw new Error(`Resource with ID ${resourceId} not found`);
+      }
+
+      await this.resourceRepository.remove(existingResource);
 
       // Send notification to Elixir
       await this.notificationService.notifyResourceDeleted({
@@ -216,7 +243,7 @@ export class ResourceDataService {
         shardId: shardId,
       });
 
-      this.logger.log(`Deleted ${resourceType} with ID: ${resourceId} from database`);
+      this.logger.log(`Deleted ${resourceType} with ID: ${resourceId} from database using TypeORM`);
       return true;
     } catch (error) {
       this.logger.error(`Error deleting ${resourceType}:`, error);
@@ -238,38 +265,49 @@ export class ResourceDataService {
       const { shardId, isRDS } = await this.getShardInfo(businessId, locationId);
       
       if (isRDS) {
-        this.logger.log(`Patching ${resourceType} in RDS mode`);
+        this.logger.log(`Patching ${resourceType} in RDS mode using TypeORM`);
       } else {
         this.logger.log(`Using shard ${shardId} for patching ${resourceType}`);
       }
 
-      // Get existing resource to merge with patch data
-      const existingResource = await this.databaseService.getResource(businessId, locationId, resourceId);
+      // Find existing resource using TypeORM repository
+      const existingResource = await this.resourceRepository.findOne({
+        where: { id: resourceId }
+      });
 
-      // Prepare patched resource data
-      const resourceData = {
-        ...existingResource?.data,
+      if (!existingResource) {
+        throw new Error(`Resource with ID ${resourceId} not found`);
+      }
+
+      // Merge existing data with patch data
+      const mergedData = {
+        ...existingResource.data,
         ...data,
+      };
+
+      // Extract business date for indexing (use existing date if patching)
+      const businessDate = this.extractBusinessDate(data, resourceType) || existingResource.date;
+
+      // Update resource entity
+      Object.assign(existingResource, {
+        data: mergedData,
+        date: businessDate,
+        operation: 'patch',
+        shardId: shardId,
+      });
+
+      // Save using TypeORM repository
+      const savedResource = await this.resourceRepository.save(existingResource);
+
+      // Prepare response data
+      const resourceData = {
         id: resourceId,
-        updatedAt: new Date().toISOString(),
+        ...mergedData,
+        updatedAt: savedResource.updatedAt.toISOString(),
         businessId,
         locationId,
         shardId: shardId,
       };
-
-      // Extract business date for indexing (use existing date if patching)
-      const businessDate = this.extractBusinessDate(data, resourceType) || existingResource?.date;
-
-      // Save directly to database
-      await this.databaseService.saveResource(
-        businessId,
-        locationId,
-        resourceType,
-        resourceId,
-        resourceData,
-        'patch',
-        businessDate
-      );
 
       // Send notification to Elixir
       await this.notificationService.notifyResourcePatched({
@@ -281,7 +319,7 @@ export class ResourceDataService {
         data: resourceData,
       });
 
-      this.logger.log(`Patched ${resourceType} with ID: ${resourceId} and saved to database`);
+      this.logger.log(`Patched ${resourceType} with ID: ${resourceId} and saved to database using TypeORM`);
       return resourceData;
     } catch (error) {
       this.logger.error(`Error patching ${resourceType}:`, error);
