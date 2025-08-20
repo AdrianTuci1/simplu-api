@@ -66,64 +66,76 @@ export class ResourcesController {
     });
   }
 
-  @Put(':businessId-:locationId')
+  @Put(':businessId-:locationId/:resourceType/:resourceId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Update resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
   async updateResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceDataRequest,
-    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
       operation: 'update',
       businessId,
       locationId,
       resourceType,
+      resourceId,
       data: resourceRequest.data,
     });
   }
 
-  @Patch(':businessId-:locationId')
+  @Patch(':businessId-:locationId/:resourceType/:resourceId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Patch resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
   async patchResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceDataRequest,
-    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
       operation: 'patch',
       businessId,
       locationId,
       resourceType,
+      resourceId,
       data: resourceRequest.data,
     });
   }
 
-  @Delete(':businessId-:locationId')
+  @Delete(':businessId-:locationId/:resourceType/:resourceId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Delete resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
   async deleteResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Param('resourceId') resourceId: string,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
       operation: 'delete',
       businessId,
       locationId,
+      resourceType,
+      resourceId,
     });
   }
 

@@ -194,6 +194,24 @@ curl -X POST "http://localhost:3000/api/resources/dental-clinic-location1" \
   }'
 ```
 
+### Actualizare Client (folosește resource_id)
+```bash
+curl -X PUT "http://localhost:3000/api/resources/dental-clinic-location1/clients/cl24-00001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "John Doe Updated",
+      "email": "john.updated@example.com",
+      "phone": "+40123456789"
+    }
+  }'
+```
+
+### Ștergere Client (folosește resource_id)
+```bash
+curl -X DELETE "http://localhost:3000/api/resources/dental-clinic-location1/clients/cl24-00001"
+```
+
 ### Query cu Filtre de Date
 ```bash
 # Folosește câmpurile start_date și end_date din DB
@@ -288,14 +306,20 @@ const body = {
 };
 ```
 
-### Headers și URL-uri Rămân la Fel
+### Headers și URL-uri pentru Operații
 ```javascript
-const headers = {
+// CREATE - URL și headers rămân la fel
+const createHeaders = {
   'X-Resource-Type': resourceType,
   'Content-Type': 'application/json'
 };
+const createUrl = `/api/resources/${businessId}-${locationId}`;
 
-const url = `/api/resources/${businessId}-${locationId}`;
+// UPDATE/PATCH/DELETE - URL include resourceType și resourceId
+const updateHeaders = {
+  'Content-Type': 'application/json'
+};
+const updateUrl = `/api/resources/${businessId}-${locationId}/${resourceType}/${resourceId}`;
 ```
 
 ## Documentație

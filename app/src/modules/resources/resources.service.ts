@@ -75,13 +75,18 @@ export class ResourcesService {
       throw new BadRequestException('Business ID and Location ID are required');
     }
 
-    // Resource type is only required for create, update, and patch operations
-    if (['create', 'update', 'patch'].includes(request.operation) && !request.resourceType) {
-      throw new BadRequestException('Resource type is required for create, update, and patch operations');
+    // Resource type is required for create, update, patch, and delete operations
+    if (['create', 'update', 'patch', 'delete'].includes(request.operation) && !request.resourceType) {
+      throw new BadRequestException('Resource type is required for create, update, patch, and delete operations');
     }
 
     if (request.resourceType && !VALID_RESOURCE_TYPES.includes(request.resourceType)) {
       throw new BadRequestException(`Invalid resource type: ${request.resourceType}`);
+    }
+
+    // Resource ID is required for update, patch, and delete operations
+    if (['update', 'patch', 'delete'].includes(request.operation) && !request.resourceId) {
+      throw new BadRequestException('Resource ID is required for update, patch, and delete operations');
     }
 
     // Validate data is provided for create, update, and patch operations

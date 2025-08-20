@@ -196,13 +196,13 @@ export class ResourceDataService {
       // Extract dates from data
       const { startDate, endDate } = this.extractDates(data, resourceType);
 
-      // Find existing resource
+      // Find existing resource by resourceId
       const existingResource = await this.resourceRepository.findOne({
-        where: { businessId, locationId }
+        where: { businessId, locationId, resourceId }
       });
 
       if (!existingResource) {
-        throw new Error(`Resource for business ${businessId} location ${locationId} not found`);
+        throw new Error(`Resource with ID ${resourceId} for business ${businessId} location ${locationId} not found`);
       }
 
       // Update resource entity
@@ -268,11 +268,11 @@ export class ResourceDataService {
 
       // Find and delete using TypeORM repository
       const existingResource = await this.resourceRepository.findOne({
-        where: { businessId, locationId }
+        where: { businessId, locationId, resourceId }
       });
 
       if (!existingResource) {
-        throw new Error(`Resource for business ${businessId} location ${locationId} not found`);
+        throw new Error(`Resource with ID ${resourceId} for business ${businessId} location ${locationId} not found`);
       }
 
       await this.resourceRepository.remove(existingResource);
@@ -315,11 +315,11 @@ export class ResourceDataService {
 
       // Find existing resource using TypeORM repository
       const existingResource = await this.resourceRepository.findOne({
-        where: { businessId, locationId }
+        where: { businessId, locationId, resourceId }
       });
 
       if (!existingResource) {
-        throw new Error(`Resource for business ${businessId} location ${locationId} not found`);
+        throw new Error(`Resource with ID ${resourceId} for business ${businessId} location ${locationId} not found`);
       }
 
       // Extract dates from data (use existing dates if not provided)
