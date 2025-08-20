@@ -42,8 +42,8 @@ describe('ResourceEntity', () => {
     expect(entity).toBeDefined();
   });
 
-  it('should create table with data field', async () => {
-    // This test ensures that the table is created with the data field
+  it('should create table with data field and auto-generated id', async () => {
+    // This test ensures that the table is created with the data field and auto-generated id
     const entity = new ResourceEntity();
     entity.businessId = 'test-business';
     entity.locationId = 'test-location';
@@ -61,6 +61,9 @@ describe('ResourceEntity', () => {
     expect(entity.data).toEqual({ test: 'data' });
     expect(entity.startDate).toBe('2024-01-01');
     expect(entity.endDate).toBe('2024-01-01');
+    
+    // ID should be auto-generated
+    expect(entity.id).toBeUndefined(); // Will be set by TypeORM
   });
 
   it('should have correct table name', () => {
@@ -95,6 +98,9 @@ describe('ResourceEntity', () => {
     });
     expect(entity.startDate).toBe('2024-01-01');
     expect(entity.endDate).toBe('2024-01-01');
+    
+    // ID should be auto-generated
+    expect(entity.id).toBeUndefined(); // Will be set by TypeORM
   });
 
   it('should handle data field with JSON content', () => {

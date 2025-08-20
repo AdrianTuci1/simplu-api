@@ -142,22 +142,39 @@ private applyFilters(data: ResourceRecord[], filters?: any): ResourceRecord[] {
 }
 ```
 
+**Interfața ResourceRecord:**
+```typescript
+export interface ResourceRecord {
+  id: number;                              // Auto-generated primary key
+  business_id: string;
+  location_id: string;
+  resource_type: string;
+  resource_id: string;                     // Identificatorul resursei pe business/
+  data: any;                               // JSON-ul complet al resursei
+  start_date: string;
+  end_date: string;
+  created_at: Date;
+  updated_at: Date;
+  shard_id?: string;
+}
+```
+
 ## Structura Bazei de Date
 
 ### Tabela `resources`
 ```sql
 CREATE TABLE resources (
+  id BIGSERIAL PRIMARY KEY,               -- Auto-increment primary key
   business_id VARCHAR(255) NOT NULL,
   location_id VARCHAR(255) NOT NULL,
   resource_type VARCHAR(100) NOT NULL,
-  resource_id VARCHAR(255) NOT NULL,
+  resource_id VARCHAR(255) NOT NULL,      -- Identificatorul resursei pe business/location
   data JSONB NOT NULL,                    -- JSON-ul complet al resursei
   start_date DATE NOT NULL,               -- Extras din data
   end_date DATE NOT NULL,                 -- Extras din data
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  shard_id VARCHAR(255),
-  PRIMARY KEY (business_id, location_id)
+  shard_id VARCHAR(255)
 );
 ```
 
@@ -195,6 +212,7 @@ curl "http://localhost:3000/api/resources/dental-clinic-location1/appointments/d
 
 1. **`test-simplified-api.js`** - Testează structura simplificată a API-ului
 2. **`test-data-field.js`** - Verifică că câmpul `data` este salvat corect
+3. **`test-table-creation.js`** - Verifică că tabela este creată cu câmpul `data`
 
 ### Rulare Teste
 ```bash
@@ -203,6 +221,9 @@ node app/scripts/test-simplified-api.js
 
 # Test data field
 node app/scripts/test-data-field.js
+
+# Test table creation
+node resources-server/scripts/test-table-creation.js
 ```
 
 ### Teste Incluse
@@ -292,6 +313,8 @@ const url = `/api/resources/${businessId}-${locationId}`;
 ### Fișiere Modificate în Resources-Server
 1. `resources-server/src/modules/resources/models/resource.entity.ts` - Adăugat câmpul `data`
 2. `resources-server/src/modules/resources/services/resource-data.service.ts` - Salvare câmpul `data`
+3. `resources-server/src/modules/resources/services/database.service.ts` - Scripturi de creare tabelă cu câmpul `data`
+4. `resources-server/src/modules/resources/models/resource.entity.spec.ts` - Teste actualizate pentru câmpul `data`
 
 ## Concluzie
 

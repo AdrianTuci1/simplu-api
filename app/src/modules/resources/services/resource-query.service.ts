@@ -4,10 +4,12 @@ import { CitrusShardingService } from '../../../config/citrus-sharding.config';
 import { BaseResource, ResourceType } from '../types/base-resource';
 
 export interface ResourceRecord {
+    id: number;
     business_id: string;
     location_id: string;
     resource_type: string;
     resource_id: string;
+    data: any;
     start_date: string;
     end_date: string;
     created_at: Date;

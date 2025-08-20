@@ -12,6 +12,7 @@ export interface DatabaseConnection {
 }
 
 export interface ResourceRecord {
+    id: number;
     business_id: string;
     location_id: string;
     resource_type: string;
@@ -85,6 +86,7 @@ export class DatabaseService {
     private async createRDSTables() {
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
+        id BIGSERIAL PRIMARY KEY,
         business_id VARCHAR(255) NOT NULL,
         location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
@@ -94,8 +96,7 @@ export class DatabaseService {
         end_date DATE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        shard_id VARCHAR(255),
-        PRIMARY KEY (business_id, location_id)
+        shard_id VARCHAR(255)
       );
 
       CREATE INDEX IF NOT EXISTS idx_resources_business_location 
@@ -167,6 +168,7 @@ export class DatabaseService {
     private async createCitrusTables(pool: Pool) {
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
+        id BIGSERIAL PRIMARY KEY,
         business_id VARCHAR(255) NOT NULL,
         location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
@@ -176,8 +178,7 @@ export class DatabaseService {
         end_date DATE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        shard_id VARCHAR(255),
-        PRIMARY KEY (business_id, location_id)
+        shard_id VARCHAR(255)
       );
 
       CREATE INDEX IF NOT EXISTS idx_resources_business_location 
@@ -220,7 +221,7 @@ export class DatabaseService {
             );
         }
 
-        const record: ResourceRecord = {
+        const record = {
             business_id: businessId,
             location_id: locationId,
             resource_type: resourceType,
@@ -238,13 +239,6 @@ export class DatabaseService {
         business_id, location_id, resource_type, resource_id, 
         data, start_date, end_date, created_at, updated_at, shard_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (business_id, location_id) DO UPDATE SET
-        resource_type = EXCLUDED.resource_type,
-        resource_id = EXCLUDED.resource_id,
-        data = EXCLUDED.data,
-        start_date = EXCLUDED.start_date,
-        end_date = EXCLUDED.end_date,
-        updated_at = EXCLUDED.updated_at
       RETURNING *;
     `;
 

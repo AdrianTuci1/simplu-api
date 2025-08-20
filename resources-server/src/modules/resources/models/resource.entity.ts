@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('resources')
 @Index(['businessId', 'locationId'])
@@ -9,10 +9,13 @@ import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Inde
 @Index(['businessId', 'locationId', 'resourceType', 'endDate'])
 @Index(['createdAt'])
 export class ResourceEntity {
-  @PrimaryColumn({ type: 'varchar', length: 255, name: 'business_id' })
+  @PrimaryGeneratedColumn({ type: 'bigint', name: 'id' })
+  id: number;
+
+  @Column({ type: 'varchar', length: 255, name: 'business_id' })
   businessId: string;
 
-  @PrimaryColumn({ type: 'varchar', length: 255, name: 'location_id' })
+  @Column({ type: 'varchar', length: 255, name: 'location_id' })
   locationId: string;
 
   @Column({ type: 'varchar', length: 100, name: 'resource_type' })
