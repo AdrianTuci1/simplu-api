@@ -10,8 +10,7 @@ interface ResourceOperationRequest {
   locationId: string;
   resourceType?: ResourceType;
   resourceId?: string;
-  startDate?: string;
-  endDate?: string;
+  data?: any; // The actual resource data
   userId?: string; // Add userId for permission checking
 }
 
@@ -52,8 +51,7 @@ export class ResourcesService {
         locationId: request.locationId,
         resourceType: request.resourceType,
         resourceId: request.resourceId,
-        startDate: request.startDate,
-        endDate: request.endDate,
+        data: request.data, // Include data in the operation - startDate and endDate will be extracted from this
         timestamp: new Date().toISOString(),
         requestId,
       };
@@ -86,25 +84,10 @@ export class ResourcesService {
       throw new BadRequestException(`Invalid resource type: ${request.resourceType}`);
     }
 
-    // Validate dates for create, update, and patch operations
+    // Validate data is provided for create, update, and patch operations
     if (['create', 'update', 'patch'].includes(request.operation)) {
-      if (!request.startDate) {
-        throw new BadRequestException('Start date is required for create, update, and patch operations');
-      }
-
-      // Validate date format (YYYY-MM-DD)
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(request.startDate)) {
-        throw new BadRequestException('Start date must be in YYYY-MM-DD format');
-      }
-
-      if (request.endDate && !dateRegex.test(request.endDate)) {
-        throw new BadRequestException('End date must be in YYYY-MM-DD format');
-      }
-
-      // Validate that end date is not before start date
-      if (request.endDate && new Date(request.endDate) < new Date(request.startDate)) {
-        throw new BadRequestException('End date cannot be before start date');
+      if (!request.data) {
+        throw new BadRequestException('Data is required for create, update, and patch operations');
       }
     }
   }

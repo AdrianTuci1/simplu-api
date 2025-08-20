@@ -4,15 +4,12 @@ Acest document conține exemple de POST request-uri pentru crearea diferitelor t
 
 ## Structura URL-ului
 ```
-POST /api/resources/{businessId}-{locationId}
-Headers: 
-  X-Resource-Type: {resourceType}
+POST /api/resources/{businessId}/{locationId}/{resourceType}
 ```
 
 ## Structura Request Body
 ```json
 {
-  "resourceType": "string",
   "data": {
     // Datele specifice resursei
   }
@@ -23,9 +20,7 @@ Headers:
 
 ### 1. Creare Client (Dental)
 ```bash
-http POST localhost:3000/api/resources/business123-location456 \
-  X-Resource-Type:clients \
-  resourceType="clients" \
+http POST localhost:3000/api/resources/business123/location456/clients \
   data:='{
     "name": "Ion Popescu",
     "email": "ion.popescu@email.com",
@@ -55,11 +50,7 @@ http POST localhost:3000/api/resources/business123-location456 \
 
 ### 2. Creare Staff/Angajat (Dental)
 ```bash
-http POST localhost:3000/resources/business123-location456 \
-  X-Business-ID:business123 \
-  X-Location-ID:location456 \
-  X-Resource-Type:staff \
-  resourceType="staff" \
+http POST localhost:3000/api/resources/business123/location456/staff \
   data:='{
     "name": "Maria Ionescu",
     "email": "maria.ionescu@business.com",
@@ -395,15 +386,15 @@ http POST localhost:3000/resources/business123-location456 \
   }'
 ```
 
-## Headers Obligatorii
+## Headers
 
-Pentru toate request-urile, asigură-te că incluzi toate header-urile obligatorii:
+Pentru toate request-urile, asigură-te că incluzi header-ul pentru Content-Type:
 
 ```bash
-X-Business-ID: {businessId}
-X-Location-ID: {locationId}
-X-Resource-Type: {resourceType}
+Content-Type: application/json
 ```
+
+**Notă:** `businessId`, `locationId` și `resourceType` sunt acum parte din URL, nu din headers.
 
 ## Structura Response
 
@@ -412,26 +403,20 @@ Toate request-urile returnează un răspuns în formatul:
 ```json
 {
   "success": true,
-  "message": "Resource created successfully",
-  "data": {
-    "id": "business123-location456-resourceId",
-    "businessType": "dental",
-    "resourceName": "clients",
-    "resourceId": "generated-resource-id",
-    "data": { /* datele resursei */ },
-    "date": "2024-01-15T10:30:00Z",
-    "lastUpdated": "2024-01-15T10:30:00Z"
-  },
+  "message": "create operation queued for processing",
+  "requestId": "uuid-v4-generated",
   "timestamp": "2024-01-15T10:30:00Z"
 }
 ```
 
+**Notă:** Operațiile de creare, actualizare, patch și ștergere sunt procesate asincron prin stream-ul Kinesis. Pentru a obține datele resursei, folosește endpoint-ul GET.
+
 ## Validări și Constrainte
 
-- `resourceType`: obligatoriu, trebuie să fie valid pentru business type
-- `operation`: opțional, default "create"
-- `data`: obligatoriu, obiect JSON cu datele specifice resursei
-- Headers: toate obligatorii și trebuie să se potrivească cu parametrii din URL
+- `resourceType`: obligatoriu în URL, trebuie să fie valid pentru business type
+- `data`: obligatoriu în body, obiect JSON cu datele specifice resursei
+- `startDate` și `endDate`: sunt extrase automat din `data` în backend
+- URL: trebuie să conțină `businessId`, `locationId` și `resourceType` valide
 
 ## Testare cu HTTPie
 
@@ -440,12 +425,7 @@ Toate request-urile returnează un răspuns în formatul:
 pip install httpie
 
 # Testare simplă
-http POST localhost:3000/resources/test-business-test-location \
-  X-Business-ID:test-business \
-  X-Location-ID:test-location \
-  X-Resource-Type:clients \
-  resourceType="clients" \
-  operation="create" \
+http POST localhost:3000/api/resources/test-business/test-location/clients \
   data:='{
     "name": "Test Client",
     "email": "test@example.com",

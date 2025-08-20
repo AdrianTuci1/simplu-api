@@ -8,6 +8,7 @@ export interface BaseResource {
   resourceName: string;
   resourceId: string; // data id
   data: ResourceDataType; // json - specific to business type and resource
-  date: string; // appointment, reservation, checkin, or emitted for rest
+  startDate: string; // appointment, reservation, checkin, or emitted for rest
+  endDate: string; // appointment, reservation, checkin, or emitted for rest
   lastUpdated: string;
 } 

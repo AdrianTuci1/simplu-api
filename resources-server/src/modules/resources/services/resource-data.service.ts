@@ -135,6 +135,7 @@ export class ResourceDataService {
         locationId,
         resourceType,
         resourceId,
+        data, // Salvează câmpul data cu JSON-ul complet
         startDate,
         endDate,
         shardId: shardId,
@@ -208,6 +209,7 @@ export class ResourceDataService {
       Object.assign(existingResource, {
         resourceType,
         resourceId,
+        data, // Salvează câmpul data cu JSON-ul complet
         startDate,
         endDate,
         shardId: shardId,
@@ -329,6 +331,7 @@ export class ResourceDataService {
       Object.assign(existingResource, {
         resourceType,
         resourceId,
+        data, // Salvează câmpul data cu JSON-ul complet
         startDate: finalStartDate,
         endDate: finalEndDate,
         shardId: shardId,

@@ -8,13 +8,7 @@ export interface ResourceOperation {
   locationId: string;
   resourceType?: string;
   resourceId?: string;
-  startDate?: string;
-  endDate?: string;
-  filters?: Record<string, unknown>;
-  pagination?: {
-    page: number;
-    limit: number;
-  };
+  data?: any; // The actual resource data
   timestamp: string;
   requestId: string;
 }

@@ -24,10 +24,9 @@ import { ResourcesService } from './resources.service';
 import { ResourceQueryService, ResourceQuery } from './services/resource-query.service';
 import { ResourceType } from './types/base-resource';
 
-interface ResourceRequest {
-  startDate?: string;
-  endDate?: string;
-  resourceId?: string;
+// Simplified request interface - just the data
+interface ResourceDataRequest {
+  data: Record<string, any>; // The actual resource data
 }
 
 interface StandardResponse {
@@ -55,7 +54,7 @@ export class ResourcesController {
   async createResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Body() resourceRequest: ResourceRequest,
+    @Body() resourceRequest: ResourceDataRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
@@ -63,9 +62,7 @@ export class ResourcesController {
       businessId,
       locationId,
       resourceType,
-      startDate: resourceRequest.startDate,
-      endDate: resourceRequest.endDate,
-      resourceId: resourceRequest.resourceId,
+      data: resourceRequest.data,
     });
   }
 
@@ -79,7 +76,7 @@ export class ResourcesController {
   async updateResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Body() resourceRequest: ResourceRequest,
+    @Body() resourceRequest: ResourceDataRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
@@ -87,9 +84,7 @@ export class ResourcesController {
       businessId,
       locationId,
       resourceType,
-      startDate: resourceRequest.startDate,
-      endDate: resourceRequest.endDate,
-      resourceId: resourceRequest.resourceId,
+      data: resourceRequest.data,
     });
   }
 
@@ -103,7 +98,7 @@ export class ResourcesController {
   async patchResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Body() resourceRequest: ResourceRequest,
+    @Body() resourceRequest: ResourceDataRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
@@ -111,9 +106,7 @@ export class ResourcesController {
       businessId,
       locationId,
       resourceType,
-      startDate: resourceRequest.startDate,
-      endDate: resourceRequest.endDate,
-      resourceId: resourceRequest.resourceId,
+      data: resourceRequest.data,
     });
   }
 
@@ -136,18 +129,24 @@ export class ResourcesController {
 
   // GET endpoints - read directly from database (RDS or Citrus)
 
-  @Get(':businessId-:locationId')
-  @ApiOperation({ summary: 'Get resource by business and location - reads from database' })
+  @Get(':businessId-:locationId/:resourceType/:resourceId')
+  @ApiOperation({ summary: 'Get specific resource by ID - reads from database' })
   @ApiResponse({ status: 200, description: 'Resource retrieved successfully' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
   async getResourceById(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: ResourceType,
+    @Param('resourceId') resourceId: string,
   ) {
     const resource = await this.resourceQueryService.getResourceById(
       businessId,
       locationId,
+      resourceType,
+      resourceId,
     );
 
     if (!resource) {
@@ -157,6 +156,8 @@ export class ResourcesController {
         meta: {
           businessId,
           locationId,
+          resourceType,
+          resourceId,
           timestamp: new Date().toISOString(),
           operation: 'read',
         },
@@ -169,6 +170,8 @@ export class ResourcesController {
       meta: {
         businessId,
         locationId,
+        resourceType,
+        resourceId,
         timestamp: new Date().toISOString(),
         operation: 'read',
       },

@@ -9,28 +9,25 @@ AWS.config.update({
 
 const kinesis = new AWS.Kinesis();
 
-async function testKinesisMessage() {
+async function testSimpleMessage() {
   const streamName = process.env.KINESIS_STREAM_NAME || 'resources-stream';
   
-  // Test message with all required fields
+  // Simple test message
   const testMessage = {
     operation: 'create',
     resourceType: 'appointments',
     businessId: 'b1',
     locationId: 'loc1',
-    resourceId: 'ap24-00001',
     data: {
       clientName: 'Test Client',
-      appointmentDate: '2024-01-15',
-      startTime: '10:00',
-      endTime: '11:00'
+      appointmentDate: '2024-01-15'
     },
     timestamp: new Date().toISOString(),
-    requestId: 'test-request-123'
+    requestId: 'test-123'
   };
 
   try {
-    console.log('Sending test message to Kinesis...');
+    console.log('📤 Sending test message...');
     console.log('Message:', JSON.stringify(testMessage, null, 2));
     
     const params = {
@@ -45,9 +42,9 @@ async function testKinesisMessage() {
     console.log('Shard ID:', result.ShardId);
     
   } catch (error) {
-    console.error('❌ Error sending message:', error);
+    console.error('❌ Error sending message:', error.message);
   }
 }
 
 // Run the test
-testKinesisMessage();
+testSimpleMessage();

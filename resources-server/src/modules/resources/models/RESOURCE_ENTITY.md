@@ -8,17 +8,16 @@
 
 ```sql
 CREATE TABLE resources (
-  id VARCHAR(255) PRIMARY KEY,
   business_id VARCHAR(255) NOT NULL,
   location_id VARCHAR(255) NOT NULL,
   resource_type VARCHAR(100) NOT NULL,
   resource_id VARCHAR(255) NOT NULL,
-  data JSONB NOT NULL,
-  date DATE NOT NULL,
-  operation VARCHAR(50) NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  shard_id VARCHAR(255)
+  shard_id VARCHAR(255),
+  PRIMARY KEY (business_id, location_id)
 );
 ```
 
@@ -26,17 +25,31 @@ CREATE TABLE resources (
 
 | Câmp | Tip | Descriere |
 |------|-----|-----------|
-| `id` | `VARCHAR(255)` | Cheia primară - ID-ul unic al resursei |
-| `businessId` | `VARCHAR(255)` | ID-ul business-ului |
-| `locationId` | `VARCHAR(255)` | ID-ul locației |
+| `businessId` | `VARCHAR(255)` | Partea din cheia primară compusă - ID-ul business-ului |
+| `locationId` | `VARCHAR(255)` | Partea din cheia primară compusă - ID-ul locației |
 | `resourceType` | `VARCHAR(100)` | Tipul resursei (ex: 'clients', 'appointments', etc.) |
-| `resourceId` | `VARCHAR(255)` | ID-ul specific al resursei |
-| `data` | `JSONB` | Datele resursei în format JSON |
-| `date` | `DATE` | Data de business pentru indexare |
-| `operation` | `VARCHAR(50)` | Operația efectuată ('create', 'update', 'patch', 'delete') |
+| `resourceId` | `VARCHAR(255)` | ID-ul specific al resursei (format: {typePrefix}{year}{month}-{sequence}) |
+| `startDate` | `DATE` | Data de început pentru resursă |
+| `endDate` | `DATE` | Data de sfârșit pentru resursă |
 | `createdAt` | `TIMESTAMP` | Data și ora creării |
 | `updatedAt` | `TIMESTAMP` | Data și ora ultimei actualizări |
 | `shardId` | `VARCHAR(255)` | ID-ul shard-ului (pentru Citrus sharding) |
+
+## Cheia Primară Compusă
+
+Tabela folosește o cheie primară compusă formată din `businessId` și `locationId`. Aceasta permite:
+- Unicitatea pe nivel de business și locație
+- Query-uri optimizate pentru multi-tenancy
+- Structură simplificată fără ID-uri artificiale
+
+## Generarea ID-urilor Resurselor
+
+ID-urile resurselor urmează pattern-ul: `{primele 2 litere din resource type}{ultimele 2 cifre ale anului}{luna}-{5 cifre unice}`
+
+### Exemple:
+- **Appointments** în Ianuarie 2024: `ap24-00001`, `ap24-00002`
+- **Invoices** în Decembrie 2024: `in24-00001`, `in24-00002`
+- **Clients** în Martie 2024: `cl24-00001`, `cl24-00002`
 
 ## Indexuri
 
@@ -44,8 +57,10 @@ Modelul include următoarele indexuri pentru optimizarea performanței:
 
 - `idx_resources_business_location` - pe `business_id` și `location_id`
 - `idx_resources_type` - pe `resource_type`
-- `idx_resources_date` - pe `date`
-- `idx_resources_business_type_date` - pe `business_id`, `location_id`, `resource_type`, `date`
+- `idx_resources_start_date` - pe `start_date`
+- `idx_resources_end_date` - pe `end_date`
+- `idx_resources_business_type_start_date` - pe `business_id`, `location_id`, `resource_type`, `start_date`
+- `idx_resources_business_type_end_date` - pe `business_id`, `location_id`, `resource_type`, `end_date`
 - `idx_resources_created_at` - pe `created_at`
 
 ## Utilizare
@@ -58,30 +73,55 @@ private readonly resourceRepository: Repository<ResourceEntity>;
 
 // Creare
 const resourceEntity = this.resourceRepository.create({
-  id: resourceId,
   businessId,
   locationId,
   resourceType,
-  resourceId,
-  data: resourceData,
-  date: businessDate,
-  operation: 'create',
+  resourceId: 'ap24-00001', // Auto-generat de ResourceIdService
+  startDate: '2024-01-15',
+  endDate: '2024-01-15',
   shardId,
 });
 const savedResource = await this.resourceRepository.save(resourceEntity);
 
 // Actualizare
 const existingResource = await this.resourceRepository.findOne({
-  where: { id: resourceId }
+  where: { businessId, locationId }
 });
-Object.assign(existingResource, { data: newData, operation: 'update' });
+Object.assign(existingResource, { 
+  resourceType: 'appointments',
+  resourceId: 'ap24-00002',
+  startDate: '2024-01-20',
+  endDate: '2024-01-20'
+});
 await this.resourceRepository.save(existingResource);
 
 // Ștergere
 const resource = await this.resourceRepository.findOne({
-  where: { id: resourceId }
+  where: { businessId, locationId }
 });
 await this.resourceRepository.remove(resource);
+```
+
+### Query-uri Optimizate
+
+```typescript
+// Query pe interval de date
+const resources = await this.resourceRepository.find({
+  where: {
+    businessId,
+    locationId,
+    resourceType: 'appointments',
+    startDate: MoreThanOrEqual('2024-01-01'),
+    endDate: LessThanOrEqual('2024-01-31')
+  },
+  order: { startDate: 'ASC' }
+});
+
+// Query pe tip de resursă
+const appointments = await this.resourceRepository.find({
+  where: { businessId, locationId, resourceType: 'appointments' },
+  order: { createdAt: 'DESC' }
+});
 ```
 
 ## Configurație TypeORM
@@ -98,28 +138,31 @@ TypeOrmModule.forRootAsync({
     username: rdsConfig.username,
     password: rdsConfig.password,
     database: rdsConfig.database,
-    ssl: rdsConfig.ssl ? { rejectUnauthorized: false } : false,
-    entities: [__dirname + '/**/*.entity{.ts,.js}'],
-    synchronize: false,
-    logging: true,
+    entities: [ResourceEntity],
+    synchronize: false, // Disabled in production
+    logging: configService.get('NODE_ENV') === 'development',
   }),
   inject: [ConfigService],
-})
+}),
 ```
 
-## Avantaje
+## Migrarea de la Structura Veche
 
-1. **Type Safety** - TypeORM oferă verificare de tipuri la compile time
-2. **Query Builder** - Interfață fluentă pentru construirea query-urilor
-3. **Relationships** - Suport pentru relații între entități
-4. **Migrations** - Suport pentru migrații de bază de date
-5. **Validation** - Validare automată a datelor
-6. **Performance** - Optimizări și caching integrat
+Pentru migrarea de la structura veche cu `id`, `data`, `date`, și `operation`, folosește scriptul de migrare:
 
-## Compatibilitate
+```bash
+npm run migrate:resources
+```
 
-Modelul este compatibil cu:
-- PostgreSQL (RDS)
-- Citrus Sharding (prin configurație dinamică)
-- NestJS TypeORM Module
-- JSONB pentru date flexibile
+Acest script va:
+1. Crea o backup a datelor existente
+2. Crea noua structură de tabel
+3. Migra datele în formatul nou
+4. Actualiza indexurile
+
+## Beneficii ale Noii Structuri
+
+1. **Performanță**: Cheia primară compusă permite query-uri mai rapide
+2. **Scalabilitate**: ID-urile predictibile și organizarea temporală
+3. **Mentenabilitate**: Structură simplificată și tipizată
+4. **Query-uri optimizate**: Suport nativ pentru intervale de date

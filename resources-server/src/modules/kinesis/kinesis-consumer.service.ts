@@ -234,6 +234,11 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       const data = JSON.parse(Buffer.from(record.Data).toString('utf-8'));
       const message: KinesisResourceMessage = data;
       
+      // Validate required fields
+      if (!message.businessId || !message.locationId || !message.resourceType || !message.operation) {
+        throw new Error(`Invalid message format: missing required fields. Message: ${JSON.stringify(message)}`);
+      }
+      
       this.logger.log(`Processing ${message.operation} operation for ${message.resourceType}`);
       this.logger.log(`Business: ${message.businessId}, Location: ${message.locationId}, RequestId: ${message.requestId}`);
       

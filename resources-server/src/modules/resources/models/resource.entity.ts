@@ -9,10 +9,10 @@ import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Inde
 @Index(['businessId', 'locationId', 'resourceType', 'endDate'])
 @Index(['createdAt'])
 export class ResourceEntity {
-  @PrimaryColumn({ type: 'varchar', length: 255 })
+  @PrimaryColumn({ type: 'varchar', length: 255, name: 'business_id' })
   businessId: string;
 
-  @PrimaryColumn({ type: 'varchar', length: 255 })
+  @PrimaryColumn({ type: 'varchar', length: 255, name: 'location_id' })
   locationId: string;
 
   @Column({ type: 'varchar', length: 100, name: 'resource_type' })
@@ -20,6 +20,9 @@ export class ResourceEntity {
 
   @Column({ type: 'varchar', length: 255, name: 'resource_id' })
   resourceId: string;
+
+  @Column({ type: 'jsonb', name: 'data' })
+  data: Record<string, any>;
 
   @Column({ type: 'date', name: 'start_date' })
   startDate: string;

@@ -16,6 +16,7 @@ export interface ResourceRecord {
     location_id: string;
     resource_type: string;
     resource_id: string;
+    data: any;
     start_date: string;
     end_date: string;
     created_at: Date;
@@ -88,6 +89,7 @@ export class DatabaseService {
         location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
         resource_id VARCHAR(255) NOT NULL,
+        data JSONB NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -169,6 +171,7 @@ export class DatabaseService {
         location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
         resource_id VARCHAR(255) NOT NULL,
+        data JSONB NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -200,6 +203,7 @@ export class DatabaseService {
         businessId: string,
         locationId: string,
         resourceType: string,
+        data: any,
         startDate: string,
         endDate: string,
         resourceId?: string,
@@ -221,6 +225,7 @@ export class DatabaseService {
             location_id: locationId,
             resource_type: resourceType,
             resource_id: resourceId,
+            data: data,
             start_date: startDate,
             end_date: endDate,
             created_at: new Date(),
@@ -231,11 +236,12 @@ export class DatabaseService {
         const query = `
       INSERT INTO resources (
         business_id, location_id, resource_type, resource_id, 
-        start_date, end_date, created_at, updated_at, shard_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        data, start_date, end_date, created_at, updated_at, shard_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (business_id, location_id) DO UPDATE SET
         resource_type = EXCLUDED.resource_type,
         resource_id = EXCLUDED.resource_id,
+        data = EXCLUDED.data,
         start_date = EXCLUDED.start_date,
         end_date = EXCLUDED.end_date,
         updated_at = EXCLUDED.updated_at
@@ -247,6 +253,7 @@ export class DatabaseService {
             record.location_id,
             record.resource_type,
             record.resource_id,
+            record.data,
             record.start_date,
             record.end_date,
             record.created_at,

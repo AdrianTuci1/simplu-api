@@ -168,30 +168,32 @@ export class ResourceQueryService {
     }
 
     /**
-     * Get a single resource by business and location
+     * Get a single resource by business, location, resource type and resource ID
      */
     async getResourceById(
         businessId: string,
         locationId: string,
+        resourceType: string,
+        resourceId: string,
     ): Promise<BaseResource | null> {
         try {
             let resource: ResourceRecord | null;
 
             if (this.shouldUseCitrusForRead()) {
-                resource = await this.getResourceFromCitrus(businessId, locationId);
+                resource = await this.getResourceFromCitrus(businessId, locationId, resourceType, resourceId);
             } else {
-                resource = await this.getResourceFromRDS(businessId, locationId);
+                resource = await this.getResourceFromRDS(businessId, locationId, resourceType, resourceId);
             }
 
             if (resource) {
-                this.logger.log(`Found resource for ${businessId}/${locationId}`);
+                this.logger.log(`Found resource ${resourceId} of type ${resourceType} for ${businessId}/${locationId}`);
                 return this.convertToBaseResource(resource);
             } else {
-                this.logger.log(`Resource not found for ${businessId}/${locationId}`);
+                this.logger.log(`Resource ${resourceId} of type ${resourceType} not found for ${businessId}/${locationId}`);
                 return null;
             }
         } catch (error) {
-            this.logger.error(`Error getting resource for ${businessId}/${locationId}:`, error);
+            this.logger.error(`Error getting resource ${resourceId} of type ${resourceType} for ${businessId}/${locationId}:`, error);
             throw error;
         }
     }
@@ -362,11 +364,14 @@ export class ResourceQueryService {
     private async getResourceFromCitrus(
         businessId: string,
         locationId: string,
+        resourceType: string,
+        resourceId: string,
     ): Promise<ResourceRecord | null> {
         try {
             const shard = await this.citrusService.getShardForBusiness(businessId, locationId);
 
             // TODO: Implement actual database query using shard connection
+            // Query should filter by businessId, locationId, resourceType, and resourceId
 
             return null;
         } catch (error) {
@@ -433,9 +438,12 @@ export class ResourceQueryService {
     private async getResourceFromRDS(
         businessId: string,
         locationId: string,
+        resourceType: string,
+        resourceId: string,
     ): Promise<ResourceRecord | null> {
         try {
             // TODO: Implement RDS query using TypeORM or raw SQL
+            // Query should filter by businessId, locationId, resourceType, and resourceId
 
             return null;
         } catch (error) {
