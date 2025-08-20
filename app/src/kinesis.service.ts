@@ -6,9 +6,10 @@ export interface ResourceOperation {
   operation: 'create' | 'update' | 'patch' | 'delete' | 'read' | 'list';
   businessId: string;
   locationId: string;
-  resourceType: string;
+  resourceType?: string;
   resourceId?: string;
-  data?: unknown;
+  startDate?: string;
+  endDate?: string;
   filters?: Record<string, unknown>;
   pagination?: {
     page: number;
@@ -64,7 +65,9 @@ export class KinesisService {
 
   async sendResourceOperation(operation: ResourceOperation): Promise<void> {
     try {
-      const partitionKey = `${operation.businessId}-${operation.locationId}-${operation.resourceType}`;
+      const partitionKey = operation.resourceType 
+        ? `${operation.businessId}-${operation.locationId}-${operation.resourceType}`
+        : `${operation.businessId}-${operation.locationId}`;
 
       const command = new PutRecordCommand({
         StreamName: this.streamName,
@@ -75,7 +78,7 @@ export class KinesisService {
       const result = await this.kinesisClient.send(command);
 
       this.logger.log(
-        `Resource operation sent to Kinesis: ${operation.operation} for ${operation.resourceType} ` +
+        `Resource operation sent to Kinesis: ${operation.operation} for ${operation.resourceType || 'business-location'} ` +
           `(Business: ${operation.businessId}, Location: ${operation.locationId}) - ` +
           `Sequence: ${result.SequenceNumber}`,
       );
@@ -100,6 +103,7 @@ export class KinesisService {
     const promises = operations.map((operation) =>
       this.sendResourceOperation(operation),
     );
+
     await Promise.all(promises);
   }
 }

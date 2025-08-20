@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
 import { DatabaseService } from './database.service';
+import { ResourceIdService } from './resource-id.service';
 import { NotificationService } from '../../notification/notification.service';
 import { ResourceEntity } from '../models/resource.entity';
 
@@ -15,35 +16,68 @@ export class ResourceDataService {
     @InjectRepository(ResourceEntity)
     private readonly resourceRepository: Repository<ResourceEntity>,
     private readonly databaseService: DatabaseService,
+    private readonly resourceIdService: ResourceIdService,
     private readonly notificationService: NotificationService,
     private readonly configService: ConfigService,
   ) { }
 
   /**
-   * Extract business date from resource data for indexing
+   * Extract start and end dates from resource data
    */
-  private extractBusinessDate(data: any, resourceType: string): string {
+  private extractDates(data: any, resourceType: string): { startDate: string; endDate: string } {
     // Try common date fields based on resource type and data structure
-    const dateFields = [
-      'date',
-      'appointmentDate', 
+    const startDateFields = [
       'startDate',
+      'appointmentDate', 
       'reservationDate',
       'checkInDate',
       'eventDate',
-      'scheduledDate'
+      'scheduledDate',
+      'date'
     ];
 
-    for (const field of dateFields) {
+    const endDateFields = [
+      'endDate',
+      'checkOutDate',
+      'endDate',
+      'finishDate',
+      'dueDate'
+    ];
+
+    let startDate = '';
+    let endDate = '';
+
+    // Find start date
+    for (const field of startDateFields) {
       if (data[field]) {
-        // Ensure it's in YYYY-MM-DD format
         const date = new Date(data[field]);
-        return date.toISOString().split('T')[0];
+        startDate = date.toISOString().split('T')[0];
+        break;
       }
     }
 
-    // Fallback to current date if no business date found
-    return new Date().toISOString().split('T')[0];
+    // Find end date
+    for (const field of endDateFields) {
+      if (data[field]) {
+        const date = new Date(data[field]);
+        endDate = date.toISOString().split('T')[0];
+        break;
+      }
+    }
+
+    // If no end date found, use start date as end date
+    if (!endDate && startDate) {
+      endDate = startDate;
+    }
+
+    // Fallback to current date if no dates found
+    if (!startDate) {
+      const today = new Date().toISOString().split('T')[0];
+      startDate = today;
+      endDate = today;
+    }
+
+    return { startDate, endDate };
   }
 
   /**
@@ -53,10 +87,8 @@ export class ResourceDataService {
     const dbType = this.configService.get<string>('database.type');
     
     if (dbType === 'rds') {
-      // For RDS, we don't need a shard - the primary key is businessId-locationId-resourceId
       return { shardId: null, isRDS: true };
     } else {
-      // For Citrus, get the shard from the sharding service
       try {
         const shardConnection = await citrusShardingService.getShardForBusiness(businessId, locationId);
         return { shardId: shardConnection.shardId, isRDS: false };
@@ -85,22 +117,26 @@ export class ResourceDataService {
         this.logger.log(`Using shard ${shardId} for creating ${resourceType}`);
       }
 
-      // Generate resource ID
-      const resourceId = `${resourceType}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      // Extract dates from data
+      const { startDate, endDate } = this.extractDates(data, resourceType);
 
-      // Extract business date for indexing
-      const businessDate = this.extractBusinessDate(data, resourceType);
+      // Generate resource ID using the new service
+      const connection = await this.databaseService.getConnection(businessId, locationId);
+      const resourceId = await this.resourceIdService.generateResourceId(
+        businessId,
+        locationId,
+        resourceType,
+        connection.pool
+      );
 
       // Create resource entity
       const resourceEntity = this.resourceRepository.create({
-        id: resourceId,
         businessId,
         locationId,
         resourceType,
         resourceId,
-        data: data,
-        date: businessDate,
-        operation: 'create',
+        startDate,
+        endDate,
         shardId: shardId,
       });
 
@@ -111,6 +147,8 @@ export class ResourceDataService {
       const resourceData = {
         id: resourceId,
         ...data,
+        startDate,
+        endDate,
         createdAt: savedResource.createdAt.toISOString(),
         businessId,
         locationId,
@@ -154,23 +192,24 @@ export class ResourceDataService {
         this.logger.log(`Using shard ${shardId} for updating ${resourceType}`);
       }
 
-      // Extract business date for indexing
-      const businessDate = this.extractBusinessDate(data, resourceType);
+      // Extract dates from data
+      const { startDate, endDate } = this.extractDates(data, resourceType);
 
       // Find existing resource
       const existingResource = await this.resourceRepository.findOne({
-        where: { id: resourceId }
+        where: { businessId, locationId }
       });
 
       if (!existingResource) {
-        throw new Error(`Resource with ID ${resourceId} not found`);
+        throw new Error(`Resource for business ${businessId} location ${locationId} not found`);
       }
 
       // Update resource entity
       Object.assign(existingResource, {
-        data: data,
-        date: businessDate,
-        operation: 'update',
+        resourceType,
+        resourceId,
+        startDate,
+        endDate,
         shardId: shardId,
       });
 
@@ -181,6 +220,8 @@ export class ResourceDataService {
       const resourceData = {
         id: resourceId,
         ...data,
+        startDate,
+        endDate,
         updatedAt: savedResource.updatedAt.toISOString(),
         businessId,
         locationId,
@@ -225,11 +266,11 @@ export class ResourceDataService {
 
       // Find and delete using TypeORM repository
       const existingResource = await this.resourceRepository.findOne({
-        where: { id: resourceId }
+        where: { businessId, locationId }
       });
 
       if (!existingResource) {
-        throw new Error(`Resource with ID ${resourceId} not found`);
+        throw new Error(`Resource for business ${businessId} location ${locationId} not found`);
       }
 
       await this.resourceRepository.remove(existingResource);
@@ -272,27 +313,24 @@ export class ResourceDataService {
 
       // Find existing resource using TypeORM repository
       const existingResource = await this.resourceRepository.findOne({
-        where: { id: resourceId }
+        where: { businessId, locationId }
       });
 
       if (!existingResource) {
-        throw new Error(`Resource with ID ${resourceId} not found`);
+        throw new Error(`Resource for business ${businessId} location ${locationId} not found`);
       }
 
-      // Merge existing data with patch data
-      const mergedData = {
-        ...existingResource.data,
-        ...data,
-      };
-
-      // Extract business date for indexing (use existing date if patching)
-      const businessDate = this.extractBusinessDate(data, resourceType) || existingResource.date;
+      // Extract dates from data (use existing dates if not provided)
+      const { startDate, endDate } = this.extractDates(data, resourceType);
+      const finalStartDate = startDate || existingResource.startDate;
+      const finalEndDate = endDate || existingResource.endDate;
 
       // Update resource entity
       Object.assign(existingResource, {
-        data: mergedData,
-        date: businessDate,
-        operation: 'patch',
+        resourceType,
+        resourceId,
+        startDate: finalStartDate,
+        endDate: finalEndDate,
         shardId: shardId,
       });
 
@@ -302,7 +340,9 @@ export class ResourceDataService {
       // Prepare response data
       const resourceData = {
         id: resourceId,
-        ...mergedData,
+        ...data,
+        startDate: finalStartDate,
+        endDate: finalEndDate,
         updatedAt: savedResource.updatedAt.toISOString(),
         businessId,
         locationId,

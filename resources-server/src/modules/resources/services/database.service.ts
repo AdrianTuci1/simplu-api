@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { citrusShardingService } from '../../../config/citrus-sharding.config';
+import { ResourceIdService } from './resource-id.service';
 
 export interface DatabaseConnection {
     type: 'citrus' | 'rds';
@@ -11,14 +12,12 @@ export interface DatabaseConnection {
 }
 
 export interface ResourceRecord {
-    id: string;
     business_id: string;
     location_id: string;
     resource_type: string;
     resource_id: string;
-    data: any;
-    date: string; // business date for indexing (appointment, reservation, etc.)
-    operation: string;
+    start_date: string;
+    end_date: string;
     created_at: Date;
     updated_at: Date;
     shard_id?: string;
@@ -30,7 +29,10 @@ export class DatabaseService {
     private rdsPool: Pool;
     private citrusConnections: Map<string, Pool> = new Map();
 
-    constructor(private readonly configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly resourceIdService: ResourceIdService,
+    ) {
         this.initializeConnections();
     }
 
@@ -82,27 +84,30 @@ export class DatabaseService {
     private async createRDSTables() {
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
-        id VARCHAR(255) PRIMARY KEY,
         business_id VARCHAR(255) NOT NULL,
         location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
         resource_id VARCHAR(255) NOT NULL,
-        data JSONB NOT NULL,
-        date DATE NOT NULL,
-        operation VARCHAR(50) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        shard_id VARCHAR(255)
+        shard_id VARCHAR(255),
+        PRIMARY KEY (business_id, location_id)
       );
 
       CREATE INDEX IF NOT EXISTS idx_resources_business_location 
         ON resources(business_id, location_id);
       CREATE INDEX IF NOT EXISTS idx_resources_type 
         ON resources(resource_type);
-      CREATE INDEX IF NOT EXISTS idx_resources_date 
-        ON resources(date);
-      CREATE INDEX IF NOT EXISTS idx_resources_business_type_date 
-        ON resources(business_id, location_id, resource_type, date);
+      CREATE INDEX IF NOT EXISTS idx_resources_start_date 
+        ON resources(start_date);
+      CREATE INDEX IF NOT EXISTS idx_resources_end_date 
+        ON resources(end_date);
+      CREATE INDEX IF NOT EXISTS idx_resources_business_type_start_date 
+        ON resources(business_id, location_id, resource_type, start_date);
+      CREATE INDEX IF NOT EXISTS idx_resources_business_type_end_date 
+        ON resources(business_id, location_id, resource_type, end_date);
       CREATE INDEX IF NOT EXISTS idx_resources_created_at 
         ON resources(created_at);
     `;
@@ -160,27 +165,30 @@ export class DatabaseService {
     private async createCitrusTables(pool: Pool) {
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
-        id VARCHAR(255) PRIMARY KEY,
         business_id VARCHAR(255) NOT NULL,
         location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
         resource_id VARCHAR(255) NOT NULL,
-        data JSONB NOT NULL,
-        date DATE NOT NULL,
-        operation VARCHAR(50) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        shard_id VARCHAR(255)
+        shard_id VARCHAR(255),
+        PRIMARY KEY (business_id, location_id)
       );
 
       CREATE INDEX IF NOT EXISTS idx_resources_business_location 
         ON resources(business_id, location_id);
       CREATE INDEX IF NOT EXISTS idx_resources_type 
         ON resources(resource_type);
-      CREATE INDEX IF NOT EXISTS idx_resources_date 
-        ON resources(date);
-      CREATE INDEX IF NOT EXISTS idx_resources_business_type_date 
-        ON resources(business_id, location_id, resource_type, date);
+      CREATE INDEX IF NOT EXISTS idx_resources_start_date 
+        ON resources(start_date);
+      CREATE INDEX IF NOT EXISTS idx_resources_end_date 
+        ON resources(end_date);
+      CREATE INDEX IF NOT EXISTS idx_resources_business_type_start_date 
+        ON resources(business_id, location_id, resource_type, start_date);
+      CREATE INDEX IF NOT EXISTS idx_resources_business_type_end_date 
+        ON resources(business_id, location_id, resource_type, end_date);
       CREATE INDEX IF NOT EXISTS idx_resources_created_at 
         ON resources(created_at);
     `;
@@ -192,22 +200,29 @@ export class DatabaseService {
         businessId: string,
         locationId: string,
         resourceType: string,
-        resourceId: string,
-        data: any,
-        operation: string,
-        date: string,
+        startDate: string,
+        endDate: string,
+        resourceId?: string,
     ): Promise<ResourceRecord> {
         const connection = await this.getConnection(businessId, locationId);
 
+        // Generate resource ID if not provided
+        if (!resourceId) {
+            resourceId = await this.resourceIdService.generateResourceId(
+                businessId,
+                locationId,
+                resourceType,
+                connection.pool
+            );
+        }
+
         const record: ResourceRecord = {
-            id: `${businessId}-${locationId}-${resourceId}`,
             business_id: businessId,
             location_id: locationId,
             resource_type: resourceType,
             resource_id: resourceId,
-            data: data,
-            date: date,
-            operation: operation,
+            start_date: startDate,
+            end_date: endDate,
             created_at: new Date(),
             updated_at: new Date(),
             shard_id: connection.shardId,
@@ -215,26 +230,25 @@ export class DatabaseService {
 
         const query = `
       INSERT INTO resources (
-        id, business_id, location_id, resource_type, resource_id, 
-        data, date, operation, created_at, updated_at, shard_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (id) DO UPDATE SET
-        data = EXCLUDED.data,
-        date = EXCLUDED.date,
-        operation = EXCLUDED.operation,
+        business_id, location_id, resource_type, resource_id, 
+        start_date, end_date, created_at, updated_at, shard_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (business_id, location_id) DO UPDATE SET
+        resource_type = EXCLUDED.resource_type,
+        resource_id = EXCLUDED.resource_id,
+        start_date = EXCLUDED.start_date,
+        end_date = EXCLUDED.end_date,
         updated_at = EXCLUDED.updated_at
       RETURNING *;
     `;
 
         const values = [
-            record.id,
             record.business_id,
             record.location_id,
             record.resource_type,
             record.resource_id,
-            JSON.stringify(record.data),
-            record.date,
-            record.operation,
+            record.start_date,
+            record.end_date,
             record.created_at,
             record.updated_at,
             record.shard_id,
@@ -249,30 +263,26 @@ export class DatabaseService {
     async deleteResource(
         businessId: string,
         locationId: string,
-        resourceId: string,
     ): Promise<boolean> {
         const connection = await this.getConnection(businessId, locationId);
 
-        const query = 'DELETE FROM resources WHERE id = $1';
-        const recordId = `${businessId}-${locationId}-${resourceId}`;
+        const query = 'DELETE FROM resources WHERE business_id = $1 AND location_id = $2';
 
-        const result = await connection.pool.query(query, [recordId]);
+        const result = await connection.pool.query(query, [businessId, locationId]);
 
-        this.logger.log(`✅ Deleted resource ${resourceId} from ${connection.type} database${connection.shardId ? ` (shard: ${connection.shardId})` : ''}`);
+        this.logger.log(`✅ Deleted resource for ${businessId}/${locationId} from ${connection.type} database${connection.shardId ? ` (shard: ${connection.shardId})` : ''}`);
         return result.rowCount > 0;
     }
 
     async getResource(
         businessId: string,
         locationId: string,
-        resourceId: string,
     ): Promise<ResourceRecord | null> {
         const connection = await this.getConnection(businessId, locationId);
 
-        const query = 'SELECT * FROM resources WHERE id = $1';
-        const recordId = `${businessId}-${locationId}-${resourceId}`;
+        const query = 'SELECT * FROM resources WHERE business_id = $1 AND location_id = $2';
 
-        const result = await connection.pool.query(query, [recordId]);
+        const result = await connection.pool.query(query, [businessId, locationId]);
 
         return result.rows[0] || null;
     }
@@ -292,10 +302,10 @@ export class DatabaseService {
         if (resourceType) {
             query += ' AND resource_type = $3';
             values.push(resourceType);
-            query += ' ORDER BY date DESC, created_at DESC LIMIT $4 OFFSET $5';
+            query += ' ORDER BY start_date DESC, created_at DESC LIMIT $4 OFFSET $5';
             values.push(limit.toString(), offset.toString());
         } else {
-            query += ' ORDER BY date DESC, created_at DESC LIMIT $3 OFFSET $4';
+            query += ' ORDER BY start_date DESC, created_at DESC LIMIT $3 OFFSET $4';
             values.push(limit.toString(), offset.toString());
         }
 
@@ -327,17 +337,17 @@ export class DatabaseService {
 
         if (startDate) {
             paramCount++;
-            query += ` AND date >= $${paramCount}`;
+            query += ` AND start_date >= $${paramCount}`;
             values.push(startDate);
         }
 
         if (endDate) {
             paramCount++;
-            query += ` AND date <= $${paramCount}`;
+            query += ` AND end_date <= $${paramCount}`;
             values.push(endDate);
         }
 
-        query += ` ORDER BY date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
         values.push(limit.toString(), offset.toString());
 
         const result = await connection.pool.query(query, values);

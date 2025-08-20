@@ -8,9 +8,10 @@ interface ResourceOperationRequest {
   operation: ResourceAction;
   businessId: string;
   locationId: string;
-  resourceType: ResourceType;
+  resourceType?: ResourceType;
   resourceId?: string;
-  data?: any;
+  startDate?: string;
+  endDate?: string;
   userId?: string; // Add userId for permission checking
 }
 
@@ -28,8 +29,6 @@ export class ResourcesService {
     private readonly permissionService: PermissionService,
   ) { }
 
-
-
   async processResourceOperation(request: ResourceOperationRequest): Promise<StandardResponse> {
     const requestId = uuidv4();
 
@@ -38,7 +37,7 @@ export class ResourcesService {
       this.validateRequest(request);
 
       // Check user permissions
-      if (request.userId) {
+      if (request.userId && request.resourceType) {
         await this.permissionService.checkPermissionLegacy(
           request.userId,
           request.resourceType,
@@ -53,7 +52,8 @@ export class ResourcesService {
         locationId: request.locationId,
         resourceType: request.resourceType,
         resourceId: request.resourceId,
-        data: request.data,
+        startDate: request.startDate,
+        endDate: request.endDate,
         timestamp: new Date().toISOString(),
         requestId,
       };
@@ -77,18 +77,35 @@ export class ResourcesService {
       throw new BadRequestException('Business ID and Location ID are required');
     }
 
-    if (!request.resourceType) {
-      throw new BadRequestException('Resource type is required');
+    // Resource type is only required for create, update, and patch operations
+    if (['create', 'update', 'patch'].includes(request.operation) && !request.resourceType) {
+      throw new BadRequestException('Resource type is required for create, update, and patch operations');
     }
 
-    if (!VALID_RESOURCE_TYPES.includes(request.resourceType)) {
+    if (request.resourceType && !VALID_RESOURCE_TYPES.includes(request.resourceType)) {
       throw new BadRequestException(`Invalid resource type: ${request.resourceType}`);
     }
 
-    if (['update', 'patch', 'delete'].includes(request.operation) && !request.resourceId) {
-      throw new BadRequestException(`Resource ID is required for ${request.operation} operation`);
+    // Validate dates for create, update, and patch operations
+    if (['create', 'update', 'patch'].includes(request.operation)) {
+      if (!request.startDate) {
+        throw new BadRequestException('Start date is required for create, update, and patch operations');
+      }
+
+      // Validate date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(request.startDate)) {
+        throw new BadRequestException('Start date must be in YYYY-MM-DD format');
+      }
+
+      if (request.endDate && !dateRegex.test(request.endDate)) {
+        throw new BadRequestException('End date must be in YYYY-MM-DD format');
+      }
+
+      // Validate that end date is not before start date
+      if (request.endDate && new Date(request.endDate) < new Date(request.startDate)) {
+        throw new BadRequestException('End date cannot be before start date');
+      }
     }
   }
-
-
 }

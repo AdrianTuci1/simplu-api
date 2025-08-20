@@ -1,12 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
-import { KinesisService } from './kinesis.service';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly kinesisService: KinesisService,
   ) {}
 
   @Get()

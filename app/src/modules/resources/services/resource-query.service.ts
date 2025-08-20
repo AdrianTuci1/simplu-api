@@ -4,14 +4,12 @@ import { CitrusShardingService } from '../../../config/citrus-sharding.config';
 import { BaseResource, ResourceType } from '../types/base-resource';
 
 export interface ResourceRecord {
-    id: string;
     business_id: string;
     location_id: string;
     resource_type: string;
     resource_id: string;
-    data: any;
-    date: string; // business date for indexing (appointment, reservation, etc.)
-    operation: string;
+    start_date: string;
+    end_date: string;
     created_at: Date;
     updated_at: Date;
     shard_id?: string;
@@ -170,31 +168,30 @@ export class ResourceQueryService {
     }
 
     /**
-     * Get a single resource by ID
+     * Get a single resource by business and location
      */
     async getResourceById(
         businessId: string,
         locationId: string,
-        resourceId: string,
     ): Promise<BaseResource | null> {
         try {
             let resource: ResourceRecord | null;
 
             if (this.shouldUseCitrusForRead()) {
-                resource = await this.getResourceFromCitrus(businessId, locationId, resourceId);
+                resource = await this.getResourceFromCitrus(businessId, locationId);
             } else {
-                resource = await this.getResourceFromRDS(businessId, locationId, resourceId);
+                resource = await this.getResourceFromRDS(businessId, locationId);
             }
 
             if (resource) {
-                this.logger.log(`Found resource ${resourceId} for ${businessId}/${locationId}`);
+                this.logger.log(`Found resource for ${businessId}/${locationId}`);
                 return this.convertToBaseResource(resource);
             } else {
-                this.logger.log(`Resource ${resourceId} not found for ${businessId}/${locationId}`);
+                this.logger.log(`Resource not found for ${businessId}/${locationId}`);
                 return null;
             }
         } catch (error) {
-            this.logger.error(`Error getting resource ${resourceId}:`, error);
+            this.logger.error(`Error getting resource for ${businessId}/${locationId}:`, error);
             throw error;
         }
     }
@@ -314,21 +311,22 @@ export class ResourceQueryService {
 
             const stats = {
                 total: resources.length,
-                byOperation: {} as Record<string, number>,
                 byResourceType: {} as Record<string, number>,
-                byDate: {} as Record<string, number>,
+                byStartDate: {} as Record<string, number>,
+                byEndDate: {} as Record<string, number>,
             };
 
             resources.forEach(record => {
-                // Count by operation
-                stats.byOperation[record.operation] = (stats.byOperation[record.operation] || 0) + 1;
-
                 // Count by resource type
                 stats.byResourceType[record.resource_type] = (stats.byResourceType[record.resource_type] || 0) + 1;
 
-                // Count by business date (daily)
-                const date = record.date;
-                stats.byDate[date] = (stats.byDate[date] || 0) + 1;
+                // Count by start date (daily)
+                const startDate = record.start_date;
+                stats.byStartDate[startDate] = (stats.byStartDate[startDate] || 0) + 1;
+
+                // Count by end date (daily)
+                const endDate = record.end_date;
+                stats.byEndDate[endDate] = (stats.byEndDate[endDate] || 0) + 1;
             });
 
             this.logger.log(`Generated stats for ${businessId}/${locationId}: ${stats.total} total resources`);
@@ -364,7 +362,6 @@ export class ResourceQueryService {
     private async getResourceFromCitrus(
         businessId: string,
         locationId: string,
-        resourceId: string,
     ): Promise<ResourceRecord | null> {
         try {
             const shard = await this.citrusService.getShardForBusiness(businessId, locationId);
@@ -436,7 +433,6 @@ export class ResourceQueryService {
     private async getResourceFromRDS(
         businessId: string,
         locationId: string,
-        resourceId: string,
     ): Promise<ResourceRecord | null> {
         try {
             // TODO: Implement RDS query using TypeORM or raw SQL
@@ -490,21 +486,20 @@ export class ResourceQueryService {
         return data.filter(record => {
             // Apply date filters only if not already handled by database query
             if (!skipDateFilters && (filters.dateFrom || filters.dateTo || filters.startDate || filters.endDate)) {
-                const recordDate = new Date(record.date);
+                const recordStartDate = new Date(record.start_date);
+                const recordEndDate = new Date(record.end_date);
 
                 const startDate = filters.startDate || filters.dateFrom;
                 const endDate = filters.endDate || filters.dateTo;
 
-                if (startDate && recordDate < new Date(startDate)) {
+                if (startDate && recordEndDate < new Date(startDate)) {
                     return false;
                 }
 
-                if (endDate && recordDate > new Date(endDate)) {
+                if (endDate && recordStartDate > new Date(endDate)) {
                     return false;
                 }
             }
-
-
 
             // Apply custom data filters
             if (filters.customFilters) {
@@ -517,20 +512,18 @@ export class ResourceQueryService {
 
     private applyCustomFilters(record: ResourceRecord, customFilters: any): boolean {
         try {
-            const data = typeof record.data === 'string' ? JSON.parse(record.data) : record.data;
-
-
-
-            // Filter by name (case-insensitive partial match)
-            if (customFilters.name) {
-                const name = data.name || data.firstName || data.title || '';
-                if (!name.toLowerCase().includes(customFilters.name.toLowerCase())) {
-                    return false;
-                }
+            // Since we no longer have a data field, we can only filter by the available fields
+            // Filter by resource type
+            if (customFilters.resourceType && record.resource_type !== customFilters.resourceType) {
+                return false;
             }
 
-            // Filter by active status
-            if (customFilters.isActive !== undefined && data.isActive !== customFilters.isActive) {
+            // Filter by date ranges
+            if (customFilters.startDate && record.start_date < customFilters.startDate) {
+                return false;
+            }
+
+            if (customFilters.endDate && record.end_date > customFilters.endDate) {
                 return false;
             }
 
@@ -543,13 +536,18 @@ export class ResourceQueryService {
 
     private convertToBaseResource(record: ResourceRecord): BaseResource {
         return {
-            id: record.id,
+            id: `${record.business_id}-${record.location_id}`,
             businessId: record.business_id,
             locationId: record.location_id,
             resourceType: record.resource_type,
             resourceId: record.resource_id,
-            data: typeof record.data === 'string' ? JSON.parse(record.data) : record.data,
-            timestamp: record.date,
+            data: {
+                startDate: record.start_date,
+                endDate: record.end_date,
+                resourceType: record.resource_type,
+                resourceId: record.resource_id,
+            },
+            timestamp: record.start_date,
             lastUpdated: record.updated_at.toISOString(),
         };
     }

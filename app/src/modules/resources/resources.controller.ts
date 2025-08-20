@@ -25,7 +25,8 @@ import { ResourceQueryService, ResourceQuery } from './services/resource-query.s
 import { ResourceType } from './types/base-resource';
 
 interface ResourceRequest {
-  data?: any;
+  startDate?: string;
+  endDate?: string;
   resourceId?: string;
 }
 
@@ -62,22 +63,22 @@ export class ResourcesController {
       businessId,
       locationId,
       resourceType,
-      data: resourceRequest.data,
+      startDate: resourceRequest.startDate,
+      endDate: resourceRequest.endDate,
+      resourceId: resourceRequest.resourceId,
     });
   }
 
-  @Put(':businessId-:locationId/:resourceId')
+  @Put(':businessId-:locationId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Update resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
   @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async updateResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
@@ -86,23 +87,22 @@ export class ResourcesController {
       businessId,
       locationId,
       resourceType,
-      resourceId,
-      data: resourceRequest.data,
+      startDate: resourceRequest.startDate,
+      endDate: resourceRequest.endDate,
+      resourceId: resourceRequest.resourceId,
     });
   }
 
-  @Patch(':businessId-:locationId/:resourceId')
+  @Patch(':businessId-:locationId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Patch resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
   @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async patchResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
@@ -111,53 +111,43 @@ export class ResourcesController {
       businessId,
       locationId,
       resourceType,
-      resourceId,
-      data: resourceRequest.data,
+      startDate: resourceRequest.startDate,
+      endDate: resourceRequest.endDate,
+      resourceId: resourceRequest.resourceId,
     });
   }
 
-  @Delete(':businessId-:locationId/:resourceId')
+  @Delete(':businessId-:locationId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Delete resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
-  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async deleteResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Param('resourceId') resourceId: string,
-    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
       operation: 'delete',
       businessId,
       locationId,
-      resourceType,
-      resourceId,
     });
   }
 
   // GET endpoints - read directly from database (RDS or Citrus)
 
-  @Get(':businessId-:locationId/:resourceType/:resourceId')
-  @ApiOperation({ summary: 'Get resource by ID - reads from database' })
+  @Get(':businessId-:locationId')
+  @ApiOperation({ summary: 'Get resource by business and location - reads from database' })
   @ApiResponse({ status: 200, description: 'Resource retrieved successfully' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({ name: 'resourceType', description: 'Resource type' })
-  @ApiParam({ name: 'resourceId', description: 'Resource ID' })
   async getResourceById(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Param('resourceType') resourceType: ResourceType,
-    @Param('resourceId') resourceId: string,
   ) {
     const resource = await this.resourceQueryService.getResourceById(
       businessId,
       locationId,
-      resourceId,
     );
 
     if (!resource) {
@@ -167,8 +157,6 @@ export class ResourcesController {
         meta: {
           businessId,
           locationId,
-          resourceType,
-          resourceId,
           timestamp: new Date().toISOString(),
           operation: 'read',
         },
@@ -181,8 +169,6 @@ export class ResourcesController {
       meta: {
         businessId,
         locationId,
-        resourceType,
-        resourceId,
         timestamp: new Date().toISOString(),
         operation: 'read',
       },
