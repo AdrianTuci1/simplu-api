@@ -66,20 +66,42 @@ export class ResourcesController {
     });
   }
 
-  @Put(':businessId-:locationId/:resourceType/:resourceId')
+  @Post(':businessId-:locationId/query')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Create resource with query parameter - sends to stream for processing' })
+  @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiQuery({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
+  async createResourceWithQuery(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Body() resourceRequest: ResourceDataRequest,
+    @Query('X-Resource-Type') resourceType: ResourceType,
+  ): Promise<StandardResponse> {
+    return this.resourcesService.processResourceOperation({
+      operation: 'create',
+      businessId,
+      locationId,
+      resourceType,
+      data: resourceRequest.data,
+    });
+  }
+
+  @Put(':businessId-:locationId/:resourceId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Update resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({ name: 'resourceType', description: 'Resource type' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async updateResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Param('resourceType') resourceType: ResourceType,
     @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceDataRequest,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
       operation: 'update',
@@ -91,20 +113,20 @@ export class ResourcesController {
     });
   }
 
-  @Patch(':businessId-:locationId/:resourceType/:resourceId')
+  @Patch(':businessId-:locationId/:resourceId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Patch resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({ name: 'resourceType', description: 'Resource type' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async patchResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Param('resourceType') resourceType: ResourceType,
     @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceDataRequest,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
       operation: 'patch',
@@ -116,19 +138,19 @@ export class ResourcesController {
     });
   }
 
-  @Delete(':businessId-:locationId/:resourceType/:resourceId')
+  @Delete(':businessId-:locationId/:resourceId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Delete resource - sends to stream for processing' })
   @ApiResponse({ status: 202, description: 'Request accepted and sent to stream' })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({ name: 'resourceType', description: 'Resource type' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async deleteResource(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
-    @Param('resourceType') resourceType: ResourceType,
     @Param('resourceId') resourceId: string,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ): Promise<StandardResponse> {
     return this.resourcesService.processResourceOperation({
       operation: 'delete',
@@ -141,26 +163,19 @@ export class ResourcesController {
 
   // GET endpoints - read directly from database (RDS or Citrus)
 
-  @Get(':businessLocationId/:resourceType/:resourceId')
+  @Get(':businessId-:locationId/:resourceId')
   @ApiOperation({ summary: 'Get specific resource by ID - reads from database' })
   @ApiResponse({ status: 200, description: 'Resource retrieved successfully' })
-  @ApiParam({ name: 'businessLocationId', description: 'Business-Location ID (format: businessId-locationId)' })
-  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   async getResourceById(
-    @Param('businessLocationId') businessLocationId: string,
-    @Param('resourceType') resourceType: ResourceType,
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
     @Param('resourceId') resourceId: string,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
   ) {
-    // Parse businessLocationId to extract businessId and locationId
-    // Format: B01-00001-L01-00001 -> businessId: B01-00001, locationId: L01-00001
-    const parts = businessLocationId.split('-');
-    if (parts.length < 4) {
-      throw new Error('Invalid businessLocationId format. Expected: B##-#####-L##-#####');
-    }
-    
-    const businessId = `${parts[0]}-${parts[1]}`;  // B01-00001
-    const locationId = `${parts[2]}-${parts[3]}`;  // L01-00001
     const resource = await this.resourceQueryService.getResourceById(
       businessId,
       locationId,
@@ -197,73 +212,12 @@ export class ResourcesController {
     };
   }
 
-  // Additional endpoint for date range queries - MUST be before generic :resourceType route
-  @Get(':businessLocationId/date-range')
-  @ApiOperation({ summary: 'Get resources by date range - optimized for time-based queries' })
-  @ApiResponse({ status: 200, description: 'Resources retrieved successfully' })
-  @ApiParam({ name: 'businessLocationId', description: 'Business-Location ID (format: businessId-locationId)' })
-  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
-  @ApiQuery({ name: 'startDate', required: true, description: 'Start date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'endDate', required: true, description: 'End date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
-  async getResourcesByDateRange(
-    @Param('businessLocationId') businessLocationId: string,
-    @Headers('X-Resource-Type') resourceType: ResourceType,
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    // Parse businessLocationId to extract businessId and locationId
-    // Format: B01-00001-L01-00001 -> businessId: B01-00001, locationId: L01-00001
-    const parts = businessLocationId.split('-');
-    if (parts.length < 4) {
-      throw new Error('Invalid businessLocationId format. Expected: B##-#####-L##-#####');
-    }
-    
-    const businessId = `${parts[0]}-${parts[1]}`;  // B01-00001
-    const locationId = `${parts[2]}-${parts[3]}`;  // L01-00001
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 50;
-    const offset = (pageNum - 1) * limitNum;
-
-    const resources = await this.resourceQueryService.getResourcesByDateRange(
-      businessId,
-      locationId,
-      resourceType,
-      startDate,
-      endDate,
-      limitNum,
-      offset,
-    );
-
-    return {
-      success: true,
-      data: resources,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total: resources.length,
-        pages: Math.ceil(resources.length / limitNum),
-      },
-      meta: {
-        businessId,
-        locationId,
-        resourceType,
-        startDate,
-        endDate,
-        timestamp: new Date().toISOString(),
-        operation: 'date-range-query',
-      },
-    };
-  }
-
-  @Get(':businessLocationId/:resourceType')
+  @Get(':businessId-:locationId')
   @ApiOperation({ summary: 'Query resources with filters - reads from database' })
   @ApiResponse({ status: 200, description: 'Resources retrieved successfully' })
-  @ApiParam({ name: 'businessLocationId', description: 'Business-Location ID (format: businessId-locationId)' })
-  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiHeader({ name: 'X-Resource-Type', required: true, description: 'Resource type' })
   @ApiQuery({ name: 'page', required: false, description: 'Page number' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
   @ApiQuery({ name: 'sortBy', required: false, description: 'Sort field' })
@@ -272,9 +226,11 @@ export class ResourcesController {
   @ApiQuery({ name: 'endDate', required: false, description: 'End date filter (YYYY-MM-DD)' })
   @ApiQuery({ name: 'name', required: false, description: 'Name search (partial match)' })
   @ApiQuery({ name: 'isActive', required: false, description: 'Active status filter (true/false)' })
+  @ApiQuery({ name: 'queryType', required: false, description: 'Query type: date-range, stats, or general' })
   async queryResources(
-    @Param('businessLocationId') businessLocationId: string,
-    @Param('resourceType') resourceType: ResourceType,
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Headers('X-Resource-Type') resourceType: ResourceType,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
@@ -283,22 +239,85 @@ export class ResourcesController {
     @Query('endDate') endDate?: string,
     @Query('name') name?: string,
     @Query('isActive') isActive?: string,
+    @Query('queryType') queryType?: string,
     @Query() allFilters?: any,
   ) {
-    // Parse businessLocationId to extract businessId and locationId
-    // Format: B01-00001-L01-00001 -> businessId: B01-00001, locationId: L01-00001
-    const parts = businessLocationId.split('-');
-    if (parts.length < 4) {
-      throw new Error('Invalid businessLocationId format. Expected: B##-#####-L##-#####');
-    }
-    
-    const businessId = `${parts[0]}-${parts[1]}`;  // B01-00001
-    const locationId = `${parts[2]}-${parts[3]}`;  // L01-00001
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
 
+    // Handle different query types based on queryType parameter
+    if (queryType === 'date-range') {
+      if (!startDate || !endDate) {
+        return {
+          success: false,
+          message: 'startDate and endDate are required for date-range queries',
+          meta: {
+            businessId,
+            locationId,
+            resourceType,
+            timestamp: new Date().toISOString(),
+            operation: 'date-range-query',
+          },
+        };
+      }
+
+      const offset = (pageNum - 1) * limitNum;
+      const resources = await this.resourceQueryService.getResourcesByDateRange(
+        businessId,
+        locationId,
+        resourceType,
+        startDate,
+        endDate,
+        limitNum,
+        offset,
+      );
+
+      return {
+        success: true,
+        data: resources,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: resources.length,
+          pages: Math.ceil(resources.length / limitNum),
+        },
+        meta: {
+          businessId,
+          locationId,
+          resourceType,
+          startDate,
+          endDate,
+          timestamp: new Date().toISOString(),
+          operation: 'date-range-query',
+        },
+      };
+    }
+
+    if (queryType === 'stats') {
+      const stats = await this.resourceQueryService.getResourceStats(
+        businessId,
+        locationId,
+        resourceType,
+      );
+
+      return {
+        success: true,
+        data: stats,
+        meta: {
+          businessId,
+          locationId,
+          resourceType,
+          timestamp: new Date().toISOString(),
+          operation: 'stats',
+        },
+      };
+    }
+
+    // Default general query
     const query: ResourceQuery = {
       resourceType,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 50,
+      page: pageNum,
+      limit: limitNum,
       sortBy,
       sortOrder,
       filters: {
@@ -329,42 +348,4 @@ export class ResourcesController {
       },
     };
   }
-
-  @Get(':businessLocationId/stats')
-  @ApiOperation({ summary: 'Get resource statistics - reads from database' })
-  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
-  @ApiParam({ name: 'businessLocationId', description: 'Business-Location ID (format: businessId-locationId)' })
-  @ApiQuery({ name: 'resourceType', required: false, description: 'Resource type filter' })
-  async getResourceStats(
-    @Param('businessLocationId') businessLocationId: string,
-    @Query('resourceType') resourceType?: ResourceType,
-  ) {
-    // Parse businessLocationId to extract businessId and locationId
-    // Format: B01-00001-L01-00001 -> businessId: B01-00001, locationId: L01-00001
-    const parts = businessLocationId.split('-');
-    if (parts.length < 4) {
-      throw new Error('Invalid businessLocationId format. Expected: B##-#####-L##-#####');
-    }
-    
-    const businessId = `${parts[0]}-${parts[1]}`;  // B01-00001
-    const locationId = `${parts[2]}-${parts[3]}`;  // L01-00001
-    const stats = await this.resourceQueryService.getResourceStats(
-      businessId,
-      locationId,
-      resourceType,
-    );
-
-    return {
-      success: true,
-      data: stats,
-      meta: {
-        businessId,
-        locationId,
-        resourceType,
-        timestamp: new Date().toISOString(),
-        operation: 'stats',
-      },
-    };
-  }
-
 }

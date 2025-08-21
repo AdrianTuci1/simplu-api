@@ -24,7 +24,7 @@ export class ResourceDataService {
   /**
    * Extract start and end dates from resource data
    */
-  private extractDates(data: any, resourceType: string): { startDate: string; endDate: string } {
+  private extractDates(data: any, resourceType: string): { startDate: string | null; endDate: string | null } {
     // Try common date fields based on resource type and data structure
     const startDateFields = [
       'startDate',
@@ -44,8 +44,8 @@ export class ResourceDataService {
       'dueDate'
     ];
 
-    let startDate = '';
-    let endDate = '';
+    let startDate: string | null = null;
+    let endDate: string | null = null;
 
     // Find start date
     for (const field of startDateFields) {
@@ -117,10 +117,24 @@ export class ResourceDataService {
         this.logger.log(`Using shard ${shardId} for creating ${resourceType}`);
       }
 
-      // Extract dates from data
-      const { startDate, endDate } = this.extractDates(data, resourceType);
+      // Extract dates based on resource type
+      let startDate: string | null = null;
+      let endDate: string | null = null;
+      
+      if (resourceType === 'timeline') {
+        // Timeline needs both startDate and endDate
+        const extractedDates = this.extractDates(data, resourceType);
+        startDate = extractedDates.startDate || null;
+        endDate = extractedDates.endDate || null;
+      } else if (['invoices', 'activities', 'reports', 'sales', 'classes', 'history'].includes(resourceType)) {
+        // These resource types need only startDate
+        const extractedDates = this.extractDates(data, resourceType);
+        startDate = extractedDates.startDate || null;
+        endDate = null; // No endDate for these types
+      }
+      // For other resource types (patients, clients, members, staff, etc.), no dates are needed
 
-      // Generate resource ID using the new service
+      // Generate resource ID first to check for duplicates
       const connection = await this.databaseService.getConnection(businessId, locationId);
       const resourceId = await this.resourceIdService.generateResourceId(
         businessId,
@@ -128,6 +142,27 @@ export class ResourceDataService {
         resourceType,
         connection.pool
       );
+
+      // Check if resource with this specific resourceId already exists
+      const existingResource = await this.resourceRepository.findOne({
+        where: { businessId, locationId, resourceId }
+      });
+
+      if (existingResource) {
+        this.logger.log(`Resource with ID ${resourceId} already exists for ${businessId}/${locationId}, skipping creation`);
+        return {
+          id: existingResource.resourceId,
+          ...existingResource.data,
+          startDate: existingResource.startDate,
+          endDate: existingResource.endDate,
+          createdAt: existingResource.createdAt.toISOString(),
+          businessId,
+          locationId,
+          shardId: existingResource.shardId,
+        };
+      }
+
+      // Resource ID already generated above
 
       // Create resource entity
       const resourceEntity = this.resourceRepository.create({
@@ -193,8 +228,22 @@ export class ResourceDataService {
         this.logger.log(`Using shard ${shardId} for updating ${resourceType}`);
       }
 
-      // Extract dates from data
-      const { startDate, endDate } = this.extractDates(data, resourceType);
+      // Extract dates based on resource type
+      let startDate: string | null = null;
+      let endDate: string | null = null;
+      
+      if (resourceType === 'timeline') {
+        // Timeline needs both startDate and endDate
+        const extractedDates = this.extractDates(data, resourceType);
+        startDate = extractedDates.startDate || null;
+        endDate = extractedDates.endDate || null;
+      } else if (['invoices', 'activities', 'reports', 'sales', 'classes', 'history'].includes(resourceType)) {
+        // These resource types need only startDate
+        const extractedDates = this.extractDates(data, resourceType);
+        startDate = extractedDates.startDate || null;
+        endDate = null; // No endDate for these types
+      }
+      // For other resource types (patients, clients, members, staff, etc.), no dates are needed
 
       // Find existing resource by resourceId
       const existingResource = await this.resourceRepository.findOne({
@@ -322,10 +371,22 @@ export class ResourceDataService {
         throw new Error(`Resource with ID ${resourceId} for business ${businessId} location ${locationId} not found`);
       }
 
-      // Extract dates from data (use existing dates if not provided)
-      const { startDate, endDate } = this.extractDates(data, resourceType);
-      const finalStartDate = startDate || existingResource.startDate;
-      const finalEndDate = endDate || existingResource.endDate;
+      // Extract dates based on resource type (use existing dates if not provided)
+      let finalStartDate = existingResource.startDate;
+      let finalEndDate = existingResource.endDate;
+      
+      if (resourceType === 'timeline') {
+        // Timeline needs both startDate and endDate
+        const extractedDates = this.extractDates(data, resourceType);
+        finalStartDate = extractedDates.startDate || existingResource.startDate;
+        finalEndDate = extractedDates.endDate || existingResource.endDate;
+      } else if (['invoices', 'activities', 'reports', 'sales', 'classes', 'history'].includes(resourceType)) {
+        // These resource types need only startDate
+        const extractedDates = this.extractDates(data, resourceType);
+        finalStartDate = extractedDates.startDate || existingResource.startDate;
+        finalEndDate = null; // No endDate for these types
+      }
+      // For other resource types, keep existing dates
 
       // Update resource entity
       Object.assign(existingResource, {

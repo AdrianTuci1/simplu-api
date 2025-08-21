@@ -56,7 +56,7 @@ Content-Type: application/json
 ### URL Components
 - `businessId`: Unique business identifier
 - `locationId`: Specific location within the business
-- Combined as: `business123-location456`
+- Combined as: `B0100001-L0100001`
 
 ### Header Validation
 - URL parameters must match header values

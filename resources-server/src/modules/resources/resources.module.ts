@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ResourceDataService } from './services/resource-data.service';
 import { DatabaseService } from './services/database.service';
 import { ResourceIdService } from './services/resource-id.service';
+
 import { NotificationModule } from '../notification/notification.module';
 import { ResourceEntity } from './models/resource.entity';
 

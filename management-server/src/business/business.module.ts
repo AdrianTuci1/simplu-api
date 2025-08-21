@@ -9,10 +9,11 @@ import { AuthModule } from '../modules/auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
 import { UsersModule } from '../users/users.module';
 import { BusinessScheduler } from './business.scheduler';
+import { BusinessIdService } from './business-id.service';
 
 @Module({
   imports: [ConfigModule, DatabaseModule, SharedModule, InfrastructureModule, AuthModule, forwardRef(() => PaymentModule), UsersModule],
-  providers: [BusinessService, BusinessScheduler],
+  providers: [BusinessService, BusinessScheduler, BusinessIdService],
   controllers: [BusinessController],
   exports: [BusinessService],
 })

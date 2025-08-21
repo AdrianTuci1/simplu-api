@@ -1,5 +1,4 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../database/database.service';
 import { BusinessEntity, BusinessLocation, BusinessSettings, BusinessStatus } from './entities/business.entity';
 import { ShardManagementService } from '../shared/services/shard-management.service';
@@ -7,6 +6,7 @@ import { InfrastructureService } from '../infrastructure/infrastructure.service'
 import { PaymentService } from '../payment/payment.service';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../shared/services/email.service';
+import { BusinessIdService } from './business-id.service';
 
 @Injectable()
 export class BusinessService {
@@ -20,19 +20,23 @@ export class BusinessService {
     private readonly paymentService: PaymentService,
     private readonly usersService: UsersService,
     private readonly emailService: EmailService,
+    private readonly businessIdService: BusinessIdService,
   ) {}
 
   // Step 1: Configuration - Create business with suspended status
   async configureBusiness(input: any, user: any): Promise<BusinessEntity> {
     const nowIso = new Date().toISOString();
 
-    const locations: BusinessLocation[] = (input.locations || []).map((l) => ({
-      id: l.id || uuidv4(),
+    // Generate business ID first
+    const businessId = await this.businessIdService.generateBusinessId();
+
+    const locations: BusinessLocation[] = await Promise.all((input.locations || []).map(async (l) => ({
+      id: l.id || await this.businessIdService.generateLocationId(businessId),
       name: l.name,
       address: l.address,
       active: l.active ?? true,
       timezone: l.timezone || 'Europe/Bucharest',
-    }));
+    })));
 
     // Determine subscription type automatically based on number of locations
     const subscriptionType = locations.length === 1 ? 'solo' : 'enterprise';
@@ -69,7 +73,7 @@ export class BusinessService {
     }
 
     const business: BusinessEntity = {
-      businessId: uuidv4(),
+      businessId: businessId,
       companyName: input.companyName,
       registrationNumber: input.registrationNumber || '',
       businessType: input.businessType,
@@ -232,13 +236,16 @@ export class BusinessService {
   async createBusiness(input: Partial<BusinessEntity> & { companyName: string; businessType: string }): Promise<BusinessEntity> {
     const nowIso = new Date().toISOString();
 
-    const locations: BusinessLocation[] = (input.locations || []).map((l) => ({
-      id: l.id || uuidv4(),
+    // Generate business ID first
+    const businessId = await this.businessIdService.generateBusinessId();
+
+    const locations: BusinessLocation[] = await Promise.all((input.locations || []).map(async (l) => ({
+      id: l.id || await this.businessIdService.generateLocationId(businessId),
       name: l.name,
       address: l.address,
       active: l.active ?? true,
       timezone: l.timezone || 'Europe/Bucharest',
-    }));
+    })));
 
     // Determine subscription type automatically based on number of locations
     const subscriptionType = locations.length === 1 ? 'solo' : 'enterprise';
@@ -254,7 +261,7 @@ export class BusinessService {
     };
 
     const business: BusinessEntity = {
-      businessId: uuidv4(),
+      businessId: businessId,
       companyName: input.companyName,
       registrationNumber: input.registrationNumber || '',
       businessType: input.businessType,

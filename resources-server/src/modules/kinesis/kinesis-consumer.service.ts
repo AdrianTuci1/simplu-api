@@ -141,7 +141,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
         const getIteratorCommand = new GetShardIteratorCommand({
           StreamName: streamName,
           ShardId: shard.ShardId,
-          ShardIteratorType: 'TRIM_HORIZON', // Start from the beginning of the stream
+          ShardIteratorType: 'LATEST', // Start from the latest record (only new messages)
         });
         
         const iteratorResponse = await this.kinesisClient.send(getIteratorCommand);
@@ -199,6 +199,8 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`Error polling shard ${shardId}:`, error);
         
         // Try to reinitialize this shard iterator
+        // Note: This will reset to LATEST, which may cause some records to be processed again
+        // The deduplication logic in ResourceDataService will prevent duplicate database entries
         try {
           await this.reinitializeShardIterator(shardId);
         } catch (reinitError) {
@@ -215,7 +217,7 @@ export class KinesisConsumerService implements OnModuleInit, OnModuleDestroy {
       const getIteratorCommand = new GetShardIteratorCommand({
         StreamName: streamName,
         ShardId: shardId,
-        ShardIteratorType: 'TRIM_HORIZON',
+        ShardIteratorType: 'LATEST',
       });
       
       const iteratorResponse = await this.kinesisClient.send(getIteratorCommand);

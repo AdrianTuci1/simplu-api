@@ -27,11 +27,11 @@ export class ResourceEntity {
   @Column({ type: 'jsonb', name: 'data' })
   data: Record<string, any>;
 
-  @Column({ type: 'date', name: 'start_date' })
-  startDate: string;
+  @Column({ type: 'date', name: 'start_date', nullable: true })
+  startDate: string | null;
 
-  @Column({ type: 'date', name: 'end_date' })
-  endDate: string;
+  @Column({ type: 'date', name: 'end_date', nullable: true })
+  endDate: string | null;
 
   @CreateDateColumn({ type: 'timestamp with time zone', name: 'created_at' })
   createdAt: Date;
