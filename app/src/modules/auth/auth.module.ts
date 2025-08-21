@@ -3,13 +3,12 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { LambdaAuthorizerGuard } from './guards/lambda-authorizer.guard';
-import { PermissionService } from '../resources/services/permission.service';
-import { ResourceQueryService } from '../resources/services/resource-query.service';
+import { ResourcesModule } from '../resources/resources.module';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, LambdaAuthorizerGuard, PermissionService, ResourceQueryService],
-  exports: [AuthService, LambdaAuthorizerGuard, PermissionService],
-  imports: [ConfigModule],
+  providers: [AuthService, LambdaAuthorizerGuard],
+  exports: [AuthService, LambdaAuthorizerGuard],
+  imports: [ConfigModule, ResourcesModule],
 })
 export class AuthModule {} 

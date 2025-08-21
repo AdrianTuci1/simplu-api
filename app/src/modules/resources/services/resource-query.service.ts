@@ -1,7 +1,10 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CitrusShardingService } from '../../../config/citrus-sharding.config';
 import { BaseResource, ResourceType } from '../types/base-resource';
+import { ResourceEntity } from '../entities/resource.entity';
 
 export interface ResourceRecord {
     id: number;
@@ -68,7 +71,11 @@ export class ResourceQueryService {
     private readonly databaseConfig: DatabaseConfig;
     private readonly citrusService: CitrusShardingService;
 
-    constructor(private readonly configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        @InjectRepository(ResourceEntity)
+        private readonly resourceRepository: Repository<ResourceEntity>,
+    ) {
         this.databaseConfig = this.configService.get<DatabaseConfig>('database')!;
         this.citrusService = new CitrusShardingService();
     }
@@ -391,8 +398,23 @@ export class ResourceQueryService {
         try {
             const shard = await this.citrusService.getShardForBusiness(businessId, locationId);
 
-            // TODO: Implement actual database query using shard connection
+            let query = 'SELECT * FROM resources WHERE business_id = $1 AND location_id = $2';
+            const values = [businessId, locationId];
 
+            if (resourceType) {
+                query += ' AND resource_type = $3';
+                values.push(resourceType);
+                query += ' ORDER BY start_date DESC, created_at DESC LIMIT $4 OFFSET $5';
+                values.push(limit.toString(), offset.toString());
+            } else {
+                query += ' ORDER BY start_date DESC, created_at DESC LIMIT $3 OFFSET $4';
+                values.push(limit.toString(), offset.toString());
+            }
+
+            this.logger.log(`Executing Citrus type query: ${query} with values: ${JSON.stringify(values)}`);
+
+            // TODO: Execute the query using the shard connection
+            // For now, return empty array as the actual database connection needs to be implemented
             return [];
         } catch (error) {
             throw new BadRequestException(`Failed to get resources by type from Citrus: ${error.message}`);
@@ -411,8 +433,37 @@ export class ResourceQueryService {
         try {
             const shard = await this.citrusService.getShardForBusiness(businessId, locationId);
 
-            // TODO: Implement actual database query using shard connection
+            // Build the SQL query with proper field names (start_date, end_date)
+            let query = 'SELECT * FROM resources WHERE business_id = $1 AND location_id = $2';
+            const values = [businessId, locationId];
+            let paramCount = 2;
 
+            // Add resource type filter
+            paramCount++;
+            query += ` AND resource_type = $${paramCount}`;
+            values.push(resourceType);
+
+            // Add date range filters using the correct field names
+            if (startDate) {
+                paramCount++;
+                query += ` AND start_date >= $${paramCount}`;
+                values.push(startDate);
+            }
+
+            if (endDate) {
+                paramCount++;
+                query += ` AND end_date <= $${paramCount}`;
+                values.push(endDate);
+            }
+
+            // Add ordering and pagination
+            query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+            values.push(limit.toString(), offset.toString());
+
+            this.logger.log(`Executing Citrus date range query: ${query} with values: ${JSON.stringify(values)}`);
+
+            // TODO: Execute the query using the shard connection
+            // For now, return empty array as the actual database connection needs to be implemented
             return [];
         } catch (error) {
             throw new BadRequestException(`Failed to get resources by date range from Citrus: ${error.message}`);
@@ -429,10 +480,51 @@ export class ResourceQueryService {
         offset: number = 0,
     ): Promise<ResourceRecord[]> {
         try {
-            // TODO: Implement RDS query using TypeORM or raw SQL
+            this.logger.log(`Querying resources: businessId=${businessId}, locationId=${locationId}, resourceType=${resourceType}`);
 
-            return [];
+            const queryBuilder = this.resourceRepository
+                .createQueryBuilder('resource')
+                .where('resource.businessId = :businessId', { businessId })
+                .andWhere('resource.locationId = :locationId', { locationId });
+
+            if (resourceType) {
+                queryBuilder.andWhere('resource.resourceType = :resourceType', { resourceType });
+            }
+
+            // Apply date filters if provided
+            if (filters?.startDate) {
+                queryBuilder.andWhere('resource.startDate >= :startDate', { startDate: filters.startDate });
+            }
+
+            if (filters?.endDate) {
+                queryBuilder.andWhere('resource.endDate <= :endDate', { endDate: filters.endDate });
+            }
+
+            const resources = await queryBuilder
+                .orderBy('resource.startDate', 'DESC')
+                .addOrderBy('resource.createdAt', 'DESC')
+                .limit(limit)
+                .offset(offset)
+                .getMany();
+
+            this.logger.log(`Found ${resources.length} resources`);
+
+            // Convert ResourceEntity to ResourceRecord
+            return resources.map(resource => ({
+                id: resource.id,
+                business_id: resource.businessId,
+                location_id: resource.locationId,
+                resource_type: resource.resourceType,
+                resource_id: resource.resourceId,
+                data: resource.data,
+                start_date: resource.startDate,
+                end_date: resource.endDate,
+                created_at: resource.createdAt,
+                updated_at: resource.updatedAt,
+                shard_id: resource.shardId,
+            }));
         } catch (error) {
+            this.logger.error(`Error querying resources: ${error.message}`, error.stack);
             throw new BadRequestException(`Failed to query resources from RDS: ${error.message}`);
         }
     }
@@ -444,11 +536,39 @@ export class ResourceQueryService {
         resourceId: string,
     ): Promise<ResourceRecord | null> {
         try {
-            // TODO: Implement RDS query using TypeORM or raw SQL
-            // Query should filter by businessId, locationId, resourceType, and resourceId
+            this.logger.log(`Getting resource: businessId=${businessId}, locationId=${locationId}, resourceType=${resourceType}, resourceId=${resourceId}`);
 
-            return null;
+            const resource = await this.resourceRepository
+                .createQueryBuilder('resource')
+                .where('resource.businessId = :businessId', { businessId })
+                .andWhere('resource.locationId = :locationId', { locationId })
+                .andWhere('resource.resourceType = :resourceType', { resourceType })
+                .andWhere('resource.resourceId = :resourceId', { resourceId })
+                .getOne();
+
+            if (!resource) {
+                this.logger.log(`Resource not found: ${businessId}/${locationId}/${resourceType}/${resourceId}`);
+                return null;
+            }
+
+            this.logger.log(`Found resource: ${resource.id}`);
+
+            // Convert ResourceEntity to ResourceRecord
+            return {
+                id: resource.id,
+                business_id: resource.businessId,
+                location_id: resource.locationId,
+                resource_type: resource.resourceType,
+                resource_id: resource.resourceId,
+                data: resource.data,
+                start_date: resource.startDate,
+                end_date: resource.endDate,
+                created_at: resource.createdAt,
+                updated_at: resource.updatedAt,
+                shard_id: resource.shardId,
+            };
         } catch (error) {
+            this.logger.error(`Error getting resource: ${error.message}`, error.stack);
             throw new BadRequestException(`Failed to get resource from RDS: ${error.message}`);
         }
     }
@@ -461,10 +581,42 @@ export class ResourceQueryService {
         offset: number = 0,
     ): Promise<ResourceRecord[]> {
         try {
-            // TODO: Implement RDS query using TypeORM or raw SQL
+            this.logger.log(`Querying resources by type: businessId=${businessId}, locationId=${locationId}, resourceType=${resourceType}`);
 
-            return [];
+            const queryBuilder = this.resourceRepository
+                .createQueryBuilder('resource')
+                .where('resource.businessId = :businessId', { businessId })
+                .andWhere('resource.locationId = :locationId', { locationId });
+
+            if (resourceType) {
+                queryBuilder.andWhere('resource.resourceType = :resourceType', { resourceType });
+            }
+
+            const resources = await queryBuilder
+                .orderBy('resource.startDate', 'DESC')
+                .addOrderBy('resource.createdAt', 'DESC')
+                .limit(limit)
+                .offset(offset)
+                .getMany();
+
+            this.logger.log(`Found ${resources.length} resources by type`);
+
+            // Convert ResourceEntity to ResourceRecord
+            return resources.map(resource => ({
+                id: resource.id,
+                business_id: resource.businessId,
+                location_id: resource.locationId,
+                resource_type: resource.resourceType,
+                resource_id: resource.resourceId,
+                data: resource.data,
+                start_date: resource.startDate,
+                end_date: resource.endDate,
+                created_at: resource.createdAt,
+                updated_at: resource.updatedAt,
+                shard_id: resource.shardId,
+            }));
         } catch (error) {
+            this.logger.error(`Error querying resources by type: ${error.message}`, error.stack);
             throw new BadRequestException(`Failed to get resources by type from RDS: ${error.message}`);
         }
     }
@@ -479,10 +631,47 @@ export class ResourceQueryService {
         offset: number = 0,
     ): Promise<ResourceRecord[]> {
         try {
-            // TODO: Implement RDS query using TypeORM or raw SQL
+            this.logger.log(`Querying resources by date range: businessId=${businessId}, locationId=${locationId}, resourceType=${resourceType}, startDate=${startDate}, endDate=${endDate}`);
 
-            return [];
+            const queryBuilder = this.resourceRepository
+                .createQueryBuilder('resource')
+                .where('resource.businessId = :businessId', { businessId })
+                .andWhere('resource.locationId = :locationId', { locationId })
+                .andWhere('resource.resourceType = :resourceType', { resourceType });
+
+            if (startDate) {
+                queryBuilder.andWhere('resource.startDate >= :startDate', { startDate });
+            }
+
+            if (endDate) {
+                queryBuilder.andWhere('resource.endDate <= :endDate', { endDate });
+            }
+
+            const resources = await queryBuilder
+                .orderBy('resource.startDate', 'DESC')
+                .addOrderBy('resource.createdAt', 'DESC')
+                .limit(limit)
+                .offset(offset)
+                .getMany();
+
+            this.logger.log(`Found ${resources.length} resources in date range`);
+
+            // Convert ResourceEntity to ResourceRecord
+            return resources.map(resource => ({
+                id: resource.id,
+                business_id: resource.businessId,
+                location_id: resource.locationId,
+                resource_type: resource.resourceType,
+                resource_id: resource.resourceId,
+                data: resource.data,
+                start_date: resource.startDate,
+                end_date: resource.endDate,
+                created_at: resource.createdAt,
+                updated_at: resource.updatedAt,
+                shard_id: resource.shardId,
+            }));
         } catch (error) {
+            this.logger.error(`Error querying resources by date range: ${error.message}`, error.stack);
             throw new BadRequestException(`Failed to get resources by date range from RDS: ${error.message}`);
         }
     }
@@ -552,6 +741,9 @@ export class ResourceQueryService {
             resourceType: record.resource_type,
             resourceId: record.resource_id,
             data: {
+                // Include the actual data from the database
+                ...record.data,
+                // Add metadata fields
                 startDate: record.start_date,
                 endDate: record.end_date,
                 resourceType: record.resource_type,
