@@ -123,7 +123,7 @@ export class ResourceDataService {
 
       // Check if resource with this specific resourceId already exists
       const existingResource = await this.resourceRepository.findOne({
-        where: { businessId, locationId, resourceId }
+        where: { businessLocationId: `${businessId}-${locationId}`, resourceId }
       });
 
       if (existingResource) {
@@ -144,8 +144,7 @@ export class ResourceDataService {
 
       // Create resource entity
       const resourceEntity = this.resourceRepository.create({
-        businessId,
-        locationId,
+        businessLocationId: `${businessId}-${locationId}`,
         resourceType,
         resourceId,
         data, // Salvează câmpul data cu JSON-ul complet
@@ -213,7 +212,7 @@ export class ResourceDataService {
 
       // Find existing resource by resourceId
       const existingResource = await this.resourceRepository.findOne({
-        where: { businessId, locationId, resourceId }
+        where: { businessLocationId: `${businessId}-${locationId}`, resourceId }
       });
 
       if (!existingResource) {
@@ -283,7 +282,7 @@ export class ResourceDataService {
 
       // Find and delete using TypeORM repository
       const existingResource = await this.resourceRepository.findOne({
-        where: { businessId, locationId, resourceId }
+        where: { businessLocationId: `${businessId}-${locationId}`, resourceId }
       });
 
       if (!existingResource) {
@@ -330,7 +329,7 @@ export class ResourceDataService {
 
       // Find existing resource using TypeORM repository
       const existingResource = await this.resourceRepository.findOne({
-        where: { businessId, locationId, resourceId }
+        where: { businessLocationId: `${businessId}-${locationId}`, resourceId }
       });
 
       if (!existingResource) {

@@ -13,8 +13,7 @@ export interface DatabaseConnection {
 
 export interface ResourceRecord {
     id: number;
-    business_id: string;
-    location_id: string;
+    business_location_id: string;
     resource_type: string;
     resource_id: string;
     data: any;
@@ -87,20 +86,19 @@ export class DatabaseService {
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
         id BIGSERIAL PRIMARY KEY,
-        business_id VARCHAR(255) NOT NULL,
-        location_id VARCHAR(255) NOT NULL,
+        business_location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
         resource_id VARCHAR(255) NOT NULL,
         data JSONB NOT NULL,
-        start_date DATE NOT NULL,
-        end_date DATE NOT NULL,
+        start_date DATE,
+        end_date DATE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         shard_id VARCHAR(255)
       );
 
       CREATE INDEX IF NOT EXISTS idx_resources_business_location 
-        ON resources(business_id, location_id);
+        ON resources(business_location_id);
       CREATE INDEX IF NOT EXISTS idx_resources_type 
         ON resources(resource_type);
       CREATE INDEX IF NOT EXISTS idx_resources_start_date 
@@ -108,11 +106,21 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_resources_end_date 
         ON resources(end_date);
       CREATE INDEX IF NOT EXISTS idx_resources_business_type_start_date 
-        ON resources(business_id, location_id, resource_type, start_date);
+        ON resources(business_location_id, resource_type, start_date);
       CREATE INDEX IF NOT EXISTS idx_resources_business_type_end_date 
-        ON resources(business_id, location_id, resource_type, end_date);
+        ON resources(business_location_id, resource_type, end_date);
       CREATE INDEX IF NOT EXISTS idx_resources_created_at 
         ON resources(created_at);
+      
+      -- Indexuri pentru câmpurile din JSON data
+      CREATE INDEX IF NOT EXISTS idx_data_medic_name 
+        ON resources USING GIN ((data->>'medicName'));
+      CREATE INDEX IF NOT EXISTS idx_data_patient_name 
+        ON resources USING GIN ((data->>'patientName'));
+      CREATE INDEX IF NOT EXISTS idx_data_trainer_name 
+        ON resources USING GIN ((data->>'trainerName'));
+      CREATE INDEX IF NOT EXISTS idx_data_customer_name 
+        ON resources USING GIN ((data->>'customerName'));
     `;
 
         await this.rdsPool.query(createTableQuery);
@@ -169,8 +177,7 @@ export class DatabaseService {
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
         id BIGSERIAL PRIMARY KEY,
-        business_id VARCHAR(255) NOT NULL,
-        location_id VARCHAR(255) NOT NULL,
+        business_location_id VARCHAR(255) NOT NULL,
         resource_type VARCHAR(100) NOT NULL,
         resource_id VARCHAR(255) NOT NULL,
         data JSONB NOT NULL,
@@ -182,7 +189,7 @@ export class DatabaseService {
       );
 
       CREATE INDEX IF NOT EXISTS idx_resources_business_location 
-        ON resources(business_id, location_id);
+        ON resources(business_location_id);
       CREATE INDEX IF NOT EXISTS idx_resources_type 
         ON resources(resource_type);
       CREATE INDEX IF NOT EXISTS idx_resources_start_date 
@@ -190,11 +197,21 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_resources_end_date 
         ON resources(end_date);
       CREATE INDEX IF NOT EXISTS idx_resources_business_type_start_date 
-        ON resources(business_id, location_id, resource_type, start_date);
+        ON resources(business_location_id, resource_type, start_date);
       CREATE INDEX IF NOT EXISTS idx_resources_business_type_end_date 
-        ON resources(business_id, location_id, resource_type, end_date);
+        ON resources(business_location_id, resource_type, end_date);
       CREATE INDEX IF NOT EXISTS idx_resources_created_at 
         ON resources(created_at);
+      
+      -- Indexuri pentru câmpurile din JSON data
+      CREATE INDEX IF NOT EXISTS idx_data_medic_name 
+        ON resources USING GIN ((data->>'medicName'));
+      CREATE INDEX IF NOT EXISTS idx_data_patient_name 
+        ON resources USING GIN ((data->>'patientName'));
+      CREATE INDEX IF NOT EXISTS idx_data_trainer_name 
+        ON resources USING GIN ((data->>'trainerName'));
+      CREATE INDEX IF NOT EXISTS idx_data_customer_name 
+        ON resources USING GIN ((data->>'customerName'));
     `;
 
         await pool.query(createTableQuery);
@@ -210,6 +227,7 @@ export class DatabaseService {
         resourceId?: string,
     ): Promise<ResourceRecord> {
         const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
 
         // Generate resource ID if not provided
         if (!resourceId) {
@@ -222,8 +240,7 @@ export class DatabaseService {
         }
 
         const record = {
-            business_id: businessId,
-            location_id: locationId,
+            business_location_id: businessLocationId,
             resource_type: resourceType,
             resource_id: resourceId,
             data: data,
@@ -236,15 +253,14 @@ export class DatabaseService {
 
         const query = `
       INSERT INTO resources (
-        business_id, location_id, resource_type, resource_id, 
+        business_location_id, resource_type, resource_id, 
         data, start_date, end_date, created_at, updated_at, shard_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
 
         const values = [
-            record.business_id,
-            record.location_id,
+            record.business_location_id,
             record.resource_type,
             record.resource_id,
             record.data,
@@ -266,10 +282,11 @@ export class DatabaseService {
         locationId: string,
     ): Promise<boolean> {
         const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
 
-        const query = 'DELETE FROM resources WHERE business_id = $1 AND location_id = $2';
+        const query = 'DELETE FROM resources WHERE business_location_id = $1';
 
-        const result = await connection.pool.query(query, [businessId, locationId]);
+        const result = await connection.pool.query(query, [businessLocationId]);
 
         this.logger.log(`✅ Deleted resource for ${businessId}/${locationId} from ${connection.type} database${connection.shardId ? ` (shard: ${connection.shardId})` : ''}`);
         return result.rowCount > 0;
@@ -280,10 +297,11 @@ export class DatabaseService {
         locationId: string,
     ): Promise<ResourceRecord | null> {
         const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
 
-        const query = 'SELECT * FROM resources WHERE business_id = $1 AND location_id = $2';
+        const query = 'SELECT * FROM resources WHERE business_location_id = $1';
 
-        const result = await connection.pool.query(query, [businessId, locationId]);
+        const result = await connection.pool.query(query, [businessLocationId]);
 
         return result.rows[0] || null;
     }
@@ -296,17 +314,18 @@ export class DatabaseService {
         offset: number = 0,
     ): Promise<ResourceRecord[]> {
         const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
 
-        let query = 'SELECT * FROM resources WHERE business_id = $1 AND location_id = $2';
-        const values = [businessId, locationId];
+        let query = 'SELECT * FROM resources WHERE business_location_id = $1';
+        const values = [businessLocationId];
 
         if (resourceType) {
-            query += ' AND resource_type = $3';
+            query += ' AND resource_type = $2';
             values.push(resourceType);
-            query += ' ORDER BY start_date DESC, created_at DESC LIMIT $4 OFFSET $5';
+            query += ' ORDER BY start_date DESC, created_at DESC LIMIT $3 OFFSET $4';
             values.push(limit.toString(), offset.toString());
         } else {
-            query += ' ORDER BY start_date DESC, created_at DESC LIMIT $3 OFFSET $4';
+            query += ' ORDER BY start_date DESC, created_at DESC LIMIT $2 OFFSET $3';
             values.push(limit.toString(), offset.toString());
         }
 
@@ -325,10 +344,11 @@ export class DatabaseService {
         offset: number = 0,
     ): Promise<ResourceRecord[]> {
         const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
 
-        let query = 'SELECT * FROM resources WHERE business_id = $1 AND location_id = $2';
-        const values = [businessId, locationId];
-        let paramCount = 2;
+        let query = 'SELECT * FROM resources WHERE business_location_id = $1';
+        const values = [businessLocationId];
+        let paramCount = 1;
 
         if (resourceType) {
             paramCount++;
@@ -353,6 +373,78 @@ export class DatabaseService {
 
         const result = await connection.pool.query(query, values);
 
+        return result.rows;
+    }
+
+    // Metode pentru căutare după câmpurile din JSON data
+    async getResourcesByName(
+        businessId: string,
+        locationId: string,
+        nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
+        nameValue: string,
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
+
+        let query = `SELECT * FROM resources WHERE business_location_id = $1 AND data->>'${nameField}' ILIKE $2`;
+        const values = [businessLocationId, `%${nameValue}%`];
+        let paramCount = 2;
+
+        if (resourceType) {
+            paramCount++;
+            query += ` AND resource_type = $${paramCount}`;
+            values.push(resourceType);
+        }
+
+        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+        values.push(limit.toString(), offset.toString());
+
+        const result = await connection.pool.query(query, values);
+        return result.rows;
+    }
+
+    async getResourcesByMultipleNames(
+        businessId: string,
+        locationId: string,
+        nameFilters: {
+            medicName?: string;
+            patientName?: string;
+            trainerName?: string;
+            customerName?: string;
+        },
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
+
+        let query = 'SELECT * FROM resources WHERE business_location_id = $1';
+        const values = [businessLocationId];
+        let paramCount = 1;
+
+        // Adaugă filtrele pentru nume
+        Object.entries(nameFilters).forEach(([field, value]) => {
+            if (value) {
+                paramCount++;
+                query += ` AND data->>'${field}' ILIKE $${paramCount}`;
+                values.push(`%${value}%`);
+            }
+        });
+
+        if (resourceType) {
+            paramCount++;
+            query += ` AND resource_type = $${paramCount}`;
+            values.push(resourceType);
+        }
+
+        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+        values.push(limit.toString(), offset.toString());
+
+        const result = await connection.pool.query(query, values);
         return result.rows;
     }
 

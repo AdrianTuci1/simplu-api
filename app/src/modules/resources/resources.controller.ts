@@ -579,4 +579,138 @@ export class ResourcesController {
     
     return monthlyData;
   }
+
+  // Name-based search endpoints
+
+  @Get(':businessId-:locationId/search/name/:nameField')
+  @ApiOperation({ summary: 'Search resources by specific name field' })
+  @ApiResponse({ status: 200, description: 'Resources found by name' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'nameField', description: 'Name field to search: medicName, patientName, trainerName, customerName' })
+  @ApiQuery({ name: 'nameValue', required: true, description: 'Name value to search for' })
+  @ApiQuery({ name: 'resourceType', required: false, description: 'Filter by resource type' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 50)' })
+  async searchResourcesByName(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('nameField') nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
+    @Query('nameValue') nameValue: string,
+    @Query('resourceType') resourceType?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    try {
+      const pageNum = page ? parseInt(page, 10) : 1;
+      const limitNum = limit ? parseInt(limit, 10) : 50;
+      const offset = (pageNum - 1) * limitNum;
+
+      const resources = await this.resourceQueryService.getResourcesByName(
+        businessId,
+        locationId,
+        nameField,
+        nameValue,
+        resourceType,
+        limitNum,
+        offset,
+      );
+
+      return {
+        success: true,
+        data: resources,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: resources.length,
+          pages: Math.ceil(resources.length / limitNum),
+        },
+        meta: {
+          businessId,
+          locationId,
+          nameField,
+          nameValue,
+          resourceType,
+          timestamp: new Date().toISOString(),
+          operation: 'name-search',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error searching resources by name: ${error.message}`,
+        meta: {
+          businessId,
+          locationId,
+          nameField,
+          nameValue,
+          timestamp: new Date().toISOString(),
+          operation: 'name-search',
+        },
+      };
+    }
+  }
+
+  @Post(':businessId-:locationId/search/names')
+  @ApiOperation({ summary: 'Search resources by multiple name fields' })
+  @ApiResponse({ status: 200, description: 'Resources found by multiple names' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  async searchResourcesByMultipleNames(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Body() nameFilters: {
+      medicName?: string;
+      patientName?: string;
+      trainerName?: string;
+      customerName?: string;
+      resourceType?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    try {
+      const { page = 1, limit = 50, resourceType, ...names } = nameFilters;
+      const offset = (page - 1) * limit;
+
+      const resources = await this.resourceQueryService.getResourcesByMultipleNames(
+        businessId,
+        locationId,
+        names,
+        resourceType,
+        limit,
+        offset,
+      );
+
+      return {
+        success: true,
+        data: resources,
+        pagination: {
+          page,
+          limit,
+          total: resources.length,
+          pages: Math.ceil(resources.length / limit),
+        },
+        meta: {
+          businessId,
+          locationId,
+          nameFilters: names,
+          resourceType,
+          timestamp: new Date().toISOString(),
+          operation: 'multiple-names-search',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error searching resources by multiple names: ${error.message}`,
+        meta: {
+          businessId,
+          locationId,
+          timestamp: new Date().toISOString(),
+          operation: 'multiple-names-search',
+        },
+      };
+    }
+  }
 }

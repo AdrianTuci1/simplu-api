@@ -1,22 +1,24 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, PrimaryColumn } from 'typeorm';
 
 @Entity('resources')
-@Index(['businessId', 'locationId'])
+@Index(['businessLocationId'])
 @Index(['resourceType'])
 @Index(['startDate'])
 @Index(['endDate'])
-@Index(['businessId', 'locationId', 'resourceType', 'startDate'])
-@Index(['businessId', 'locationId', 'resourceType', 'endDate'])
+@Index(['businessLocationId', 'resourceType', 'startDate'])
+@Index(['businessLocationId', 'resourceType', 'endDate'])
 @Index(['createdAt'])
+// Indexuri pentru câmpurile din JSON data
+@Index('idx_data_medic_name', { synchronize: false })
+@Index('idx_data_patient_name', { synchronize: false })
+@Index('idx_data_trainer_name', { synchronize: false })
+@Index('idx_data_customer_name', { synchronize: false })
 export class ResourceEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', name: 'id' })
   id: number;
 
-  @Column({ type: 'varchar', length: 255, name: 'business_id' })
-  businessId: string;
-
-  @Column({ type: 'varchar', length: 255, name: 'location_id' })
-  locationId: string;
+  @Column({ type: 'varchar', length: 255, name: 'business_location_id' })
+  businessLocationId: string;
 
   @Column({ type: 'varchar', length: 100, name: 'resource_type' })
   resourceType: string;

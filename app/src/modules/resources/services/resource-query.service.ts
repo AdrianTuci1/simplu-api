@@ -753,4 +753,241 @@ export class ResourceQueryService {
             lastUpdated: record.updated_at.toISOString(),
         };
     }
+
+    // Name-based search methods
+    async getResourcesByName(
+        businessId: string,
+        locationId: string,
+        nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
+        nameValue: string,
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        try {
+            this.logger.log(`Searching resources by ${nameField} = "${nameValue}" for ${businessId}/${locationId}`);
+
+            if (this.shouldUseCitrusForRead()) {
+                return this.getResourcesByNameFromCitrus(businessId, locationId, nameField, nameValue, resourceType, limit, offset);
+            } else {
+                return this.getResourcesByNameFromRDS(businessId, locationId, nameField, nameValue, resourceType, limit, offset);
+            }
+        } catch (error) {
+            this.logger.error(`Error searching resources by name: ${error.message}`, error.stack);
+            throw new BadRequestException(`Failed to search resources by name: ${error.message}`);
+        }
+    }
+
+    async getResourcesByMultipleNames(
+        businessId: string,
+        locationId: string,
+        nameFilters: {
+            medicName?: string;
+            patientName?: string;
+            trainerName?: string;
+            customerName?: string;
+        },
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        try {
+            this.logger.log(`Searching resources by multiple names for ${businessId}/${locationId}`, nameFilters);
+
+            if (this.shouldUseCitrusForRead()) {
+                return this.getResourcesByMultipleNamesFromCitrus(businessId, locationId, nameFilters, resourceType, limit, offset);
+            } else {
+                return this.getResourcesByMultipleNamesFromRDS(businessId, locationId, nameFilters, resourceType, limit, offset);
+            }
+        } catch (error) {
+            this.logger.error(`Error searching resources by multiple names: ${error.message}`, error.stack);
+            throw new BadRequestException(`Failed to search resources by multiple names: ${error.message}`);
+        }
+    }
+
+    private async getResourcesByNameFromCitrus(
+        businessId: string,
+        locationId: string,
+        nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
+        nameValue: string,
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        try {
+            const shardConnection = await this.citrusService.getShardForBusiness(businessId, locationId);
+            const businessLocationId = `${businessId}-${locationId}`;
+
+            // Create a temporary pool connection for this query
+            const { Pool } = require('pg');
+            const pool = new Pool({
+                connectionString: shardConnection.connectionString,
+                max: 1,
+                idleTimeoutMillis: 30000,
+                connectionTimeoutMillis: 2000,
+            });
+
+            try {
+                let query = `SELECT * FROM resources WHERE business_location_id = $1 AND data->>'${nameField}' ILIKE $2`;
+                const values = [businessLocationId, `%${nameValue}%`];
+                let paramCount = 2;
+
+                if (resourceType) {
+                    paramCount++;
+                    query += ` AND resource_type = $${paramCount}`;
+                    values.push(resourceType);
+                }
+
+                query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+                values.push(limit.toString(), offset.toString());
+
+                const result = await pool.query(query, values);
+                return result.rows;
+            } finally {
+                await pool.end();
+            }
+        } catch (error) {
+            this.logger.error(`Error querying resources by name from Citrus: ${error.message}`, error.stack);
+            throw new BadRequestException(`Failed to get resources by name from Citrus: ${error.message}`);
+        }
+    }
+
+    private async getResourcesByNameFromRDS(
+        businessId: string,
+        locationId: string,
+        nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
+        nameValue: string,
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        try {
+            const businessLocationId = `${businessId}-${locationId}`;
+
+            let query = `SELECT * FROM resources WHERE business_location_id = $1 AND data->>'${nameField}' ILIKE $2`;
+            const values = [businessLocationId, `%${nameValue}%`];
+            let paramCount = 2;
+
+            if (resourceType) {
+                paramCount++;
+                query += ` AND resource_type = $${paramCount}`;
+                values.push(resourceType);
+            }
+
+            query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+            values.push(limit.toString(), offset.toString());
+
+            const result = await this.resourceRepository.query(query, values);
+            return result;
+        } catch (error) {
+            this.logger.error(`Error querying resources by name from RDS: ${error.message}`, error.stack);
+            throw new BadRequestException(`Failed to get resources by name from RDS: ${error.message}`);
+        }
+    }
+
+    private async getResourcesByMultipleNamesFromCitrus(
+        businessId: string,
+        locationId: string,
+        nameFilters: {
+            medicName?: string;
+            patientName?: string;
+            trainerName?: string;
+            customerName?: string;
+        },
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        try {
+            const shardConnection = await this.citrusService.getShardForBusiness(businessId, locationId);
+            const businessLocationId = `${businessId}-${locationId}`;
+
+            // Create a temporary pool connection for this query
+            const { Pool } = require('pg');
+            const pool = new Pool({
+                connectionString: shardConnection.connectionString,
+                max: 1,
+                idleTimeoutMillis: 30000,
+                connectionTimeoutMillis: 2000,
+            });
+
+            try {
+                let query = 'SELECT * FROM resources WHERE business_location_id = $1';
+                const values = [businessLocationId];
+                let paramCount = 1;
+
+                // Adaugă filtrele pentru nume
+                Object.entries(nameFilters).forEach(([field, value]) => {
+                    if (value) {
+                        paramCount++;
+                        query += ` AND data->>'${field}' ILIKE $${paramCount}`;
+                        values.push(`%${value}%`);
+                    }
+                });
+
+                if (resourceType) {
+                    paramCount++;
+                    query += ` AND resource_type = $${paramCount}`;
+                    values.push(resourceType);
+                }
+
+                query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+                values.push(limit.toString(), offset.toString());
+
+                const result = await pool.query(query, values);
+                return result.rows;
+            } finally {
+                await pool.end();
+            }
+        } catch (error) {
+            this.logger.error(`Error querying resources by multiple names from Citrus: ${error.message}`, error.stack);
+            throw new BadRequestException(`Failed to get resources by multiple names from Citrus: ${error.message}`);
+        }
+    }
+
+    private async getResourcesByMultipleNamesFromRDS(
+        businessId: string,
+        locationId: string,
+        nameFilters: {
+            medicName?: string;
+            patientName?: string;
+            trainerName?: string;
+            customerName?: string;
+        },
+        resourceType?: string,
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<ResourceRecord[]> {
+        try {
+            const businessLocationId = `${businessId}-${locationId}`;
+
+            let query = 'SELECT * FROM resources WHERE business_location_id = $1';
+            const values = [businessLocationId];
+            let paramCount = 1;
+
+            // Adaugă filtrele pentru nume
+            Object.entries(nameFilters).forEach(([field, value]) => {
+                if (value) {
+                    paramCount++;
+                    query += ` AND data->>'${field}' ILIKE $${paramCount}`;
+                    values.push(`%${value}%`);
+                }
+            });
+
+            if (resourceType) {
+                paramCount++;
+                query += ` AND resource_type = $${paramCount}`;
+                values.push(resourceType);
+            }
+
+            query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+            values.push(limit.toString(), offset.toString());
+
+            const result = await this.resourceRepository.query(query, values);
+            return result;
+        } catch (error) {
+            this.logger.error(`Error querying resources by multiple names from RDS: ${error.message}`, error.stack);
+            throw new BadRequestException(`Failed to get resources by multiple names from RDS: ${error.message}`);
+        }
+    }
 }
