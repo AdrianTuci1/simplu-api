@@ -1,17 +1,13 @@
-// Main models index - exports all organized models
+// Main models index - simplified exports
 
 // Entity models
 export * from './resource.entity';
 
-// Common models
-export * from './common';
+// Base resource interface
+export * from './base-resource';
 
-// Business-specific models
-export * from './dental';
-export * from './gym';
-export * from './hotel';
+// Simplified resource types
+export { CoreResourceType, ResourceOperation } from './resource-types';
 
-// Legacy exports for backward compatibility
-export * from './resource-types';
-export * from './unified-data-types';
-export * from './business-types';
+// Menu structure for organizing resources
+export * from './menu-structure';

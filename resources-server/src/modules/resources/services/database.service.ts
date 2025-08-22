@@ -174,8 +174,8 @@ export class DatabaseService {
         resource_type VARCHAR(100) NOT NULL,
         resource_id VARCHAR(255) NOT NULL,
         data JSONB NOT NULL,
-        start_date DATE NOT NULL,
-        end_date DATE NOT NULL,
+        start_date DATE,
+        end_date DATE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         shard_id VARCHAR(255)

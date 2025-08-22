@@ -5,6 +5,7 @@ import { ResourcesController } from './resources.controller';
 import { ResourcesService } from './resources.service';
 import { PermissionService } from './services/permission.service';
 import { ResourceQueryService } from './services/resource-query.service';
+import { StatisticsService } from './services/statistics.service';
 import { KinesisService } from '../../kinesis.service';
 import { ResourceEntity } from './entities/resource.entity';
 
@@ -14,7 +15,7 @@ import { ResourceEntity } from './entities/resource.entity';
     TypeOrmModule.forFeature([ResourceEntity]),
   ],
   controllers: [ResourcesController],
-  providers: [ResourcesService, PermissionService, ResourceQueryService, KinesisService],
-  exports: [ResourcesService, PermissionService, ResourceQueryService],
+  providers: [ResourcesService, PermissionService, ResourceQueryService, StatisticsService, KinesisService],
+  exports: [ResourcesService, PermissionService, ResourceQueryService, StatisticsService],
 })
 export class ResourcesModule {}

@@ -154,42 +154,65 @@ export class PermissionService {
     const mockRoles: Record<string, { permissions: Permission[] }> = {
       'admin': {
         permissions: [
+          'timeline:create', 'timeline:read', 'timeline:update', 'timeline:delete',
           'clients:create', 'clients:read', 'clients:update', 'clients:delete',
-          'invoices:create', 'invoices:read', 'invoices:update', 'invoices:delete',
           'staff:create', 'staff:read', 'staff:update', 'staff:delete',
-          'roles:create', 'roles:read', 'roles:update', 'roles:delete',
+          'invoices:create', 'invoices:read', 'invoices:update', 'invoices:delete',
+          'stocks:create', 'stocks:read', 'stocks:update', 'stocks:delete',
+          'activities:create', 'activities:read', 'activities:update', 'activities:delete',
           'reports:create', 'reports:read', 'reports:update', 'reports:delete',
-          'appointments:create', 'appointments:read', 'appointments:update', 'appointments:delete',
-          'treatments:create', 'treatments:read', 'treatments:update', 'treatments:delete'
+          'roles:create', 'roles:read', 'roles:update', 'roles:delete',
+          'sales:create', 'sales:read', 'sales:update', 'sales:delete',
+          'workflows:create', 'workflows:read', 'workflows:update', 'workflows:delete',
+          'permissions:create', 'permissions:read', 'permissions:update', 'permissions:delete',
+          'userData:create', 'userData:read', 'userData:update', 'userData:delete',
+          'history:create', 'history:read', 'history:update', 'history:delete'
         ]
       },
       'manager': {
         permissions: [
+          'timeline:create', 'timeline:read', 'timeline:update',
           'clients:create', 'clients:read', 'clients:update',
-          'invoices:create', 'invoices:read', 'invoices:update',
           'staff:read', 'staff:update',
-          'roles:read',
+          'invoices:create', 'invoices:read', 'invoices:update',
+          'stocks:read', 'stocks:update',
+          'activities:read', 'activities:update',
           'reports:read',
-          'appointments:create', 'appointments:read', 'appointments:update',
-          'treatments:read'
+          'roles:read',
+          'sales:read', 'sales:update',
+          'workflows:read', 'workflows:update',
+          'permissions:read',
+          'userData:read', 'userData:update',
+          'history:read'
         ]
       },
       'user': {
         permissions: [
+          'timeline:read',
           'clients:read',
-          'invoices:read',
           'staff:read',
+          'invoices:read',
+          'stocks:read',
+          'activities:read',
           'reports:read',
-          'appointments:read',
-          'treatments:read'
+          'roles:read',
+          'sales:read',
+          'workflows:read',
+          'permissions:read',
+          'userData:read',
+          'history:read'
         ]
       },
       'viewer': {
         permissions: [
+          'timeline:read',
           'clients:read',
-          'invoices:read',
           'staff:read',
-          'appointments:read'
+          'invoices:read',
+          'stocks:read',
+          'activities:read',
+          'reports:read',
+          'history:read'
         ]
       }
     };
@@ -204,29 +227,59 @@ export class PermissionService {
   private getDefaultPermissionsForRole(roleName: string): Permission[] {
     const rolePermissions: Record<string, Permission[]> = {
       'admin': [
+        'timeline:create', 'timeline:read', 'timeline:update', 'timeline:delete',
         'clients:create', 'clients:read', 'clients:update', 'clients:delete',
-        'invoices:create', 'invoices:read', 'invoices:update', 'invoices:delete',
         'staff:create', 'staff:read', 'staff:update', 'staff:delete',
+        'invoices:create', 'invoices:read', 'invoices:update', 'invoices:delete',
+        'stocks:create', 'stocks:read', 'stocks:update', 'stocks:delete',
+        'activities:create', 'activities:read', 'activities:update', 'activities:delete',
+        'reports:create', 'reports:read', 'reports:update', 'reports:delete',
         'roles:create', 'roles:read', 'roles:update', 'roles:delete',
-        'reports:create', 'reports:read', 'reports:update', 'reports:delete'
+        'sales:create', 'sales:read', 'sales:update', 'sales:delete',
+        'workflows:create', 'workflows:read', 'workflows:update', 'workflows:delete',
+        'permissions:create', 'permissions:read', 'permissions:update', 'permissions:delete',
+        'userData:create', 'userData:read', 'userData:update', 'userData:delete',
+        'history:create', 'history:read', 'history:update', 'history:delete'
       ],
       'manager': [
+        'timeline:create', 'timeline:read', 'timeline:update',
         'clients:create', 'clients:read', 'clients:update',
-        'invoices:create', 'invoices:read', 'invoices:update',
         'staff:read', 'staff:update',
+        'invoices:create', 'invoices:read', 'invoices:update',
+        'stocks:read', 'stocks:update',
+        'activities:read', 'activities:update',
+        'reports:read',
         'roles:read',
-        'reports:read'
+        'sales:read', 'sales:update',
+        'workflows:read', 'workflows:update',
+        'permissions:read',
+        'userData:read', 'userData:update',
+        'history:read'
       ],
       'user': [
+        'timeline:read',
         'clients:read',
-        'invoices:read',
         'staff:read',
-        'reports:read'
+        'invoices:read',
+        'stocks:read',
+        'activities:read',
+        'reports:read',
+        'roles:read',
+        'sales:read',
+        'workflows:read',
+        'permissions:read',
+        'userData:read',
+        'history:read'
       ],
       'viewer': [
+        'timeline:read',
         'clients:read',
+        'staff:read',
         'invoices:read',
-        'staff:read'
+        'stocks:read',
+        'activities:read',
+        'reports:read',
+        'history:read'
       ]
     };
 

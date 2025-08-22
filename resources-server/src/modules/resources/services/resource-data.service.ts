@@ -25,56 +25,46 @@ export class ResourceDataService {
    * Extract start and end dates from resource data
    */
   private extractDates(data: any, resourceType: string): { startDate: string | null; endDate: string | null } {
-    // Try common date fields based on resource type and data structure
-    const startDateFields = [
+    // Căutăm câmpurile de dată specifice în data
+    const dateFields = [
       'startDate',
-      'appointmentDate', 
-      'reservationDate',
-      'checkInDate',
-      'eventDate',
-      'scheduledDate',
-      'date'
-    ];
-
-    const endDateFields = [
-      'endDate',
-      'checkOutDate',
-      'endDate',
-      'finishDate',
-      'dueDate'
+      'endDate', 
+      'appointmentDate',
+      'actionDate',
+      'documentDate'
     ];
 
     let startDate: string | null = null;
     let endDate: string | null = null;
 
-    // Find start date
-    for (const field of startDateFields) {
-      if (data[field]) {
+    // Căutăm endDate specific - doar acest câmp va fi folosit pentru end_date
+    if (data.endDate) {
+      const date = new Date(data.endDate);
+      endDate = date.toISOString().split('T')[0];
+    }
+
+    // Căutăm câmpurile pentru startDate - toate celelalte câmpuri vor fi folosite pentru start_date
+    for (const field of dateFields) {
+      if (field !== 'endDate' && data[field]) {
         const date = new Date(data[field]);
         startDate = date.toISOString().split('T')[0];
         break;
       }
     }
 
-    // Find end date
-    for (const field of endDateFields) {
-      if (data[field]) {
-        const date = new Date(data[field]);
-        endDate = date.toISOString().split('T')[0];
-        break;
-      }
+    // Dacă nu găsim niciun câmp de dată, nu populăm nimic
+    if (!startDate && !endDate) {
+      return { startDate: null, endDate: null };
     }
 
-    // If no end date found, use start date as end date
-    if (!endDate && startDate) {
-      endDate = startDate;
+    // Dacă avem doar endDate, îl folosim și pentru startDate
+    if (!startDate && endDate) {
+      startDate = endDate;
     }
 
-    // Fallback to current date if no dates found
-    if (!startDate) {
-      const today = new Date().toISOString().split('T')[0];
-      startDate = today;
-      endDate = today;
+    // Dacă avem doar startDate, nu populăm endDate
+    if (startDate && !endDate) {
+      endDate = null;
     }
 
     return { startDate, endDate };
@@ -117,22 +107,10 @@ export class ResourceDataService {
         this.logger.log(`Using shard ${shardId} for creating ${resourceType}`);
       }
 
-      // Extract dates based on resource type
-      let startDate: string | null = null;
-      let endDate: string | null = null;
-      
-      if (resourceType === 'timeline') {
-        // Timeline needs both startDate and endDate
-        const extractedDates = this.extractDates(data, resourceType);
-        startDate = extractedDates.startDate || null;
-        endDate = extractedDates.endDate || null;
-      } else if (['invoices', 'activities', 'reports', 'sales', 'classes', 'history'].includes(resourceType)) {
-        // These resource types need only startDate
-        const extractedDates = this.extractDates(data, resourceType);
-        startDate = extractedDates.startDate || null;
-        endDate = null; // No endDate for these types
-      }
-      // For other resource types (patients, clients, members, staff, etc.), no dates are needed
+      // Extract dates from data - căutăm automat câmpurile de dată
+      const extractedDates = this.extractDates(data, resourceType);
+      const startDate = extractedDates.startDate;
+      const endDate = extractedDates.endDate;
 
       // Generate resource ID first to check for duplicates
       const connection = await this.databaseService.getConnection(businessId, locationId);
@@ -228,22 +206,10 @@ export class ResourceDataService {
         this.logger.log(`Using shard ${shardId} for updating ${resourceType}`);
       }
 
-      // Extract dates based on resource type
-      let startDate: string | null = null;
-      let endDate: string | null = null;
-      
-      if (resourceType === 'timeline') {
-        // Timeline needs both startDate and endDate
-        const extractedDates = this.extractDates(data, resourceType);
-        startDate = extractedDates.startDate || null;
-        endDate = extractedDates.endDate || null;
-      } else if (['invoices', 'activities', 'reports', 'sales', 'classes', 'history'].includes(resourceType)) {
-        // These resource types need only startDate
-        const extractedDates = this.extractDates(data, resourceType);
-        startDate = extractedDates.startDate || null;
-        endDate = null; // No endDate for these types
-      }
-      // For other resource types (patients, clients, members, staff, etc.), no dates are needed
+      // Extract dates from data - căutăm automat câmpurile de dată
+      const extractedDates = this.extractDates(data, resourceType);
+      const startDate = extractedDates.startDate;
+      const endDate = extractedDates.endDate;
 
       // Find existing resource by resourceId
       const existingResource = await this.resourceRepository.findOne({
@@ -371,22 +337,10 @@ export class ResourceDataService {
         throw new Error(`Resource with ID ${resourceId} for business ${businessId} location ${locationId} not found`);
       }
 
-      // Extract dates based on resource type (use existing dates if not provided)
-      let finalStartDate = existingResource.startDate;
-      let finalEndDate = existingResource.endDate;
-      
-      if (resourceType === 'timeline') {
-        // Timeline needs both startDate and endDate
-        const extractedDates = this.extractDates(data, resourceType);
-        finalStartDate = extractedDates.startDate || existingResource.startDate;
-        finalEndDate = extractedDates.endDate || existingResource.endDate;
-      } else if (['invoices', 'activities', 'reports', 'sales', 'classes', 'history'].includes(resourceType)) {
-        // These resource types need only startDate
-        const extractedDates = this.extractDates(data, resourceType);
-        finalStartDate = extractedDates.startDate || existingResource.startDate;
-        finalEndDate = null; // No endDate for these types
-      }
-      // For other resource types, keep existing dates
+      // Extract dates from data - căutăm automat câmpurile de dată (use existing dates if not provided)
+      const extractedDates = this.extractDates(data, resourceType);
+      const finalStartDate = extractedDates.startDate || existingResource.startDate;
+      const finalEndDate = extractedDates.endDate || existingResource.endDate;
 
       // Update resource entity
       Object.assign(existingResource, {

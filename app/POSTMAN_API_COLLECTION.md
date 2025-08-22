@@ -1015,21 +1015,112 @@ Content-Type: application/json
 
 ---
 
-## 📊 8. MONITORING ENDPOINTS
+## 📊 8. STATISTICS ENDPOINTS
 
-### 8.1 Request Metrics
+### 8.1 Business Statistics (Comprehensive)
+```http
+GET {{base_url}}/api/resources/{{business_id}}-{{location_id}}/statistics/business
+Authorization: Bearer {{auth_token}}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "appointments": {
+      "today": 15,
+      "yesterday": 12,
+      "difference": 3,
+      "percentageChange": 25.0
+    },
+    "clients": {
+      "thisMonth": 45,
+      "lastMonth": 38,
+      "difference": 7,
+      "percentageChange": 18.42
+    },
+    "revenue": {
+      "thisMonth": 12500.50,
+      "lastMonth": 10800.00,
+      "difference": 1700.50,
+      "percentageChange": 15.75
+    },
+    "inventory": {
+      "totalProducts": 150,
+      "lowStock": 12,
+      "outOfStock": 3,
+      "totalValue": 25000.00
+    },
+    "summary": {
+      "totalRevenue": 12500.50,
+      "totalClients": 45,
+      "totalAppointments": 15,
+      "averageRevenuePerClient": 277.79
+    }
+  }
+}
+```
+
+### 8.2 Resource Type Statistics
+```http
+GET {{base_url}}/api/resources/{{business_id}}-{{location_id}}/statistics/{{resource_type}}
+Authorization: Bearer {{auth_token}}
+```
+
+**Parameters:**
+- `resource_type`: timeline, clients, invoices, stocks, etc.
+- `startDate` (optional): YYYY-MM-DD
+- `endDate` (optional): YYYY-MM-DD
+
+**Example:**
+```http
+GET {{base_url}}/api/resources/{{business_id}}-{{location_id}}/statistics/timeline?startDate=2024-01-01&endDate=2024-01-31
+```
+
+### 8.3 Daily Appointment Statistics
+```http
+GET {{base_url}}/api/resources/{{business_id}}-{{location_id}}/statistics/appointments/daily
+Authorization: Bearer {{auth_token}}
+```
+
+**Parameters:**
+- `days` (optional): Number of days to analyze (default: 7)
+
+**Example:**
+```http
+GET {{base_url}}/api/resources/{{business_id}}-{{location_id}}/statistics/appointments/daily?days=30
+```
+
+### 8.4 Monthly Revenue Statistics
+```http
+GET {{base_url}}/api/resources/{{business_id}}-{{location_id}}/statistics/revenue/monthly
+Authorization: Bearer {{auth_token}}
+```
+
+**Parameters:**
+- `months` (optional): Number of months to analyze (default: 6)
+
+**Example:**
+```http
+GET {{base_url}}/api/resources/{{business_id}}-{{location_id}}/statistics/revenue/monthly?months=12
+```
+
+## 📈 9. MONITORING ENDPOINTS
+
+### 9.1 Request Metrics
 ```http
 GET {{base_url}}/api/metrics/requests
 Authorization: Bearer {{auth_token}}
 ```
 
-### 8.2 Error Metrics
+### 9.2 Error Metrics
 ```http
 GET {{base_url}}/api/metrics/errors
 Authorization: Bearer {{auth_token}}
 ```
 
-### 8.3 Performance Metrics
+### 9.3 Performance Metrics
 ```http
 GET {{base_url}}/api/metrics/performance
 Authorization: Bearer {{auth_token}}
@@ -1037,9 +1128,9 @@ Authorization: Bearer {{auth_token}}
 
 ---
 
-## 🔔 9. WEBHOOKS (Optional)
+## 🔔 10. WEBHOOKS (Optional)
 
-### 9.1 Resource Created Webhook
+### 10.1 Resource Created Webhook
 ```http
 POST {{base_url}}/api/webhooks/resource-created
 Content-Type: application/json

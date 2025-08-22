@@ -1,67 +1,24 @@
-// Resource type definitions for all business types
-export type BusinessType = 'dental' | 'gym' | 'hotel';
+// Simplified resource type definitions - no business-specific classifications
+// All resources use the same BaseResource structure with flexible data field
 
-// Common resource types (available for all business types)
-export type CommonResourceType = 
-  | 'stocks' 
-  | 'invoices' 
-  | 'activities' 
-  | 'reports'
-  | 'roles'
-  | 'sales'
-  | 'workflows'
-  | 'permissions'
-  | 'userData'
-  | 'history'; // Alias for activities (frontend compatibility)
+// Core resource types for all businesses
+export type CoreResourceType = 
+  | 'timeline'    // Reservations, appointments, events
+  | 'clients'     // Customers, members, patients
+  | 'staff'       // Employees, team members
+  | 'invoices'    // Billing and payments
+  | 'stocks'      // Inventory management
+  | 'activities'  // Business activities and logs
+  | 'reports'     // Analytics and reporting
+  | 'roles'       // User roles and permissions
+  | 'sales'       // Sales data
+  | 'workflows'   // Business processes
+  | 'permissions' // Access control
+  | 'userData'    // User-specific data
+  | 'history';    // Alias for activities (frontend compatibility)
 
-// Dental-specific resource types
-export type DentalResourceType = 
-  | 'timeline'
-  | 'clients' 
-  | 'services'
-  | 'staff'
-  | CommonResourceType;
-
-// Gym-specific resource types
-export type GymResourceType = 
-  | 'timeline'
-  | 'members' 
-  | 'packages'
-  | 'classes'
-  | 'equipment'
-  | 'staff'
-  | CommonResourceType;
-
-// Hotel-specific resource types
-export type HotelResourceType = 
-  | 'timeline'
-  | 'clients' 
-  | 'rooms'
-  | 'services'
-  | 'staff'
-  | CommonResourceType;
-
-// Union of all resource types
-export type ResourceType = 
-  | DentalResourceType 
-  | GymResourceType 
-  | HotelResourceType;
-
-// Business type to resource type mapping
-export type BusinessResourceMap = {
-  dental: DentalResourceType;
-  gym: GymResourceType;
-  hotel: HotelResourceType;
-};
-
-// Helper type to get valid resource types for a business
-export type GetResourceTypes<T extends BusinessType> = BusinessResourceMap[T];
+// Union of all valid resource types
+export type ResourceType = CoreResourceType;
 
 // Resource operation types
 export type ResourceOperation = 'create' | 'read' | 'update' | 'patch' | 'delete' | 'list';
-
-// Permission types
-export type Permission = 'create' | 'read' | 'update' | 'delete' | 'list';
-
-// Resource status types
-export type ResourceStatus = 'active' | 'inactive' | 'archived' | 'deleted';

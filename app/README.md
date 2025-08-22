@@ -25,6 +25,38 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## 📊 Statistics API
+
+The application provides comprehensive statistics for business performance including appointments, clients, revenue, and inventory. **All statistics can be obtained in a single request** using the main endpoint `/statistics/business`.
+
+### 🎯 Main Endpoint (Recommended)
+```http
+GET /{businessId}-{locationId}/statistics/business
+```
+
+This endpoint returns all statistics in one call:
+- ✅ Appointments today vs yesterday
+- ✅ Clients this month vs last month  
+- ✅ Revenue this month vs last month
+- ✅ Inventory and stock levels
+- ✅ Summary and performance metrics
+
+### Example Usage
+```javascript
+const response = await fetch('/api/resources/business-123-location-456/statistics/business');
+const stats = await response.json();
+
+// All statistics available in stats.data
+console.log('Appointments today:', stats.data.appointments.today);
+console.log('Clients this month:', stats.data.clients.thisMonth);
+console.log('Revenue this month:', stats.data.revenue.thisMonth);
+console.log('Total products:', stats.data.inventory.totalProducts);
+```
+
+### Documentation
+- [Statistics API Documentation](./STATISTICS_API.md)
+- [Implementation Summary](./STATISTICS_IMPLEMENTATION_SUMMARY.md)
+
 ## Project setup
 
 ```bash

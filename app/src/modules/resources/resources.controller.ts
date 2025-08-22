@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { ResourcesService } from './resources.service';
 import { ResourceQueryService, ResourceQuery } from './services/resource-query.service';
+import { StatisticsService } from './services/statistics.service';
 import { ResourceType } from './types/base-resource';
 
 // Simplified request interface - just the data
@@ -42,6 +43,7 @@ export class ResourcesController {
   constructor(
     private readonly resourcesService: ResourcesService,
     private readonly resourceQueryService: ResourceQueryService,
+    private readonly statisticsService: StatisticsService,
   ) { }
 
   @Post(':businessId-:locationId')
@@ -347,5 +349,234 @@ export class ResourcesController {
         operation: 'query',
       },
     };
+  }
+
+  // Statistics endpoints
+
+  @Get(':businessId-:locationId/statistics/business')
+  @ApiOperation({ summary: 'Get comprehensive business statistics' })
+  @ApiResponse({ status: 200, description: 'Business statistics retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  async getBusinessStatistics(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+  ) {
+    try {
+      const statistics = await this.statisticsService.getBusinessStatistics(businessId, locationId);
+
+      return {
+        success: true,
+        data: statistics,
+        meta: {
+          businessId,
+          locationId,
+          timestamp: new Date().toISOString(),
+          operation: 'business-statistics',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error generating business statistics: ${error.message}`,
+        meta: {
+          businessId,
+          locationId,
+          timestamp: new Date().toISOString(),
+          operation: 'business-statistics',
+        },
+      };
+    }
+  }
+
+  @Get(':businessId-:locationId/statistics/:resourceType')
+  @ApiOperation({ summary: 'Get statistics for a specific resource type' })
+  @ApiResponse({ status: 200, description: 'Resource type statistics retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({ name: 'resourceType', description: 'Resource type' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date filter (YYYY-MM-DD)' })
+  async getResourceTypeStatistics(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('resourceType') resourceType: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    try {
+      const dateRange = startDate && endDate ? { startDate, endDate } : undefined;
+      const statistics = await this.statisticsService.getResourceTypeStatistics(
+        businessId,
+        locationId,
+        resourceType,
+        dateRange,
+      );
+
+      return {
+        success: true,
+        data: statistics,
+        meta: {
+          businessId,
+          locationId,
+          resourceType,
+          dateRange,
+          timestamp: new Date().toISOString(),
+          operation: 'resource-type-statistics',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error generating resource type statistics: ${error.message}`,
+        meta: {
+          businessId,
+          locationId,
+          resourceType,
+          timestamp: new Date().toISOString(),
+          operation: 'resource-type-statistics',
+        },
+      };
+    }
+  }
+
+  @Get(':businessId-:locationId/statistics/appointments/daily')
+  @ApiOperation({ summary: 'Get daily appointment statistics' })
+  @ApiResponse({ status: 200, description: 'Daily appointment statistics retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiQuery({ name: 'days', required: false, description: 'Number of days to analyze (default: 7)' })
+  async getDailyAppointmentStatistics(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Query('days') days?: string,
+  ) {
+    try {
+      const daysToAnalyze = days ? parseInt(days, 10) : 7;
+      const statistics = await this.statisticsService.getResourceTypeStatistics(
+        businessId,
+        locationId,
+        'timeline',
+      );
+
+      // Filter for the last N days
+      const today = new Date();
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - daysToAnalyze);
+
+      const dailyStats = {
+        daysAnalyzed: daysToAnalyze,
+        totalAppointments: statistics.total,
+        averagePerDay: Math.round((statistics.total / daysToAnalyze) * 100) / 100,
+        byDate: statistics.byDate,
+        trend: this.calculateTrend(statistics.byDate),
+      };
+
+      return {
+        success: true,
+        data: dailyStats,
+        meta: {
+          businessId,
+          locationId,
+          resourceType: 'timeline',
+          daysAnalyzed: daysToAnalyze,
+          timestamp: new Date().toISOString(),
+          operation: 'daily-appointment-statistics',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error generating daily appointment statistics: ${error.message}`,
+        meta: {
+          businessId,
+          locationId,
+          timestamp: new Date().toISOString(),
+          operation: 'daily-appointment-statistics',
+        },
+      };
+    }
+  }
+
+  @Get(':businessId-:locationId/statistics/revenue/monthly')
+  @ApiOperation({ summary: 'Get monthly revenue statistics' })
+  @ApiResponse({ status: 200, description: 'Monthly revenue statistics retrieved successfully' })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiQuery({ name: 'months', required: false, description: 'Number of months to analyze (default: 6)' })
+  async getMonthlyRevenueStatistics(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Query('months') months?: string,
+  ) {
+    try {
+      const monthsToAnalyze = months ? parseInt(months, 10) : 6;
+      const statistics = await this.statisticsService.getResourceTypeStatistics(
+        businessId,
+        locationId,
+        'invoices',
+      );
+
+      const monthlyStats = {
+        monthsAnalyzed: monthsToAnalyze,
+        totalRevenue: statistics.totalValue,
+        averagePerMonth: Math.round((statistics.totalValue / monthsToAnalyze) * 100) / 100,
+        byMonth: this.groupByMonth(statistics.byDate),
+        trend: this.calculateTrend(this.groupByMonth(statistics.byDate)),
+      };
+
+      return {
+        success: true,
+        data: monthlyStats,
+        meta: {
+          businessId,
+          locationId,
+          resourceType: 'invoices',
+          monthsAnalyzed: monthsToAnalyze,
+          timestamp: new Date().toISOString(),
+          operation: 'monthly-revenue-statistics',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error generating monthly revenue statistics: ${error.message}`,
+        meta: {
+          businessId,
+          locationId,
+          timestamp: new Date().toISOString(),
+          operation: 'monthly-revenue-statistics',
+        },
+      };
+    }
+  }
+
+  // Helper methods for trend calculation
+  private calculateTrend(data: Record<string, number>): 'increasing' | 'decreasing' | 'stable' {
+    const values = Object.values(data).sort();
+    if (values.length < 2) return 'stable';
+    
+    const firstHalf = values.slice(0, Math.floor(values.length / 2));
+    const secondHalf = values.slice(Math.floor(values.length / 2));
+    
+    const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+    
+    const change = ((secondAvg - firstAvg) / firstAvg) * 100;
+    
+    if (change > 5) return 'increasing';
+    if (change < -5) return 'decreasing';
+    return 'stable';
+  }
+
+  private groupByMonth(data: Record<string, number>): Record<string, number> {
+    const monthlyData: Record<string, number> = {};
+    
+    Object.entries(data).forEach(([date, value]) => {
+      const monthKey = date.substring(0, 7); // YYYY-MM
+      monthlyData[monthKey] = (monthlyData[monthKey] || 0) + value;
+    });
+    
+    return monthlyData;
   }
 }
