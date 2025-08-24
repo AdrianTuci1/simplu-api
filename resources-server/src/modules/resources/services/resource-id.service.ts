@@ -67,16 +67,16 @@ export class ResourceIdService {
             const query = `
                 SELECT resource_id 
                 FROM resources 
-                WHERE business_id = $1 
-                AND location_id = $2 
-                AND resource_type = $3 
-                AND resource_id LIKE $4
+                WHERE business_location_id = $1 
+                AND resource_type = $2 
+                AND resource_id LIKE $3
                 ORDER BY resource_id DESC 
                 LIMIT 1
             `;
             
+            const businessLocationId = `${businessId}-${locationId}`;
             const pattern = `${baseId}-%`;
-            const result = await pool.query(query, [businessId, locationId, resourceType, pattern]);
+            const result = await pool.query(query, [businessLocationId, resourceType, pattern]);
             
             if (result.rows.length === 0) {
                 // No existing resources for this type/month, start with 1

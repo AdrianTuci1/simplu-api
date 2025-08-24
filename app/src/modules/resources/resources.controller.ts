@@ -64,7 +64,7 @@ export class ResourcesController {
       businessId,
       locationId,
       resourceType,
-      data: resourceRequest.data,
+      data: resourceRequest,
     });
   }
 

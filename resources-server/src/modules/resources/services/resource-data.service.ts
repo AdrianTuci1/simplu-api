@@ -31,7 +31,8 @@ export class ResourceDataService {
       'endDate', 
       'appointmentDate',
       'actionDate',
-      'documentDate'
+      'documentDate',
+      'date',
     ];
 
     let startDate: string | null = null;
@@ -48,6 +49,7 @@ export class ResourceDataService {
       if (field !== 'endDate' && data[field]) {
         const date = new Date(data[field]);
         startDate = date.toISOString().split('T')[0];
+
         break;
       }
     }
@@ -64,7 +66,7 @@ export class ResourceDataService {
 
     // Dacă avem doar startDate, nu populăm endDate
     if (startDate && !endDate) {
-      endDate = null;
+      endDate = startDate;
     }
 
     return { startDate, endDate };

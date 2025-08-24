@@ -24,7 +24,12 @@ export const VALID_RESOURCE_TYPES = [
   'workflows',   // Business processes
   'permissions', // Access control
   'userData',    // User-specific data
-  'history'      // Alias for activities (frontend compatibility)
+  'history',      // Alias for activities (frontend compatibility)
+
+  'appointment',
+  'patient',
+  'medic',
+  'treatment',
 ] as const;
 
 export type ResourceType = typeof VALID_RESOURCE_TYPES[number];

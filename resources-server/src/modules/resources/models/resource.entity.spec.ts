@@ -45,8 +45,7 @@ describe('ResourceEntity', () => {
   it('should create table with data field and auto-generated id', async () => {
     // This test ensures that the table is created with the data field and auto-generated id
     const entity = new ResourceEntity();
-    entity.businessId = 'test-business';
-    entity.locationId = 'test-location';
+    entity.businessLocationId = 'test-business-test-location';
     entity.resourceType = 'test';
     entity.resourceId = 'te24-00001';
     entity.data = { test: 'data' };
@@ -54,8 +53,7 @@ describe('ResourceEntity', () => {
     entity.endDate = '2024-01-01';
 
     // The entity should have all required fields including data
-    expect(entity.businessId).toBe('test-business');
-    expect(entity.locationId).toBe('test-location');
+    expect(entity.businessLocationId).toBe('test-business-test-location');
     expect(entity.resourceType).toBe('test');
     expect(entity.resourceId).toBe('te24-00001');
     expect(entity.data).toEqual({ test: 'data' });
@@ -75,8 +73,7 @@ describe('ResourceEntity', () => {
     const entity = new ResourceEntity();
     
     // Test that entity can be instantiated with required properties
-    entity.businessId = 'business-123';
-    entity.locationId = 'location-456';
+    entity.businessLocationId = 'business-123-location-456';
     entity.resourceType = 'clients';
     entity.resourceId = 'cl24-00001';
     entity.data = {
@@ -87,8 +84,7 @@ describe('ResourceEntity', () => {
     entity.startDate = '2024-01-01';
     entity.endDate = '2024-01-01';
 
-    expect(entity.businessId).toBe('business-123');
-    expect(entity.locationId).toBe('location-456');
+    expect(entity.businessLocationId).toBe('business-123-location-456');
     expect(entity.resourceType).toBe('clients');
     expect(entity.resourceId).toBe('cl24-00001');
     expect(entity.data).toEqual({

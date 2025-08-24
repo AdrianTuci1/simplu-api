@@ -8,8 +8,7 @@ import { ResourceEntity } from '../entities/resource.entity';
 
 export interface ResourceRecord {
     id: number;
-    business_id: string;
-    location_id: string;
+    business_location_id: string;
     resource_type: string;
     resource_id: string;
     data: any;
@@ -482,10 +481,10 @@ export class ResourceQueryService {
         try {
             this.logger.log(`Querying resources: businessId=${businessId}, locationId=${locationId}, resourceType=${resourceType}`);
 
+            const businessLocationId = `${businessId}-${locationId}`;
             const queryBuilder = this.resourceRepository
                 .createQueryBuilder('resource')
-                .where('resource.businessId = :businessId', { businessId })
-                .andWhere('resource.locationId = :locationId', { locationId });
+                .where('resource.businessLocationId = :businessLocationId', { businessLocationId });
 
             if (resourceType) {
                 queryBuilder.andWhere('resource.resourceType = :resourceType', { resourceType });
@@ -512,8 +511,7 @@ export class ResourceQueryService {
             // Convert ResourceEntity to ResourceRecord
             return resources.map(resource => ({
                 id: resource.id,
-                business_id: resource.businessId,
-                location_id: resource.locationId,
+                business_location_id: resource.businessLocationId,
                 resource_type: resource.resourceType,
                 resource_id: resource.resourceId,
                 data: resource.data,
@@ -556,8 +554,7 @@ export class ResourceQueryService {
             // Convert ResourceEntity to ResourceRecord
             return {
                 id: resource.id,
-                business_id: resource.businessId,
-                location_id: resource.locationId,
+                business_location_id: resource.businessLocationId,
                 resource_type: resource.resourceType,
                 resource_id: resource.resourceId,
                 data: resource.data,
@@ -604,8 +601,7 @@ export class ResourceQueryService {
             // Convert ResourceEntity to ResourceRecord
             return resources.map(resource => ({
                 id: resource.id,
-                business_id: resource.businessId,
-                location_id: resource.locationId,
+                business_location_id: resource.businessLocationId,
                 resource_type: resource.resourceType,
                 resource_id: resource.resourceId,
                 data: resource.data,
@@ -659,8 +655,7 @@ export class ResourceQueryService {
             // Convert ResourceEntity to ResourceRecord
             return resources.map(resource => ({
                 id: resource.id,
-                business_id: resource.businessId,
-                location_id: resource.locationId,
+                business_location_id: resource.businessLocationId,
                 resource_type: resource.resourceType,
                 resource_id: resource.resourceId,
                 data: resource.data,
@@ -734,10 +729,14 @@ export class ResourceQueryService {
     }
 
     private convertToBaseResource(record: ResourceRecord): BaseResource {
+        // Extract businessId and locationId from business_location_id
+        const [businessId, locationId] = record.business_location_id.split('-');
+        
+
         return {
-            id: `${record.business_id}-${record.location_id}`,
-            businessId: record.business_id,
-            locationId: record.location_id,
+            id: record.business_location_id,
+            businessId: businessId,
+            locationId: locationId,
             resourceType: record.resource_type,
             resourceId: record.resource_id,
             data: {

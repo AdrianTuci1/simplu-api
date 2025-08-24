@@ -83,6 +83,54 @@ export class DatabaseService {
     }
 
     private async createRDSTables() {
+        // Enable pg_trgm extension for GIN indexes on text
+        await this.rdsPool.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+        
+        // First check if table exists and if data column is TEXT instead of JSONB
+        const checkTableQuery = `
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'resources' AND column_name = 'data'
+        `;
+        
+        const tableCheck = await this.rdsPool.query(checkTableQuery);
+        
+        if (tableCheck.rows.length > 0) {
+            const dataType = tableCheck.rows[0].data_type;
+            if (dataType === 'text') {
+                this.logger.warn('Table resources exists with data column as TEXT. Attempting to migrate to JSONB...');
+                
+                // Try to alter the column type
+                try {
+                    await this.rdsPool.query(`
+                        ALTER TABLE resources 
+                        ALTER COLUMN data TYPE JSONB USING data::JSONB
+                    `);
+                    this.logger.log('Successfully migrated data column from TEXT to JSONB');
+                } catch (error) {
+                    this.logger.error('Failed to migrate data column. Dropping and recreating table...', error);
+                    
+                    // Drop existing indexes first
+                    await this.rdsPool.query(`
+                        DROP INDEX IF EXISTS idx_data_medic_name;
+                        DROP INDEX IF EXISTS idx_data_patient_name;
+                        DROP INDEX IF EXISTS idx_data_trainer_name;
+                        DROP INDEX IF EXISTS idx_data_customer_name;
+                        DROP INDEX IF EXISTS idx_resources_business_location;
+                        DROP INDEX IF EXISTS idx_resources_type;
+                        DROP INDEX IF EXISTS idx_resources_start_date;
+                        DROP INDEX IF EXISTS idx_resources_end_date;
+                        DROP INDEX IF EXISTS idx_resources_business_type_start_date;
+                        DROP INDEX IF EXISTS idx_resources_business_type_end_date;
+                        DROP INDEX IF EXISTS idx_resources_created_at;
+                    `);
+                    
+                    // Drop and recreate table
+                    await this.rdsPool.query('DROP TABLE IF EXISTS resources');
+                }
+            }
+        }
+
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
         id BIGSERIAL PRIMARY KEY,
@@ -114,13 +162,13 @@ export class DatabaseService {
       
       -- Indexuri pentru câmpurile din JSON data
       CREATE INDEX IF NOT EXISTS idx_data_medic_name 
-        ON resources USING GIN ((data->>'medicName'));
+        ON resources USING GIN ((data->>'medicName') gin_trgm_ops);
       CREATE INDEX IF NOT EXISTS idx_data_patient_name 
-        ON resources USING GIN ((data->>'patientName'));
+        ON resources USING GIN ((data->>'patientName') gin_trgm_ops);
       CREATE INDEX IF NOT EXISTS idx_data_trainer_name 
-        ON resources USING GIN ((data->>'trainerName'));
+        ON resources USING GIN ((data->>'trainerName') gin_trgm_ops);
       CREATE INDEX IF NOT EXISTS idx_data_customer_name 
-        ON resources USING GIN ((data->>'customerName'));
+        ON resources USING GIN ((data->>'customerName') gin_trgm_ops);
     `;
 
         await this.rdsPool.query(createTableQuery);
@@ -174,6 +222,54 @@ export class DatabaseService {
     }
 
     private async createCitrusTables(pool: Pool) {
+        // Enable pg_trgm extension for GIN indexes on text
+        await pool.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+        
+        // First check if table exists and if data column is TEXT instead of JSONB
+        const checkTableQuery = `
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'resources' AND column_name = 'data'
+        `;
+        
+        const tableCheck = await pool.query(checkTableQuery);
+        
+        if (tableCheck.rows.length > 0) {
+            const dataType = tableCheck.rows[0].data_type;
+            if (dataType === 'text') {
+                this.logger.warn('Table resources exists with data column as TEXT. Attempting to migrate to JSONB...');
+                
+                // Try to alter the column type
+                try {
+                    await pool.query(`
+                        ALTER TABLE resources 
+                        ALTER COLUMN data TYPE JSONB USING data::JSONB
+                    `);
+                    this.logger.log('Successfully migrated data column from TEXT to JSONB');
+                } catch (error) {
+                    this.logger.error('Failed to migrate data column. Dropping and recreating table...', error);
+                    
+                    // Drop existing indexes first
+                    await pool.query(`
+                        DROP INDEX IF EXISTS idx_data_medic_name;
+                        DROP INDEX IF EXISTS idx_data_patient_name;
+                        DROP INDEX IF EXISTS idx_data_trainer_name;
+                        DROP INDEX IF EXISTS idx_data_customer_name;
+                        DROP INDEX IF EXISTS idx_resources_business_location;
+                        DROP INDEX IF EXISTS idx_resources_type;
+                        DROP INDEX IF EXISTS idx_resources_start_date;
+                        DROP INDEX IF EXISTS idx_resources_end_date;
+                        DROP INDEX IF EXISTS idx_resources_business_type_start_date;
+                        DROP INDEX IF EXISTS idx_resources_business_type_end_date;
+                        DROP INDEX IF EXISTS idx_resources_created_at;
+                    `);
+                    
+                    // Drop and recreate table
+                    await pool.query('DROP TABLE IF EXISTS resources');
+                }
+            }
+        }
+
         const createTableQuery = `
       CREATE TABLE IF NOT EXISTS resources (
         id BIGSERIAL PRIMARY KEY,
@@ -205,13 +301,13 @@ export class DatabaseService {
       
       -- Indexuri pentru câmpurile din JSON data
       CREATE INDEX IF NOT EXISTS idx_data_medic_name 
-        ON resources USING GIN ((data->>'medicName'));
+        ON resources USING GIN ((data->>'medicName') gin_trgm_ops);
       CREATE INDEX IF NOT EXISTS idx_data_patient_name 
-        ON resources USING GIN ((data->>'patientName'));
+        ON resources USING GIN ((data->>'patientName') gin_trgm_ops);
       CREATE INDEX IF NOT EXISTS idx_data_trainer_name 
-        ON resources USING GIN ((data->>'trainerName'));
+        ON resources USING GIN ((data->>'trainerName') gin_trgm_ops);
       CREATE INDEX IF NOT EXISTS idx_data_customer_name 
-        ON resources USING GIN ((data->>'customerName'));
+        ON resources USING GIN ((data->>'customerName') gin_trgm_ops);
     `;
 
         await pool.query(createTableQuery);
