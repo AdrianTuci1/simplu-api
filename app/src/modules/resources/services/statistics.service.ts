@@ -1,41 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResourceEntity } from '../entities/resource.entity';
-import { CitrusShardingService } from '../../../config/citrus-sharding.config';
 
 export interface BusinessStatistics {
-  appointments: {
-    today: number;
-    yesterday: number;
-    difference: number;
-    percentageChange: number;
-  };
-  clients: {
-    thisMonth: number;
-    lastMonth: number;
-    difference: number;
-    percentageChange: number;
-  };
-  revenue: {
-    thisMonth: number;
-    lastMonth: number;
-    difference: number;
-    percentageChange: number;
-  };
-  inventory: {
-    totalProducts: number;
-    lowStock: number;
-    outOfStock: number;
-    totalValue: number;
-  };
-  summary: {
-    totalRevenue: number;
-    totalClients: number;
-    totalAppointments: number;
-    averageRevenuePerClient: number;
-  };
+  registeredPatients: number;
+  scheduledVisits: number;
+  completedVisits: number;
+  canceledVisits: number;
+}
+
+export interface RecentActivity {
+  id: string;
+  resourceType: string;
+  resourceId: string;
+  activityType: 'appointment' | 'patient' | 'product' | 'pickup' | 'sale' | 'other';
+  title: string;
+  description: string;
+  amount?: number;
+  status?: string;
+  updatedAt: Date;
+  createdAt: Date;
 }
 
 export interface DateRange {
@@ -46,46 +31,44 @@ export interface DateRange {
 @Injectable()
 export class StatisticsService {
   private readonly logger = new Logger(StatisticsService.name);
-  private readonly citrusService: CitrusShardingService;
 
   constructor(
-    private readonly configService: ConfigService,
     @InjectRepository(ResourceEntity)
     private readonly resourceRepository: Repository<ResourceEntity>,
-  ) {
-    this.citrusService = new CitrusShardingService();
-  }
+  ) {}
 
   /**
-   * Get comprehensive business statistics
+   * Get simplified business statistics with only 4 KPIs for current month
    */
   async getBusinessStatistics(
     businessId: string,
     locationId: string,
   ): Promise<BusinessStatistics> {
     try {
-      this.logger.log(`Generating statistics for ${businessId}/${locationId}`);
+      this.logger.log(`Generating simplified statistics for ${businessId}/${locationId}`);
+
+      const businessLocationId = `${businessId}-${locationId}`;
+      const { thisMonth } = this.getMonthRanges();
+
+      console.log('thisMonth', thisMonth);
 
       const [
-        appointments,
-        clients,
-        revenue,
-        inventory,
+        registeredPatients,
+        scheduledVisits,
+        completedVisits,
+        canceledVisits,
       ] = await Promise.all([
-        this.getAppointmentStatistics(businessId, locationId),
-        this.getClientStatistics(businessId, locationId),
-        this.getRevenueStatistics(businessId, locationId),
-        this.getInventoryStatistics(businessId, locationId),
+        this.getRegisteredPatients(businessLocationId, thisMonth),
+        this.getScheduledVisits(businessLocationId, thisMonth),
+        this.getCompletedVisits(businessLocationId, thisMonth),
+        this.getCanceledVisits(businessLocationId, thisMonth),
       ]);
 
-      const summary = this.calculateSummary(revenue, clients, appointments);
-
       return {
-        appointments,
-        clients,
-        revenue,
-        inventory,
-        summary,
+        registeredPatients,
+        scheduledVisits,
+        completedVisits,
+        canceledVisits,
       };
     } catch (error) {
       this.logger.error(`Error generating business statistics: ${error.message}`, error.stack);
@@ -94,282 +77,28 @@ export class StatisticsService {
   }
 
   /**
-   * Get appointment statistics (today vs yesterday)
+   * Get recent activities for current day (all relevant resource types)
    */
-  private async getAppointmentStatistics(
+  async getRecentActivities(
     businessId: string,
     locationId: string,
-  ): Promise<BusinessStatistics['appointments']> {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const todayStr = today.toISOString().split('T')[0];
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    const [todayAppointments, yesterdayAppointments] = await Promise.all([
-      this.countResourcesByDate(businessId, locationId, 'timeline', todayStr),
-      this.countResourcesByDate(businessId, locationId, 'timeline', yesterdayStr),
-    ]);
-
-    const difference = todayAppointments - yesterdayAppointments;
-    const percentageChange = yesterdayAppointments > 0 
-      ? ((difference / yesterdayAppointments) * 100) 
-      : 0;
-
-    return {
-      today: todayAppointments,
-      yesterday: yesterdayAppointments,
-      difference,
-      percentageChange: Math.round(percentageChange * 100) / 100,
-    };
-  }
-
-  /**
-   * Get client statistics (this month vs last month)
-   */
-  private async getClientStatistics(
-    businessId: string,
-    locationId: string,
-  ): Promise<BusinessStatistics['clients']> {
-    const { thisMonth, lastMonth } = this.getMonthRanges();
-
-    const [thisMonthClients, lastMonthClients] = await Promise.all([
-      this.countResourcesByDateRange(businessId, locationId, 'clients', thisMonth.startDate, thisMonth.endDate),
-      this.countResourcesByDateRange(businessId, locationId, 'clients', lastMonth.startDate, lastMonth.endDate),
-    ]);
-
-    const difference = thisMonthClients - lastMonthClients;
-    const percentageChange = lastMonthClients > 0 
-      ? ((difference / lastMonthClients) * 100) 
-      : 0;
-
-    return {
-      thisMonth: thisMonthClients,
-      lastMonth: lastMonthClients,
-      difference,
-      percentageChange: Math.round(percentageChange * 100) / 100,
-    };
-  }
-
-  /**
-   * Get revenue statistics (this month vs last month)
-   */
-  private async getRevenueStatistics(
-    businessId: string,
-    locationId: string,
-  ): Promise<BusinessStatistics['revenue']> {
-    const { thisMonth, lastMonth } = this.getMonthRanges();
-
-    const [thisMonthRevenue, lastMonthRevenue] = await Promise.all([
-      this.calculateRevenueByDateRange(businessId, locationId, thisMonth.startDate, thisMonth.endDate),
-      this.calculateRevenueByDateRange(businessId, locationId, lastMonth.startDate, lastMonth.endDate),
-    ]);
-
-    const difference = thisMonthRevenue - lastMonthRevenue;
-    const percentageChange = lastMonthRevenue > 0 
-      ? ((difference / lastMonthRevenue) * 100) 
-      : 0;
-
-    return {
-      thisMonth: Math.round(thisMonthRevenue * 100) / 100,
-      lastMonth: Math.round(lastMonthRevenue * 100) / 100,
-      difference: Math.round(difference * 100) / 100,
-      percentageChange: Math.round(percentageChange * 100) / 100,
-    };
-  }
-
-  /**
-   * Get inventory statistics
-   */
-  private async getInventoryStatistics(
-    businessId: string,
-    locationId: string,
-  ): Promise<BusinessStatistics['inventory']> {
-    const inventoryItems = await this.getResourcesByType(businessId, locationId, 'stocks');
-
-    let totalProducts = 0;
-    let lowStock = 0;
-    let outOfStock = 0;
-    let totalValue = 0;
-
-    inventoryItems.forEach(item => {
-      const data = item.data;
-      const quantity = data.quantity || data.stockQuantity || 0;
-      const price = data.price || data.unitPrice || 0;
-      const minStock = data.minStock || data.minimumStock || 0;
-
-      totalProducts++;
-      totalValue += quantity * price;
-
-      if (quantity === 0) {
-        outOfStock++;
-      } else if (quantity <= minStock) {
-        lowStock++;
-      }
-    });
-
-    return {
-      totalProducts,
-      lowStock,
-      outOfStock,
-      totalValue: Math.round(totalValue * 100) / 100,
-    };
-  }
-
-  /**
-   * Calculate summary statistics
-   */
-  private calculateSummary(
-    revenue: BusinessStatistics['revenue'],
-    clients: BusinessStatistics['clients'],
-    appointments: BusinessStatistics['appointments'],
-  ): BusinessStatistics['summary'] {
-    const totalRevenue = revenue.thisMonth;
-    const totalClients = clients.thisMonth;
-    const totalAppointments = appointments.today;
-    const averageRevenuePerClient = totalClients > 0 ? totalRevenue / totalClients : 0;
-
-    return {
-      totalRevenue: Math.round(totalRevenue * 100) / 100,
-      totalClients,
-      totalAppointments,
-      averageRevenuePerClient: Math.round(averageRevenuePerClient * 100) / 100,
-    };
-  }
-
-  /**
-   * Get month ranges for current and previous month
-   */
-  private getMonthRanges(): { thisMonth: DateRange; lastMonth: DateRange } {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
-    // This month
-    const thisMonthStart = new Date(currentYear, currentMonth, 1);
-    const thisMonthEnd = new Date(currentYear, currentMonth + 1, 0);
-
-    // Last month
-    const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
-    const lastMonthEnd = new Date(currentYear, currentMonth, 0);
-
-    return {
-      thisMonth: {
-        startDate: thisMonthStart.toISOString().split('T')[0],
-        endDate: thisMonthEnd.toISOString().split('T')[0],
-      },
-      lastMonth: {
-        startDate: lastMonthStart.toISOString().split('T')[0],
-        endDate: lastMonthEnd.toISOString().split('T')[0],
-      },
-    };
-  }
-
-  /**
-   * Count resources by specific date
-   */
-  private async countResourcesByDate(
-    businessId: string,
-    locationId: string,
-    resourceType: string,
-    date: string,
-  ): Promise<number> {
+  ): Promise<RecentActivity[]> {
     try {
-      const count = await this.resourceRepository
-        .createQueryBuilder('resource')
-        .where('resource.businessId = :businessId', { businessId })
-        .andWhere('resource.locationId = :locationId', { locationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType })
-        .andWhere('DATE(resource.startDate) = :date', { date })
-        .getCount();
+      this.logger.log(`Getting recent activities for ${businessId}/${locationId}`);
 
-      return count;
+      const businessLocationId = `${businessId}-${locationId}`;
+      const today = this.getTodayRange();
+      
+      // Get all activities from specified resource types
+      const activities = await this.getAllActivities(businessLocationId, today);
+
+      // Sort by updated date (newest first)
+      activities.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      return activities;
     } catch (error) {
-      this.logger.error(`Error counting resources by date: ${error.message}`);
-      return 0;
-    }
-  }
-
-  /**
-   * Count resources by date range
-   */
-  private async countResourcesByDateRange(
-    businessId: string,
-    locationId: string,
-    resourceType: string,
-    startDate: string,
-    endDate: string,
-  ): Promise<number> {
-    try {
-      const count = await this.resourceRepository
-        .createQueryBuilder('resource')
-        .where('resource.businessId = :businessId', { businessId })
-        .andWhere('resource.locationId = :locationId', { locationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType })
-        .andWhere('resource.startDate >= :startDate', { startDate })
-        .andWhere('resource.startDate <= :endDate', { endDate })
-        .getCount();
-
-      return count;
-    } catch (error) {
-      this.logger.error(`Error counting resources by date range: ${error.message}`);
-      return 0;
-    }
-  }
-
-  /**
-   * Calculate revenue by date range from invoices
-   */
-  private async calculateRevenueByDateRange(
-    businessId: string,
-    locationId: string,
-    startDate: string,
-    endDate: string,
-  ): Promise<number> {
-    try {
-      const invoices = await this.resourceRepository
-        .createQueryBuilder('resource')
-        .where('resource.businessId = :businessId', { businessId })
-        .andWhere('resource.locationId = :locationId', { locationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType: 'invoices' })
-        .andWhere('resource.startDate >= :startDate', { startDate })
-        .andWhere('resource.startDate <= :endDate', { endDate })
-        .getMany();
-
-      let totalRevenue = 0;
-
-      invoices.forEach(invoice => {
-        const data = invoice.data;
-        const amount = data.total || data.amount || data.revenue || 0;
-        totalRevenue += parseFloat(amount.toString());
-      });
-
-      return totalRevenue;
-    } catch (error) {
-      this.logger.error(`Error calculating revenue: ${error.message}`);
-      return 0;
-    }
-  }
-
-  /**
-   * Get resources by type
-   */
-  private async getResourcesByType(
-    businessId: string,
-    locationId: string,
-    resourceType: string,
-  ): Promise<ResourceEntity[]> {
-    try {
-      return await this.resourceRepository
-        .createQueryBuilder('resource')
-        .where('resource.businessId = :businessId', { businessId })
-        .andWhere('resource.locationId = :locationId', { locationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType })
-        .getMany();
-    } catch (error) {
-      this.logger.error(`Error getting resources by type: ${error.message}`);
-      return [];
+      this.logger.error(`Error getting recent activities: ${error.message}`, error.stack);
+      throw error;
     }
   }
 
@@ -383,61 +112,273 @@ export class StatisticsService {
     dateRange?: DateRange,
   ): Promise<any> {
     try {
-      const resources = await this.getResourcesByType(businessId, locationId, resourceType);
-      
-      if (dateRange) {
-        const filteredResources = resources.filter(resource => {
-          const resourceDate = new Date(resource.startDate);
-          const startDate = new Date(dateRange.startDate);
-          const endDate = new Date(dateRange.endDate);
-          return resourceDate >= startDate && resourceDate <= endDate;
-        });
-        return this.analyzeResources(filteredResources, resourceType);
-      }
+      this.logger.log(`Getting statistics for ${resourceType} in ${businessId}/${locationId}`);
 
-      return this.analyzeResources(resources, resourceType);
+      const businessLocationId = `${businessId}-${locationId}`;
+      const range = dateRange || this.getMonthRanges().thisMonth;
+
+      const resources = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType })
+        .andWhere('resource.startDate >= :startDate', { startDate: range.startDate })
+        .andWhere('resource.startDate <= :endDate', { endDate: range.endDate })
+        .getMany();
+
+      const total = resources.length;
+      const totalValue = resources.reduce((sum, res) => sum + (res.data.amount || 0), 0);
+      
+      // Group by date
+      const byDate: Record<string, number> = {};
+      resources.forEach(res => {
+        const date = res.startDate;
+        byDate[date] = (byDate[date] || 0) + 1;
+      });
+
+      return {
+        total,
+        totalValue,
+        byDate,
+        resourceType,
+        dateRange: range,
+      };
     } catch (error) {
-      this.logger.error(`Error getting resource type statistics: ${error.message}`);
+      this.logger.error(`Error getting resource type statistics: ${error.message}`, error.stack);
       throw error;
     }
   }
 
   /**
-   * Analyze resources and generate statistics
+   * Get registered patients count for current month
    */
-  private analyzeResources(resources: ResourceEntity[], resourceType: string): any {
-    const stats = {
-      total: resources.length,
-      byDate: {} as Record<string, number>,
-      byStatus: {} as Record<string, number>,
-      totalValue: 0,
-      averageValue: 0,
-    };
+  private async getRegisteredPatients(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<number> {
+    try {
+      const count = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType: 'patient' })
+        .andWhere('resource.createdAt >= :startDate', { startDate: dateRange.startDate })
+        .andWhere('resource.createdAt <= :endDate', { endDate: dateRange.endDate })
+        .getCount();
 
-    resources.forEach(resource => {
-      const data = resource.data;
-      const date = resource.startDate.split('T')[0];
-      const status = data.status || 'unknown';
-      const value = data.total || data.amount || data.price || 0;
+      return count;
+    } catch (error) {
+      this.logger.error(`Error counting registered patients: ${error.message}`);
+      return 0;
+    }
+  }
 
-      // Count by date
-      stats.byDate[date] = (stats.byDate[date] || 0) + 1;
 
-      // Count by status
-      stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
 
-      // Calculate total value
-      stats.totalValue += parseFloat(value.toString());
-    });
+  /**
+   * Get scheduled visits count for current month
+   */
+  private async getScheduledVisits(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<number> {
+    try {
+      const count = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType: 'appointment' })
+        .andWhere('resource.startDate >= :startDate', { startDate: dateRange.startDate })
+        .andWhere('resource.startDate <= :endDate', { endDate: dateRange.endDate })
+        .andWhere("resource.data->>'status' = :status", { status: 'scheduled' })
+        .getCount();
 
-    // Calculate average value
-    stats.averageValue = stats.total > 0 ? stats.totalValue / stats.total : 0;
+      return count;
+    } catch (error) {
+      this.logger.error(`Error counting scheduled visits: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Get completed visits count for current month
+   */
+  private async getCompletedVisits(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<number> {
+    try {
+      const count = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType: 'appointment' })
+        .andWhere('resource.startDate >= :startDate', { startDate: dateRange.startDate })
+        .andWhere('resource.startDate <= :endDate', { endDate: dateRange.endDate })
+        .andWhere("resource.data->>'status' = :status", { status: 'completed' })
+        .getCount();
+
+      return count;
+    } catch (error) {
+      this.logger.error(`Error counting completed visits: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Get canceled visits count for current month
+   */
+  private async getCanceledVisits(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<number> {
+    try {
+      const count = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType: 'appointment' })
+        .andWhere('resource.startDate >= :startDate', { startDate: dateRange.startDate })
+        .andWhere('resource.startDate <= :endDate', { endDate: dateRange.endDate })
+        .andWhere("resource.data->>'status' = :status", { status: 'canceled' })
+        .getCount();
+
+      return count;
+    } catch (error) {
+      this.logger.error(`Error counting canceled visits: ${error.message}`);
+      return 0;
+    }
+  }
+
+
+
+  /**
+   * Get month ranges for current month
+   */
+  private getMonthRanges(): { thisMonth: DateRange } {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    // This month
+    const thisMonthStart = new Date(currentYear, currentMonth, 1);
+    const thisMonthEnd = new Date(currentYear, currentMonth + 1, 0);
 
     return {
-      resourceType,
-      ...stats,
-      totalValue: Math.round(stats.totalValue * 100) / 100,
-      averageValue: Math.round(stats.averageValue * 100) / 100,
+      thisMonth: {
+        startDate: thisMonthStart.toISOString().split('T')[0],
+        endDate: thisMonthEnd.toISOString().split('T')[0],
+      },
     };
+  }
+
+    /**
+   * Get today's date range for updated_at filtering
+   */
+  private getTodayRange(): DateRange {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    return {
+      startDate: todayStart.toISOString(),
+      endDate: todayEnd.toISOString(),
+    };
+  }
+
+  /**
+   * Get all activities from specified resource types for current day
+   */
+  private async getAllActivities(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<RecentActivity[]> {
+    try {
+      // Define the resource types we want to track
+      const targetResourceTypes = ['appointment', 'patient', 'product', 'pickups', 'sales'];
+      
+      const activities = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType IN (:...resourceTypes)', { resourceTypes: targetResourceTypes })
+        .andWhere('resource.updatedAt >= :startDate', { startDate: dateRange.startDate })
+        .andWhere('resource.updatedAt < :endDate', { endDate: dateRange.endDate })
+        .getMany();
+
+      return activities.map(res => {
+        const activityType = this.mapResourceTypeToActivityType(res.resourceType);
+        
+        return {
+          id: res.id.toString(),
+          resourceType: res.resourceType,
+          resourceId: res.resourceId,
+          activityType,
+          title: res.data.title || res.data.name || this.getDefaultTitle(res.resourceType),
+          description: res.data.description || res.data.notes || this.getDefaultDescription(res.resourceType),
+          amount: res.data.amount || res.data.price || res.data.total,
+          status: res.data.status || res.data.state,
+          updatedAt: res.updatedAt,
+          createdAt: res.createdAt,
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Error fetching all activities: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Map resource type to activity type
+   */
+  private mapResourceTypeToActivityType(resourceType: string): RecentActivity['activityType'] {
+    switch (resourceType) {
+      case 'appointment':
+        return 'appointment';
+      case 'patient':
+        return 'patient';
+      case 'product':
+        return 'product';
+      case 'pickups':
+        return 'pickup';
+      case 'sales':
+        return 'sale';
+      default:
+        return 'other';
+    }
+  }
+
+  /**
+   * Get default title for resource type
+   */
+  private getDefaultTitle(resourceType: string): string {
+    switch (resourceType) {
+      case 'appointment':
+        return 'Programare';
+      case 'patient':
+        return 'Pacient';
+      case 'product':
+        return 'Produs';
+      case 'pickups':
+        return 'Ridicare';
+      case 'sales':
+        return 'Vânzare';
+      default:
+        return 'Activitate';
+    }
+  }
+
+  /**
+   * Get default description for resource type
+   */
+  private getDefaultDescription(resourceType: string): string {
+    switch (resourceType) {
+      case 'appointment':
+        return 'Programare nouă sau actualizată';
+      case 'patient':
+        return 'Pacient nou sau actualizat';
+      case 'product':
+        return 'Produs nou sau actualizat';
+      case 'pickups':
+        return 'Ridicare programată';
+      case 'sales':
+        return 'Vânzare nouă';
+      default:
+        return 'Activitate nouă';
+    }
   }
 }

@@ -1,0 +1,19 @@
+  services:
+    notification-hub:
+      build:
+        context: ./elixir
+        dockerfile: Dockerfile
+      ports:
+        - "4000:4000"
+      environment:
+        # HTTP Configuration (receives communication from AI agent and Resources server)
+        - AI_AGENT_HTTP_URL=http://ai-agent-server:3001
+        - RESOURCES_SERVER_HTTP_URL=http://resources-server:3000
+        
+        # Application Configuration
+        - EXS_SECRET=${EXS_SECRET}
+      depends_on:
+        - resources-server
+        - ai-agent-server
+      networks:
+        - app-network

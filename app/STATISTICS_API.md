@@ -35,11 +35,29 @@ GET /api/resources/{businessId}-{locationId}/statistics/{endpoint}
       "difference": 7,
       "percentageChange": 18.42
     },
+    "visits": {
+      "today": 23,
+      "yesterday": 19,
+      "difference": 4,
+      "percentageChange": 21.05
+    },
     "revenue": {
       "thisMonth": 12500.50,
       "lastMonth": 10800.00,
       "difference": 1700.50,
-      "percentageChange": 15.75
+      "percentageChange": 15.75,
+      "today": 850.00,
+      "yesterday": 720.00,
+      "dailyDifference": 130.00,
+      "dailyPercentageChange": 18.06
+    },
+    "pickupAutomation": {
+      "today": 8,
+      "yesterday": 6,
+      "difference": 2,
+      "percentageChange": 33.33,
+      "totalAutomated": 45,
+      "successRate": 88.89
     },
     "inventory": {
       "totalProducts": 150,
@@ -51,6 +69,8 @@ GET /api/resources/{businessId}-{locationId}/statistics/{endpoint}
       "totalRevenue": 12500.50,
       "totalClients": 45,
       "totalAppointments": 15,
+      "totalVisits": 23,
+      "totalPickups": 8,
       "averageRevenuePerClient": 277.79
     }
   },
@@ -196,16 +216,34 @@ GET /api/resources/{businessId}-{locationId}/statistics/{endpoint}
   - Tendința pe ultimele luni
   - Media lunară
 
-### 3. Încasări (Revenue)
+### 3. Vizite (Visits)
+- **Tip resursă:** `visits`
+- **Metrici:**
+  - Vizite azi vs ieri
+  - Diferența absolută și procentuală
+  - Tendința pe ultimele zile
+  - Media zilnică
+
+### 4. Încasări (Revenue)
 - **Tip resursă:** `invoices`
 - **Metrici:**
   - Încasări luna aceasta vs luna trecută
-  - Diferența absolută și procentuală
-  - Tendința pe ultimele luni
-  - Media lunară
+  - Încasări azi vs ieri
+  - Diferența absolută și procentuală (lunar și zilnic)
+  - Tendința pe ultimele luni și zile
+  - Media lunară și zilnică
   - Valoarea totală
 
-### 4. Inventar (Inventory)
+### 5. Preluări Automate (Pickup Automation)
+- **Tip resursă:** `pickups`
+- **Metrici:**
+  - Preluări automate azi vs ieri
+  - Diferența absolută și procentuală
+  - Total preluări automate
+  - Rata de succes
+  - Tendința pe ultimele zile
+
+### 6. Inventar (Inventory)
 - **Tip resursă:** `stocks`
 - **Metrici:**
   - Total produse în stoc
@@ -217,12 +255,14 @@ GET /api/resources/{businessId}-{locationId}/statistics/{endpoint}
 
 - `timeline` - Programări și evenimente
 - `clients` - Clienți și pacienți
+- `visits` - Vizite și check-in-uri
 - `invoices` - Facturi și plăți
 - `stocks` - Inventar și stocuri
 - `sales` - Vânzări
 - `activities` - Activități business
 - `staff` - Personal
 - `workflows` - Procese business
+- `pickups` - Operațiuni de preluare automată
 
 ## Filtre și Parametri
 

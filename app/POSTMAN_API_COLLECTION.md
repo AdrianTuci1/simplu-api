@@ -1040,11 +1040,29 @@ Authorization: Bearer {{auth_token}}
       "difference": 7,
       "percentageChange": 18.42
     },
+    "visits": {
+      "today": 23,
+      "yesterday": 19,
+      "difference": 4,
+      "percentageChange": 21.05
+    },
     "revenue": {
       "thisMonth": 12500.50,
       "lastMonth": 10800.00,
       "difference": 1700.50,
-      "percentageChange": 15.75
+      "percentageChange": 15.75,
+      "today": 850.00,
+      "yesterday": 720.00,
+      "dailyDifference": 130.00,
+      "dailyPercentageChange": 18.06
+    },
+    "pickupAutomation": {
+      "today": 8,
+      "yesterday": 6,
+      "difference": 2,
+      "percentageChange": 33.33,
+      "totalAutomated": 45,
+      "successRate": 88.89
     },
     "inventory": {
       "totalProducts": 150,
@@ -1056,6 +1074,8 @@ Authorization: Bearer {{auth_token}}
       "totalRevenue": 12500.50,
       "totalClients": 45,
       "totalAppointments": 15,
+      "totalVisits": 23,
+      "totalPickups": 8,
       "averageRevenuePerClient": 277.79
     }
   }

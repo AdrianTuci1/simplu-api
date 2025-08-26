@@ -19,6 +19,7 @@ export interface BaseResource {
 export const VALID_RESOURCE_TYPES = [
   'timeline',    // Reservations, appointments, events
   'clients',     // Customers, members, patients  
+  'visits',      // Customer visits and check-ins
   'staff',       // Employees, team members
   'invoices',    // Billing and payments
   'stocks',      // Inventory management
@@ -29,7 +30,8 @@ export const VALID_RESOURCE_TYPES = [
   'workflows',   // Business processes
   'permissions', // Access control
   'userData',    // User-specific data
-  'history'      // Alias for activities (frontend compatibility)
+  'history',     // Alias for activities (frontend compatibility)
+  'pickups'      // Automated pickup operations
 ] as const;
 
 export type ResourceType = typeof VALID_RESOURCE_TYPES[number];

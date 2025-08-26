@@ -29,7 +29,7 @@ services:
       
       # External AWS DynamoDB Configuration (Business Info)
       - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
-      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+
       
       # External Citrus Sharding Service Configuration
       - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
@@ -37,11 +37,6 @@ services:
       - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
       - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
       
-      # Redis Configuration
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DB=${REDIS_DB:-0}
       
       # Logging and Monitoring
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -52,11 +47,6 @@ services:
       # Security Configuration
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:4000}
       - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-1000}
-    depends_on:
-      citrus:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
       - app-network
 
@@ -83,11 +73,21 @@ services:
       # Notification Hub Service Configuration (sends HTTP notifications to Elixir)
       - ELIXIR_URL=http://notification-hub:4000
       
-      # Citrus Sharding Configuration
-      - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
-      - CITRUS_API_KEY=${CITRUS_API_KEY}
-      - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
-      - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
+      # # Citrus Sharding Configuration
+      # - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
+      # - CITRUS_API_KEY=${CITRUS_API_KEY}
+      # - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
+      # - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
+
+      #RDS Configuration
+      - RDS_HOST=${RDS_HOST}
+      - RDS_PORT=${RDS_PORT}
+      - RDS_USERNAME=${RDS_USERNAME}
+      - RDS_PASSWORD=${RDS_PASSWORD}
+      - RDS_DATABASE=${RDS_DATABASE}
+      - RDS_SSL=${RDS_SSL:-true}
+      - RDS_SYNCHRONIZE=${RDS_SYNCHRONIZE:-true}
+      - RDS_LOGGING=${RDS_LOGGING:-true}
       
       # Cognito Configuration
       - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
@@ -99,9 +99,6 @@ services:
       
       # SQS Configuration for Shard Creation Notifications
       - SQS_SHARD_CREATION_QUEUE_URL=${SQS_SHARD_CREATION_QUEUE_URL}
-    depends_on:
-      citrus:
-        condition: service_healthy
     networks:
       - app-network
 
@@ -114,222 +111,220 @@ services:
       - "4000:4000"
     environment:
       # HTTP Configuration (receives communication from AI agent and Resources server)
-      - AI_AGENT_HTTP_URL=http://ai-agent-server:3000
-      - RESOURCES_SERVER_HTTP_URL=http://resources-server:3001
+      - AI_AGENT_HTTP_URL=http://ai-agent-server:3001
+      - RESOURCES_SERVER_HTTP_URL=http://resources-server:3000
       
       # Application Configuration
       - EXS_SECRET=${EXS_SECRET}
     depends_on:
       - resources-server
-      - ai-agent-server
+      # - ai-agent-server
     networks:
       - app-network
 
-  # AI Agent Server - processes AI messages and produces Kinesis streams
-  ai-agent-server:
-    build:
-      context: ./ai-agent-server
-      dockerfile: Dockerfile
-    ports:
-      - "3001:3000"
-    environment:
-      - NODE_ENV=development
-      - PORT=3000
+  # # AI Agent Server - processes AI messages and produces Kinesis streams
+  # ai-agent-server:
+  #   build:
+  #     context: ./ai-agent-server
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3001:3000"
+  #   environment:
+  #     - NODE_ENV=development
+  #     - PORT=3000
       
-      # HTTP Configuration (sends notifications to Elixir)
-      - NOTIFICATION_HUB_HTTP_URL=http://notification-hub:4000
-      - API_SERVER_URL=http://app:3000
-      - API_SERVER_KEY=${API_SERVER_KEY}
+  #     # HTTP Configuration (sends notifications to Elixir)
+  #     - NOTIFICATION_HUB_HTTP_URL=http://notification-hub:4000
+  #     - API_SERVER_URL=http://app:3000
+  #     - API_SERVER_KEY=${API_SERVER_KEY}
       
-      # Elixir Configuration
-      - ELIXIR_WEBSOCKET_URL=ws://notification-hub:4000/socket/websocket
-      - ELIXIR_HTTP_URL=http://notification-hub:4000
-      - ELIXIR_TIMEOUT=${ELIXIR_TIMEOUT:-5000}
-      - ELIXIR_RETRY_ATTEMPTS=${ELIXIR_RETRY_ATTEMPTS:-3}
+  #     # Elixir Configuration
+  #     - ELIXIR_WEBSOCKET_URL=ws://notification-hub:4000/socket/websocket
+  #     - ELIXIR_HTTP_URL=http://notification-hub:4000
+  #     - ELIXIR_TIMEOUT=${ELIXIR_TIMEOUT:-5000}
+  #     - ELIXIR_RETRY_ATTEMPTS=${ELIXIR_RETRY_ATTEMPTS:-3}
       
-      # AWS Configuration
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
+  #     # AWS Configuration
+  #     - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+  #     - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+  #     - AWS_REGION=${AWS_REGION:-us-east-1}
       
-      # DynamoDB Configuration
-      - DYNAMODB_SESSIONS_TABLE=${DYNAMODB_SESSIONS_TABLE:-ai-agent-sessions}
-      - DYNAMODB_MESSAGES_TABLE=${DYNAMODB_MESSAGES_TABLE:-ai-agent-messages}
-      - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
-      - DYNAMODB_RAG_TABLE=${DYNAMODB_RAG_TABLE:-rag-instructions}
-      - DYNAMODB_EXTERNAL_CREDENTIALS_TABLE=${DYNAMODB_EXTERNAL_CREDENTIALS_TABLE:-business-external-credentials}
-      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+  #     # DynamoDB Configuration
+  #     - DYNAMODB_SESSIONS_TABLE=${DYNAMODB_SESSIONS_TABLE:-ai-agent-sessions}
+  #     - DYNAMODB_MESSAGES_TABLE=${DYNAMODB_MESSAGES_TABLE:-ai-agent-messages}
+  #     - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
+  #     - DYNAMODB_RAG_TABLE=${DYNAMODB_RAG_TABLE:-rag-instructions}
+  #     - DYNAMODB_EXTERNAL_CREDENTIALS_TABLE=${DYNAMODB_EXTERNAL_CREDENTIALS_TABLE:-business-external-credentials}
+  #     - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
       
-      # OpenAI Configuration
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o-mini}
-      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-8192}
-      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.1}
-      - OPENAI_TOP_P=${OPENAI_TOP_P:-0.8}
+  #     # OpenAI Configuration
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o-mini}
+  #     - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-8192}
+  #     - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.1}
+  #     - OPENAI_TOP_P=${OPENAI_TOP_P:-0.8}
       
-      # Webhooks Configuration
-      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
-      - META_PHONE_NUMBER_ID=${META_PHONE_NUMBER_ID}
-      - META_WEBHOOK_VERIFY_TOKEN=${META_WEBHOOK_VERIFY_TOKEN}
-      - META_APP_SECRET=${META_APP_SECRET}
-      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
-      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
-      - WEBHOOK_LOG_LEVEL=${WEBHOOK_LOG_LEVEL:-info}
+  #     # Webhooks Configuration
+  #     - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
+  #     - META_PHONE_NUMBER_ID=${META_PHONE_NUMBER_ID}
+  #     - META_WEBHOOK_VERIFY_TOKEN=${META_WEBHOOK_VERIFY_TOKEN}
+  #     - META_APP_SECRET=${META_APP_SECRET}
+  #     - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+  #     - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+  #     - WEBHOOK_LOG_LEVEL=${WEBHOOK_LOG_LEVEL:-info}
       
-      # Redis Configuration
-      - REDIS_URL=redis://redis:6379
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DB=${REDIS_DB:-0}
+  #     # Redis Configuration
+  #     - REDIS_URL=redis://redis:6379
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #     - REDIS_DB=${REDIS_DB:-0}
       
-      # Logging Configuration
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+  #     # Logging Configuration
+  #     - LOG_LEVEL=${LOG_LEVEL:-info}
       
-      # Cron Jobs Configuration
-      - CRON_ENABLED=${CRON_ENABLED:-true}
-      - CRON_TIMEZONE=${CRON_TIMEZONE:-Europe/Bucharest}
-      - CRON_MEMORY_THRESHOLD_MB=${CRON_MEMORY_THRESHOLD_MB:-500}
-      - CRON_CPU_THRESHOLD_PERCENT=${CRON_CPU_THRESHOLD_PERCENT:-80}
-      - CRON_BACKUP_ENABLED=${CRON_BACKUP_ENABLED:-true}
-      - CRON_BACKUP_RETENTION_DAYS=${CRON_BACKUP_RETENTION_DAYS:-30}
-      - CRON_CLEANUP_RESOLVED_SESSIONS_DAYS=${CRON_CLEANUP_RESOLVED_SESSIONS_DAYS:-30}
-      - CRON_CLEANUP_OLD_SESSIONS_DAYS=${CRON_CLEANUP_OLD_SESSIONS_DAYS:-180}
-      - CRON_CLEANUP_INACTIVE_SESSIONS_HOURS=${CRON_CLEANUP_INACTIVE_SESSIONS_HOURS:-24}
-      - CRON_CLEANUP_ABANDONED_SESSIONS_HOURS=${CRON_CLEANUP_ABANDONED_SESSIONS_HOURS:-48}
-      - CRON_CLEANUP_OLD_MESSAGES_DAYS=${CRON_CLEANUP_OLD_MESSAGES_DAYS:-90}
-      - CRON_CLEANUP_OLD_LOGS_DAYS=${CRON_CLEANUP_OLD_LOGS_DAYS:-30}
-      - CRON_REMINDERS_ENABLED=${CRON_REMINDERS_ENABLED:-true}
-      - CRON_REMINDERS_HOURS_BEFORE=${CRON_REMINDERS_HOURS_BEFORE:-2}
-      - CRON_REPORTS_ENABLED=${CRON_REPORTS_ENABLED:-true}
-      - CRON_REPORTS_RECIPIENTS=${CRON_REPORTS_RECIPIENTS:-admin@example.com,manager@example.com}
-      - CRON_MONITORING_ENABLED=${CRON_MONITORING_ENABLED:-true}
-      - CRON_MONITORING_CHECK_INTERVAL_MINUTES=${CRON_MONITORING_CHECK_INTERVAL_MINUTES:-30}
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - app-network
+  #     # Cron Jobs Configuration
+  #     - CRON_ENABLED=${CRON_ENABLED:-true}
+  #     - CRON_TIMEZONE=${CRON_TIMEZONE:-Europe/Bucharest}
+  #     - CRON_MEMORY_THRESHOLD_MB=${CRON_MEMORY_THRESHOLD_MB:-500}
+  #     - CRON_CPU_THRESHOLD_PERCENT=${CRON_CPU_THRESHOLD_PERCENT:-80}
+  #     - CRON_BACKUP_ENABLED=${CRON_BACKUP_ENABLED:-true}
+  #     - CRON_BACKUP_RETENTION_DAYS=${CRON_BACKUP_RETENTION_DAYS:-30}
+  #     - CRON_CLEANUP_RESOLVED_SESSIONS_DAYS=${CRON_CLEANUP_RESOLVED_SESSIONS_DAYS:-30}
+  #     - CRON_CLEANUP_OLD_SESSIONS_DAYS=${CRON_CLEANUP_OLD_SESSIONS_DAYS:-180}
+  #     - CRON_CLEANUP_INACTIVE_SESSIONS_HOURS=${CRON_CLEANUP_INACTIVE_SESSIONS_HOURS:-24}
+  #     - CRON_CLEANUP_ABANDONED_SESSIONS_HOURS=${CRON_CLEANUP_ABANDONED_SESSIONS_HOURS:-48}
+  #     - CRON_CLEANUP_OLD_MESSAGES_DAYS=${CRON_CLEANUP_OLD_MESSAGES_DAYS:-90}
+  #     - CRON_CLEANUP_OLD_LOGS_DAYS=${CRON_CLEANUP_OLD_LOGS_DAYS:-30}
+  #     - CRON_REMINDERS_ENABLED=${CRON_REMINDERS_ENABLED:-true}
+  #     - CRON_REMINDERS_HOURS_BEFORE=${CRON_REMINDERS_HOURS_BEFORE:-2}
+  #     - CRON_REPORTS_ENABLED=${CRON_REPORTS_ENABLED:-true}
+  #     - CRON_REPORTS_RECIPIENTS=${CRON_REPORTS_RECIPIENTS:-admin@example.com,manager@example.com}
+  #     - CRON_MONITORING_ENABLED=${CRON_MONITORING_ENABLED:-true}
+  #     - CRON_MONITORING_CHECK_INTERVAL_MINUTES=${CRON_MONITORING_CHECK_INTERVAL_MINUTES:-30}
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
 
-  # Management Server - handles business management and payments
-  management-server:
-    build:
-      context: ./management-server
-      dockerfile: Dockerfile
-    ports:
-      - "3003:3001"
-    environment:
-      # Application Configuration
-      - NODE_ENV=development
-      - PORT=3001
+  # # Management Server - handles business management and payments
+  # management-server:
+    # build:
+    #   context: ./management-server
+    #   dockerfile: Dockerfile
+    # ports:
+    #   - "3003:3001"
+    # environment:
+    #   # Application Configuration
+    #   - NODE_ENV=development
+    #   - PORT=3001
       
-      # AWS Configuration
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
+    #   # AWS Configuration
+    #   - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    #   - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    #   - AWS_REGION=${AWS_REGION:-us-east-1}
       
-      # DynamoDB Configuration
-      - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME:-businesses}
-      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+    #   # DynamoDB Configuration
+    #   - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME:-businesses}
+    #   - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
       
-      # Stripe Configuration
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_DENTAL_PRICE_ID=${STRIPE_DENTAL_PRICE_ID:-price_dental_monthly}
-      - STRIPE_GYM_PRICE_ID=${STRIPE_GYM_PRICE_ID:-price_gym_monthly}
-      - STRIPE_HOTEL_PRICE_ID=${STRIPE_HOTEL_PRICE_ID:-price_hotel_monthly}
+    #   # Stripe Configuration
+    #   - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    #   - STRIPE_DENTAL_PRICE_ID=${STRIPE_DENTAL_PRICE_ID:-price_dental_monthly}
+    #   - STRIPE_GYM_PRICE_ID=${STRIPE_GYM_PRICE_ID:-price_gym_monthly}
+    #   - STRIPE_HOTEL_PRICE_ID=${STRIPE_HOTEL_PRICE_ID:-price_hotel_monthly}
       
-      # Domain Configuration
-      - BASE_DOMAIN=${BASE_DOMAIN:-example.com}
+    #   # Domain Configuration
+    #   - BASE_DOMAIN=${BASE_DOMAIN:-example.com}
       
-      # CloudFormation Configuration
-      - CLOUDFORMATION_STACK_PREFIX=${CLOUDFORMATION_STACK_PREFIX:-react-app-}
+    #   # CloudFormation Configuration
+    #   - CLOUDFORMATION_STACK_PREFIX=${CLOUDFORMATION_STACK_PREFIX:-react-app-}
       
-      # SQS Configuration for Shard Creation Notifications
-      - SQS_SHARD_CREATION_QUEUE_URL=${SQS_SHARD_CREATION_QUEUE_URL}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - app-network
+    #   # SQS Configuration for Shard Creation Notifications
+    #   - SQS_SHARD_CREATION_QUEUE_URL=${SQS_SHARD_CREATION_QUEUE_URL}
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+    # networks:
+    #   - app-network
 
-  # External Citrus Sharding Service
-  citrus:
-    image: citrus/sharding-service:latest
-    ports:
-      - "8080:8080"
-    environment:
-      # Citrus Configuration
-      - CITRUS_ENV=development
-      - CITRUS_LOG_LEVEL=${CITRUS_LOG_LEVEL:-info}
+  # # External Citrus Sharding Service
+  # citrus:
+  #   image: citrus/sharding-service:latest
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     # Citrus Configuration
+  #     - CITRUS_ENV=development
+  #     - CITRUS_LOG_LEVEL=${CITRUS_LOG_LEVEL:-info}
       
-      # Database Configuration for Citrus-managed shards
-      - CITRUS_DB_HOST=${CITRUS_DB_HOST:-postgres}
-      - CITRUS_DB_PORT=${CITRUS_DB_PORT:-5432}
-      - CITRUS_DB_USERNAME=${CITRUS_DB_USERNAME:-postgres}
-      - CITRUS_DB_PASSWORD=${CITRUS_DB_PASSWORD:-postgres}
-      - CITRUS_DB_NAME=${CITRUS_DB_NAME:-citrus}
+  #     # Database Configuration for Citrus-managed shards
+  #     - CITRUS_DB_HOST=${CITRUS_DB_HOST:-postgres}
+  #     - CITRUS_DB_PORT=${CITRUS_DB_PORT:-5432}
+  #     - CITRUS_DB_USERNAME=${CITRUS_DB_USERNAME:-postgres}
+  #     - CITRUS_DB_PASSWORD=${CITRUS_DB_PASSWORD:-postgres}
+  #     - CITRUS_DB_NAME=${CITRUS_DB_NAME:-citrus}
       
-      # Sharding Configuration
-      - CITRUS_MAX_BUSINESSES_PER_SHARD=${CITRUS_MAX_BUSINESSES_PER_SHARD:-3}
-      - CITRUS_SHARD_CREATION_ENABLED=${CITRUS_SHARD_CREATION_ENABLED:-true}
-      - CITRUS_AUTO_SCALING_ENABLED=${CITRUS_AUTO_SCALING_ENABLED:-true}
+  #     # Sharding Configuration
+  #     - CITRUS_MAX_BUSINESSES_PER_SHARD=${CITRUS_MAX_BUSINESSES_PER_SHARD:-3}
+  #     - CITRUS_SHARD_CREATION_ENABLED=${CITRUS_SHARD_CREATION_ENABLED:-true}
+  #     - CITRUS_AUTO_SCALING_ENABLED=${CITRUS_AUTO_SCALING_ENABLED:-true}
       
-      # API Configuration
-      - CITRUS_API_KEY=${CITRUS_API_KEY}
-      - CITRUS_CORS_ORIGINS=${CITRUS_CORS_ORIGINS:-http://localhost:3000}
+  #     # API Configuration
+  #     - CITRUS_API_KEY=${CITRUS_API_KEY}
+  #     - CITRUS_CORS_ORIGINS=${CITRUS_CORS_ORIGINS:-http://localhost:3000}
       
-      # Health Check Configuration
-      - CITRUS_HEALTH_CHECK_INTERVAL=${CITRUS_HEALTH_CHECK_INTERVAL:-30}
-      - CITRUS_SHARD_MONITORING_ENABLED=${CITRUS_SHARD_MONITORING_ENABLED:-true}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - app-network
+  #     # Health Check Configuration
+  #     - CITRUS_HEALTH_CHECK_INTERVAL=${CITRUS_HEALTH_CHECK_INTERVAL:-30}
+  #     - CITRUS_SHARD_MONITORING_ENABLED=${CITRUS_SHARD_MONITORING_ENABLED:-true}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+  #   networks:
+  #     - app-network
 
-  # PostgreSQL for Citrus-managed shards
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: citrus
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app-network
+  # # PostgreSQL for Citrus-managed shards
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: citrus
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - app-network
 
-  # Redis for AI Agent Server
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app-network
+  # # Redis for AI Agent Server
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - app-network
 
-volumes:
-  postgres_data:
-  redis_data:
+
 
 networks:
   app-network:

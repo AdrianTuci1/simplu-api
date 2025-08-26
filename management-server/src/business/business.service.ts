@@ -23,6 +23,10 @@ export class BusinessService {
     private readonly businessIdService: BusinessIdService,
   ) {}
 
+  private getDbType(): string {
+    return process.env.DB_TYPE || 'citrus';
+  }
+
   // Step 1: Configuration - Create business with suspended status
   async configureBusiness(input: any, user: any): Promise<BusinessEntity> {
     const nowIso = new Date().toISOString();
@@ -210,12 +214,18 @@ export class BusinessService {
       updatedAt: new Date().toISOString(),
     });
 
+    if (this.getDbType() === 'citrus') {
     // Trigger shard creation for each active location
     const activeLocations = (updated.locations || []).filter((l) => l.active !== false);
     await this.shardService.triggerMultipleShardCreations(
       updated.businessId,
       activeLocations.map((l) => ({ id: l.id, businessType: updated.businessType })),
     );
+  }
+
+    //  // EVENT BRIDGE - CREATE USERS FOR EACH LOCATION BASED ON createdByUserId
+    //  await this.eventBridgeService.createUsersForLocations(updated.businessId, updated.createdByUserId);
+  
 
     // Create React app infrastructure (domain may be subdomain/custom)
     try {
@@ -223,7 +233,6 @@ export class BusinessService {
         updated.businessId,
         updated.businessType,
         updated.domainType === 'subdomain' ? updated.domainLabel : undefined,
-        updated.domainType === 'custom' ? `${updated.domainLabel}${updated.customTld ? '.' + updated.customTld : ''}` : undefined,
       );
     } catch (err) {
       this.logger.warn(`Infra creation failed for business ${updated.businessId}: ${err?.message}`);

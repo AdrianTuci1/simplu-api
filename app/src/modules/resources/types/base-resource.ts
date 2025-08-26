@@ -14,22 +14,30 @@ export interface BaseResource {
 export const VALID_RESOURCE_TYPES = [
   'timeline',    // Reservations, appointments, events
   'clients',     // Customers, members, patients
+  'visits',      // Customer visits and check-ins
   'staff',       // Employees, team members
   'invoices',    // Billing and payments
   'stocks',      // Inventory management
   'activities',  // Business activities and logs
-  'reports',     // Analytics and reporting
-  'roles',       // User roles and permissions
-  'sales',       // Sales data
   'workflows',   // Business processes
   'permissions', // Access control
   'userData',    // User-specific data
   'history',      // Alias for activities (frontend compatibility)
+  'pickups',     // Automated pickup operations
 
   'appointment',
   'patient',
   'medic',
   'treatment',
+  'product',
+  'roles',       // User roles and permissions
+  'reports',     // Analytics and reporting
+  'sales',       // Sales data
+
+
+  // Statistics resource types
+  'statistics',      // General business statistics
+  'recent-activities', // Recent activities for current day
 ] as const;
 
 export type ResourceType = typeof VALID_RESOURCE_TYPES[number];

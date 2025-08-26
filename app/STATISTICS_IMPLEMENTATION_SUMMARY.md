@@ -22,16 +22,34 @@ Am implementat un API complet de statistici pentru business care oferă informa�
   - Tendința pe ultimele luni
   - Media lunară
 
-### 3. Încasări (Revenue)
+### 3. Vizite (Visits)
+- **Endpoint:** `/statistics/visits`
+- **Metrici:**
+  - Vizite azi vs ieri
+  - Diferența absolută și procentuală
+  - Tendința pe ultimele zile
+  - Media zilnică
+
+### 4. Încasări (Revenue)
 - **Endpoint:** `/statistics/revenue/monthly`
 - **Metrici:**
   - Încasări luna aceasta vs luna trecută
-  - Diferența absolută și procentuală
-  - Tendința pe ultimele luni
-  - Media lunară
+  - Încasări azi vs ieri
+  - Diferența absolută și procentuală (lunar și zilnic)
+  - Tendința pe ultimele luni și zile
+  - Media lunară și zilnică
   - Valoarea totală
 
-### 4. Inventar (Inventory)
+### 5. Preluări Automate (Pickup Automation)
+- **Endpoint:** `/statistics/pickups`
+- **Metrici:**
+  - Preluări automate azi vs ieri
+  - Diferența absolută și procentuală
+  - Total preluări automate
+  - Rata de succes
+  - Tendința pe ultimele zile
+
+### 6. Inventar (Inventory)
 - **Endpoint:** `/statistics/stocks`
 - **Metrici:**
   - Total produse în stoc
@@ -48,7 +66,9 @@ Am implementat un API complet de statistici pentru business care oferă informa�
   - `getBusinessStatistics()` - Statistici comprehensive
   - `getAppointmentStatistics()` - Statistici programări
   - `getClientStatistics()` - Statistici clienți
-  - `getRevenueStatistics()` - Statistici încasări
+  - `getVisitStatistics()` - Statistici vizite
+  - `getRevenueStatistics()` - Statistici încasări (lunar + zilnic)
+  - `getPickupAutomationStatistics()` - Statistici preluări automate
   - `getInventoryStatistics()` - Statistici inventar
   - `getResourceTypeStatistics()` - Statistici per tip resursă
 
@@ -93,11 +113,29 @@ export interface BusinessStatistics {
     difference: number;
     percentageChange: number;
   };
+  visits: {
+    today: number;
+    yesterday: number;
+    difference: number;
+    percentageChange: number;
+  };
   revenue: {
     thisMonth: number;
     lastMonth: number;
     difference: number;
     percentageChange: number;
+    today: number;
+    yesterday: number;
+    dailyDifference: number;
+    dailyPercentageChange: number;
+  };
+  pickupAutomation: {
+    today: number;
+    yesterday: number;
+    difference: number;
+    percentageChange: number;
+    totalAutomated: number;
+    successRate: number;
   };
   inventory: {
     totalProducts: number;
@@ -109,6 +147,8 @@ export interface BusinessStatistics {
     totalRevenue: number;
     totalClients: number;
     totalAppointments: number;
+    totalVisits: number;
+    totalPickups: number;
     averageRevenuePerClient: number;
   };
 }
@@ -117,7 +157,9 @@ export interface BusinessStatistics {
 ### Calculul Statisticilor
 - **Programări:** Comparație azi vs ieri
 - **Clienți:** Comparație luna aceasta vs luna trecută
-- **Încasări:** Suma totală din facturi per perioadă
+- **Vizite:** Comparație azi vs ieri
+- **Încasări:** Suma totală din facturi per perioadă (lunar + zilnic)
+- **Preluări Automate:** Comparație azi vs ieri + rata de succes
 - **Inventar:** Analiza stocurilor și valorilor
 
 ### Optimizări
@@ -189,17 +231,43 @@ node scripts/test-statistics.js
       "difference": 7,
       "percentageChange": 18.42
     },
+    "visits": {
+      "today": 23,
+      "yesterday": 19,
+      "difference": 4,
+      "percentageChange": 21.05
+    },
     "revenue": {
       "thisMonth": 12500.50,
       "lastMonth": 10800.00,
       "difference": 1700.50,
-      "percentageChange": 15.75
+      "percentageChange": 15.75,
+      "today": 850.00,
+      "yesterday": 720.00,
+      "dailyDifference": 130.00,
+      "dailyPercentageChange": 18.06
+    },
+    "pickupAutomation": {
+      "today": 8,
+      "yesterday": 6,
+      "difference": 2,
+      "percentageChange": 33.33,
+      "totalAutomated": 45,
+      "successRate": 88.89
     },
     "inventory": {
       "totalProducts": 150,
       "lowStock": 12,
       "outOfStock": 3,
       "totalValue": 25000.00
+    },
+    "summary": {
+      "totalRevenue": 12500.50,
+      "totalClients": 45,
+      "totalAppointments": 15,
+      "totalVisits": 23,
+      "totalPickups": 8,
+      "averageRevenuePerClient": 277.79
     }
   }
 }
@@ -208,17 +276,14 @@ node scripts/test-statistics.js
 ## 🚀 Utilizare
 
 ### 🎯 Dashboard Principal (Recomandat)
-Pentru a obține toate statisticile într-un singur call:
-```javascript
-const response = await fetch('/api/resources/business-123-location-456/statistics/business');
-const stats = await response.json();
-
-// Toate statisticile sunt disponibile în stats.data:
-console.log('Programări azi:', stats.data.appointments.today);
-console.log('Clienți luna aceasta:', stats.data.clients.thisMonth);
-console.log('Încasări luna aceasta:', stats.data.revenue.thisMonth);
-console.log('Produse în stoc:', stats.data.inventory.totalProducts);
-```
+**Acest endpoint returnează toate statisticile necesare pentru dashboard într-o singură cerere:**
+- ✅ Programări azi vs ieri
+- ✅ Clienți luna aceasta vs luna trecută  
+- ✅ Vizite azi vs ieri
+- ✅ Încasări luna aceasta vs luna trecută + azi vs ieri
+- ✅ Preluări automate azi vs ieri + rata de succes
+- ✅ Inventar și stocuri
+- ✅ Sumar și metrici de performanță
 
 ### Analiza Detaliată (Opțional)
 Pentru analize specifice, poți folosi endpoint-urile individuale:

@@ -45,9 +45,9 @@ export const MENU_STRUCTURE: MenuGroup[] = [
         title: 'Persoane',
         icon: 'users',
         description: 'Gestionarea clienților și personalului',
-        resourceTypes: ['clients', 'staff'],
+        resourceTypes: ['clients', 'staff', 'visits'],
         order: 2,
-        permissions: ['clients:read', 'clients:create', 'staff:read', 'staff:create']
+        permissions: ['clients:read', 'clients:create', 'staff:read', 'staff:create', 'visits:read', 'visits:create']
       },
       {
         id: 'activities',
@@ -57,6 +57,15 @@ export const MENU_STRUCTURE: MenuGroup[] = [
         resourceTypes: ['activities', 'history'],
         order: 3,
         permissions: ['activities:read', 'history:read']
+      },
+      {
+        id: 'automation',
+        title: 'Automatizare',
+        icon: 'zap',
+        description: 'Procese automate și preluări',
+        resourceTypes: ['pickups', 'workflows'],
+        order: 4,
+        permissions: ['pickups:read', 'pickups:create', 'workflows:read', 'workflows:create']
       }
     ]
   },
@@ -196,19 +205,3 @@ export function getUserAccessibleMenus(userPermissions: string[]): MenuGroup[] {
   })).filter(menu => menu.submenus.length > 0);
 }
 
-// Flat list of all resource types organized by menu structure
-export const RESOURCE_MENU_MAP: Record<ResourceType, { menuId: string; submenuId: string }> = {
-  timeline: { menuId: 'operations', submenuId: 'planning' },
-  clients: { menuId: 'operations', submenuId: 'people' },
-  staff: { menuId: 'operations', submenuId: 'people' },
-  activities: { menuId: 'operations', submenuId: 'activities' },
-  history: { menuId: 'operations', submenuId: 'activities' },
-  sales: { menuId: 'business', submenuId: 'sales' },
-  stocks: { menuId: 'business', submenuId: 'inventory' },
-  workflows: { menuId: 'business', submenuId: 'processes' },
-  invoices: { menuId: 'finance', submenuId: 'billing' },
-  reports: { menuId: 'analytics', submenuId: 'reports' },
-  roles: { menuId: 'administration', submenuId: 'access' },
-  permissions: { menuId: 'administration', submenuId: 'access' },
-  userData: { menuId: 'administration', submenuId: 'users' }
-};
