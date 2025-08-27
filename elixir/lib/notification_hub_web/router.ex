@@ -9,7 +9,7 @@ defmodule NotificationHubWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug CORSPlug,
-      origin: :check_origin,
+      origin: ["*"],
       max_age: 86400,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   end

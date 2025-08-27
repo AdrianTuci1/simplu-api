@@ -31,11 +31,25 @@ services:
       - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
 
       
-      # External Citrus Sharding Service Configuration
-      - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
-      - CITRUS_API_KEY=${CITRUS_API_KEY}
-      - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
-      - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
+      # # External Citrus Sharding Service Configuration
+      # - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
+      # - CITRUS_API_KEY=${CITRUS_API_KEY}
+      # - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
+      # - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
+
+      - DEMO_MODE=true
+
+      - DATABASE_TYPE=${DATABASE_TYPE:-rds}
+
+      #RDS Configuration
+      - RDS_HOST=${RDS_HOST}
+      - RDS_PORT=${RDS_PORT}
+      - RDS_USERNAME=${RDS_USERNAME}
+      - RDS_PASSWORD=${RDS_PASSWORD}
+      - RDS_DATABASE=${RDS_DATABASE}
+      - RDS_SSL=${RDS_SSL:-true}
+      - RDS_SYNCHRONIZE=${RDS_SYNCHRONIZE:-true}
+      - RDS_LOGGING=${RDS_LOGGING:-true}
       
       
       # Logging and Monitoring

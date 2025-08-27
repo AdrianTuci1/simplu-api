@@ -16,13 +16,13 @@ config :notification_hub, NotificationHubWeb.Endpoint,
   ],
   pubsub_server: NotificationHub.PubSub,
   code_reloader: true,
-  check_origin: ["http://localhost:5173"],
+  check_origin: false,
   render_errors: [
     formats: [json: NotificationHubWeb.ErrorJSON],
     layout: false
   ],
   cors: [
-    allowed_origins: ["http://localhost:5173"],
+    allowed_origins: ["*"],
     allowed_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowed_headers: ["*"],
     max_age: 86400,

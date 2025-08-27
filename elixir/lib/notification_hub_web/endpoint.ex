@@ -12,11 +12,11 @@ defmodule NotificationHubWeb.Endpoint do
   ]
 
   socket "/socket", NotificationHubWeb.UserSocket,
-    websocket: [check_origin: :check_origin],
+    websocket: [check_origin: false, timeout: 120_000],
     longpoll: false
 
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options], check_origin: :check_origin]
+    websocket: [connect_info: [session: @session_options], check_origin: false]
 
   # Serve at "/" the static files from "priv/static" directory.
   plug Plug.Static,
