@@ -14,7 +14,13 @@ export interface RecentActivity {
   id: string;
   resourceType: string;
   resourceId: string;
-  activityType: 'appointment' | 'patient' | 'product' | 'pickup' | 'sale' | 'other';
+  activityType:
+    | 'appointment'
+    | 'patient'
+    | 'product'
+    | 'pickup'
+    | 'sale'
+    | 'other';
   title: string;
   description: string;
   amount?: number;
@@ -45,7 +51,9 @@ export class StatisticsService {
     locationId: string,
   ): Promise<BusinessStatistics> {
     try {
-      this.logger.log(`Generating simplified statistics for ${businessId}/${locationId}`);
+      this.logger.log(
+        `Generating simplified statistics for ${businessId}/${locationId}`,
+      );
 
       const businessLocationId = `${businessId}-${locationId}`;
       const { thisMonth } = this.getMonthRanges();
@@ -71,7 +79,10 @@ export class StatisticsService {
         canceledVisits,
       };
     } catch (error) {
-      this.logger.error(`Error generating business statistics: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error generating business statistics: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -84,20 +95,28 @@ export class StatisticsService {
     locationId: string,
   ): Promise<RecentActivity[]> {
     try {
-      this.logger.log(`Getting recent activities for ${businessId}/${locationId}`);
+      this.logger.log(
+        `Getting recent activities for ${businessId}/${locationId}`,
+      );
 
       const businessLocationId = `${businessId}-${locationId}`;
       const today = this.getTodayRange();
-      
+
       // Get all activities from specified resource types
       const activities = await this.getAllActivities(businessLocationId, today);
 
       // Sort by updated date (newest first)
-      activities.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      activities.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
 
       return activities;
     } catch (error) {
-      this.logger.error(`Error getting recent activities: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error getting recent activities: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -112,25 +131,34 @@ export class StatisticsService {
     dateRange?: DateRange,
   ): Promise<any> {
     try {
-      this.logger.log(`Getting statistics for ${resourceType} in ${businessId}/${locationId}`);
+      this.logger.log(
+        `Getting statistics for ${resourceType} in ${businessId}/${locationId}`,
+      );
 
       const businessLocationId = `${businessId}-${locationId}`;
       const range = dateRange || this.getMonthRanges().thisMonth;
 
       const resources = await this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
         .andWhere('resource.resourceType = :resourceType', { resourceType })
-        .andWhere('resource.startDate >= :startDate', { startDate: range.startDate })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: range.startDate,
+        })
         .andWhere('resource.startDate <= :endDate', { endDate: range.endDate })
         .getMany();
 
       const total = resources.length;
-      const totalValue = resources.reduce((sum, res) => sum + (res.data.amount || 0), 0);
-      
+      const totalValue = resources.reduce(
+        (sum, res) => sum + (res.data.amount || 0),
+        0,
+      );
+
       // Group by date
       const byDate: Record<string, number> = {};
-      resources.forEach(res => {
+      resources.forEach((res) => {
         const date = res.startDate;
         byDate[date] = (byDate[date] || 0) + 1;
       });
@@ -143,7 +171,10 @@ export class StatisticsService {
         dateRange: range,
       };
     } catch (error) {
-      this.logger.error(`Error getting resource type statistics: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error getting resource type statistics: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -158,10 +189,18 @@ export class StatisticsService {
     try {
       const count = await this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType: 'patient' })
-        .andWhere('resource.createdAt >= :startDate', { startDate: dateRange.startDate })
-        .andWhere('resource.createdAt <= :endDate', { endDate: dateRange.endDate })
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'patient',
+        })
+        .andWhere('resource.createdAt >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.createdAt <= :endDate', {
+          endDate: dateRange.endDate,
+        })
         .getCount();
 
       return count;
@@ -170,8 +209,6 @@ export class StatisticsService {
       return 0;
     }
   }
-
-
 
   /**
    * Get scheduled visits count for current month
@@ -183,10 +220,18 @@ export class StatisticsService {
     try {
       const count = await this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType: 'appointment' })
-        .andWhere('resource.startDate >= :startDate', { startDate: dateRange.startDate })
-        .andWhere('resource.startDate <= :endDate', { endDate: dateRange.endDate })
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'appointment',
+        })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.startDate <= :endDate', {
+          endDate: dateRange.endDate,
+        })
         .andWhere("resource.data->>'status' = :status", { status: 'scheduled' })
         .getCount();
 
@@ -207,10 +252,18 @@ export class StatisticsService {
     try {
       const count = await this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType: 'appointment' })
-        .andWhere('resource.startDate >= :startDate', { startDate: dateRange.startDate })
-        .andWhere('resource.startDate <= :endDate', { endDate: dateRange.endDate })
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'appointment',
+        })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.startDate <= :endDate', {
+          endDate: dateRange.endDate,
+        })
         .andWhere("resource.data->>'status' = :status", { status: 'completed' })
         .getCount();
 
@@ -231,10 +284,18 @@ export class StatisticsService {
     try {
       const count = await this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :resourceType', { resourceType: 'appointment' })
-        .andWhere('resource.startDate >= :startDate', { startDate: dateRange.startDate })
-        .andWhere('resource.startDate <= :endDate', { endDate: dateRange.endDate })
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'appointment',
+        })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.startDate <= :endDate', {
+          endDate: dateRange.endDate,
+        })
         .andWhere("resource.data->>'status' = :status", { status: 'canceled' })
         .getCount();
 
@@ -244,8 +305,6 @@ export class StatisticsService {
       return 0;
     }
   }
-
-
 
   /**
    * Get month ranges for current month
@@ -267,13 +326,21 @@ export class StatisticsService {
     };
   }
 
-    /**
+  /**
    * Get today's date range for updated_at filtering
    */
   private getTodayRange(): DateRange {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const todayEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1,
+    );
 
     return {
       startDate: todayStart.toISOString(),
@@ -290,26 +357,48 @@ export class StatisticsService {
   ): Promise<RecentActivity[]> {
     try {
       // Define the resource types we want to track
-      const targetResourceTypes = ['appointment', 'patient', 'product', 'pickups', 'sales'];
-      
+      const targetResourceTypes = [
+        'appointment',
+        'patient',
+        'product',
+        'pickups',
+        'sales',
+      ];
+
       const activities = await this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType IN (:...resourceTypes)', { resourceTypes: targetResourceTypes })
-        .andWhere('resource.updatedAt >= :startDate', { startDate: dateRange.startDate })
-        .andWhere('resource.updatedAt < :endDate', { endDate: dateRange.endDate })
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType IN (:...resourceTypes)', {
+          resourceTypes: targetResourceTypes,
+        })
+        .andWhere('resource.updatedAt >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.updatedAt < :endDate', {
+          endDate: dateRange.endDate,
+        })
         .getMany();
 
-      return activities.map(res => {
-        const activityType = this.mapResourceTypeToActivityType(res.resourceType);
-        
+      return activities.map((res) => {
+        const activityType = this.mapResourceTypeToActivityType(
+          res.resourceType,
+        );
+
         return {
           id: res.id.toString(),
           resourceType: res.resourceType,
           resourceId: res.resourceId,
           activityType,
-          title: res.data.title || res.data.name || this.getDefaultTitle(res.resourceType),
-          description: res.data.description || res.data.notes || this.getDefaultDescription(res.resourceType),
+          title:
+            res.data.title ||
+            res.data.name ||
+            this.getDefaultTitle(res.resourceType),
+          description:
+            res.data.description ||
+            res.data.notes ||
+            this.getDefaultDescription(res.resourceType),
           amount: res.data.amount || res.data.price || res.data.total,
           status: res.data.status || res.data.state,
           updatedAt: res.updatedAt,
@@ -325,7 +414,9 @@ export class StatisticsService {
   /**
    * Map resource type to activity type
    */
-  private mapResourceTypeToActivityType(resourceType: string): RecentActivity['activityType'] {
+  private mapResourceTypeToActivityType(
+    resourceType: string,
+  ): RecentActivity['activityType'] {
     switch (resourceType) {
       case 'appointment':
         return 'appointment';

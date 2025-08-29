@@ -10,12 +10,20 @@ import { KinesisService } from '../../kinesis.service';
 import { ResourceEntity } from './entities/resource.entity';
 
 @Module({
-  imports: [
-    ConfigModule,
-    TypeOrmModule.forFeature([ResourceEntity]),
-  ],
+  imports: [ConfigModule, TypeOrmModule.forFeature([ResourceEntity])],
   controllers: [ResourcesController],
-  providers: [ResourcesService, PermissionService, ResourceQueryService, StatisticsService, KinesisService],
-  exports: [ResourcesService, PermissionService, ResourceQueryService, StatisticsService],
+  providers: [
+    ResourcesService,
+    PermissionService,
+    ResourceQueryService,
+    StatisticsService,
+    KinesisService,
+  ],
+  exports: [
+    ResourcesService,
+    PermissionService,
+    ResourceQueryService,
+    StatisticsService,
+  ],
 })
 export class ResourcesModule {}

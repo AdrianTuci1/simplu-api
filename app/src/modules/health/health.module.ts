@@ -6,10 +6,7 @@ import { HealthService } from './health.service';
 import { ResourceEntity } from '../resources/entities/resource.entity';
 
 @Module({
-  imports: [
-    ConfigModule,
-    TypeOrmModule.forFeature([ResourceEntity]),
-  ],
+  imports: [ConfigModule, TypeOrmModule.forFeature([ResourceEntity])],
   controllers: [HealthController],
   providers: [HealthService],
   exports: [HealthService],

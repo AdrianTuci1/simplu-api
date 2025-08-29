@@ -71,7 +71,7 @@ export class HealthService {
       errors.push(`Uptime: ${uptimeCheck.error}`);
     }
 
-    const isHealthy = checks.every(check => check.status === 'healthy');
+    const isHealthy = checks.every((check) => check.status === 'healthy');
 
     return {
       status: isHealthy ? 'healthy' : 'unhealthy',
@@ -98,7 +98,7 @@ export class HealthService {
       errors.push(`Database Operations: ${dbOperationsCheck.error}`);
     }
 
-    const isReady = checks.every(check => check.status === 'healthy');
+    const isReady = checks.every((check) => check.status === 'healthy');
 
     return {
       status: isReady ? 'ready' : 'not ready',
@@ -133,13 +133,13 @@ export class HealthService {
 
   private async checkDatabase(): Promise<HealthCheck> {
     const startTime = Date.now();
-    
+
     try {
       // Try to execute a simple query
       await this.resourceRepository.query('SELECT 1');
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       return {
         name: 'database',
         status: 'healthy',
@@ -151,7 +151,7 @@ export class HealthService {
       };
     } catch (error) {
       this.logger.error('Database health check failed:', error);
-      
+
       return {
         name: 'database',
         status: 'unhealthy',
@@ -167,13 +167,13 @@ export class HealthService {
 
   private async checkDatabaseOperations(): Promise<HealthCheck> {
     const startTime = Date.now();
-    
+
     try {
       // Try to count resources (basic operation)
       const count = await this.resourceRepository.count();
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       return {
         name: 'database-operations',
         status: 'healthy',
@@ -186,7 +186,7 @@ export class HealthService {
       };
     } catch (error) {
       this.logger.error('Database operations health check failed:', error);
-      
+
       return {
         name: 'database-operations',
         status: 'unhealthy',
@@ -254,9 +254,10 @@ export class HealthService {
         missingVars.push(envVar);
       } else {
         // Mask sensitive values
-        const maskedValue = envVar.includes('PASSWORD') || envVar.includes('SECRET') 
-          ? '***' 
-          : value;
+        const maskedValue =
+          envVar.includes('PASSWORD') || envVar.includes('SECRET')
+            ? '***'
+            : value;
         envDetails[envVar] = maskedValue;
       }
     }

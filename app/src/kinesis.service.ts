@@ -35,8 +35,12 @@ export class KinesisService {
 
     // Log configuration for debugging
     this.logger.log(`AWS Region: ${awsConfig?.region || 'us-east-1'}`);
-    this.logger.log(`AWS Access Key ID: ${awsConfig?.accessKeyId ? 'Set' : 'Not set'}`);
-    this.logger.log(`AWS Secret Access Key: ${awsConfig?.secretAccessKey ? 'Set' : 'Not set'}`);
+    this.logger.log(
+      `AWS Access Key ID: ${awsConfig?.accessKeyId ? 'Set' : 'Not set'}`,
+    );
+    this.logger.log(
+      `AWS Secret Access Key: ${awsConfig?.secretAccessKey ? 'Set' : 'Not set'}`,
+    );
 
     const clientConfig: any = {
       region: awsConfig?.region || 'us-east-1',
@@ -50,7 +54,9 @@ export class KinesisService {
       };
       this.logger.log('Using explicit AWS credentials');
     } else {
-      this.logger.log('Using default AWS credential provider chain (IAM roles, environment, etc.)');
+      this.logger.log(
+        'Using default AWS credential provider chain (IAM roles, environment, etc.)',
+      );
     }
 
     this.kinesisClient = new KinesisClient(clientConfig);
@@ -59,7 +65,7 @@ export class KinesisService {
 
   async sendResourceOperation(operation: ResourceOperation): Promise<void> {
     try {
-      const partitionKey = operation.resourceType 
+      const partitionKey = operation.resourceType
         ? `${operation.businessId}-${operation.locationId}-${operation.resourceType}`
         : `${operation.businessId}-${operation.locationId}`;
 

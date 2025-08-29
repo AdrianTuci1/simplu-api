@@ -19,6 +19,14 @@ defmodule NotificationHubWeb.ResourcesChannel do
   end
 
   @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "resource_update", payload: payload}, socket) do
+    Logger.info("Received broadcast resource_update, forwarding to client: #{inspect(payload)}")
+    # Forward the resource update to the connected client
+    push(socket, "resource_update", payload)
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_in(_event, _payload, socket) do
     {:noreply, socket}
   end

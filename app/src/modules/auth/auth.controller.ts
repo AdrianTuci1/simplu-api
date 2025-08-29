@@ -1,221 +1,97 @@
-import { Controller, Get, Post, Body, UseGuards, Request, HttpException, HttpStatus, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { AuthService, AuthenticatedUser } from './auth.service';
-import { LambdaAuthorizerGuard } from './guards/lambda-authorizer.guard';
-import { LambdaAuthorizerResponse } from './interfaces';
-import { Public, CurrentUser } from './decorators';
-import { PermissionService } from '../resources/services/permission.service';
-import { ResourceType, ResourceAction } from '../resources/types/base-resource';
+import { Controller, Get, Headers } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+interface AuthorizerHeaders {
+  'x-authorizer-user-id'?: string;
+  'x-authorizer-user-name'?: string;
+  'x-authorizer-business-id'?: string;
+  'x-authorizer-roles'?: string;
+}
+
+interface RoleData {
+  locationId: string;
+  locationName: string;
+  role: string;
+}
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly permissionService: PermissionService,
-  ) {}
+  constructor() {}
 
-  @Post('validate-lambda-authorizer')
-  @ApiOperation({ summary: 'Validate Lambda authorizer response' })
-  @ApiResponse({ status: 200, description: 'Lambda authorizer response is valid' })
-  @ApiResponse({ status: 401, description: 'Invalid Lambda authorizer response' })
-  async validateLambdaAuthorizer(@Body() authorizerResponse: LambdaAuthorizerResponse) {
+  @Get('me')
+  @ApiOperation({
+    summary:
+      'Get current user profile with all locations and roles from authorizer',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+  })
+  getMe(@Headers() headers: AuthorizerHeaders) {
+    // Extract user data from Lambda authorizer headers
+    const userId = headers['x-authorizer-user-id'];
+    const userName = headers['x-authorizer-user-name'];
+    const businessId = headers['x-authorizer-business-id'];
+    const rolesHeader = headers['x-authorizer-roles'];
+
+    // If no authorizer data, return error
+    if (!userId || !userName || !businessId || !rolesHeader) {
+      return {
+        success: false,
+        error: 'Missing authorizer data',
+        message: 'User data not available from Lambda authorizer',
+      };
+    }
+
     try {
-      const user = await this.authService.validateLambdaAuthorizerResponse(authorizerResponse);
+      // Parse roles from header
+      const roles = JSON.parse(rolesHeader) as RoleData[];
+
+      if (!Array.isArray(roles)) {
+        return {
+          success: false,
+          error: 'Invalid roles format',
+          message: 'Roles must be an array',
+        };
+      }
+
+      // Map roles to locations format
+      const locations = roles.map((role: RoleData) => ({
+        locationId: role.locationId,
+        locationName: role.locationName,
+        role: role.role,
+      }));
+
       return {
         success: true,
         user: {
-          userId: user.userId,
-          userName: user.userName,
-          email: user.email,
-          businessId: user.businessId,
-          roles: user.roles,
-          currentLocationId: user.currentLocationId,
+          userId,
+          userName,
+          email: userName, // Use userName as email if not provided
+          businessId,
+          locations,
         },
       };
     } catch (error) {
-      throw new HttpException('Invalid Lambda authorizer response', HttpStatus.UNAUTHORIZED);
-    }
-  }
-
-  @Get('profile')
-  @UseGuards(LambdaAuthorizerGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'User profile retrieved successfully' })
-  async getProfile(@CurrentUser() user: AuthenticatedUser) {
-    return {
-      success: true,
-      user: {
-        userId: user.userId,
-        userName: user.userName,
-        email: user.email,
-        businessId: user.businessId,
-        roles: user.roles,
-        currentLocationId: user.currentLocationId,
-      },
-    };
-  }
-
-  @Get('roles')
-  @UseGuards(LambdaAuthorizerGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get user roles for all locations' })
-  @ApiResponse({ status: 200, description: 'User roles retrieved successfully' })
-  async getUserRoles(@CurrentUser() user: AuthenticatedUser) {
-    return {
-      success: true,
-      roles: user.roles,
-    };
-  }
-
-  @Get('roles/:locationId')
-  @UseGuards(LambdaAuthorizerGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get user role for specific location' })
-  @ApiResponse({ status: 200, description: 'User role retrieved successfully' })
-  async getUserRoleForLocation(
-    @CurrentUser() user: AuthenticatedUser,
-    @Request() req: any,
-  ) {
-    const locationId = req.params.locationId;
-    const role = this.authService.getUserRoleForLocation(user, locationId);
-    
-    if (!role) {
-      throw new HttpException('User has no role for this location', HttpStatus.FORBIDDEN);
-    }
-
-    return {
-      success: true,
-      role,
-    };
-  }
-
-  @Get('permissions/:locationId')
-  @UseGuards(LambdaAuthorizerGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get user permissions for specific location' })
-  @ApiResponse({ status: 200, description: 'User permissions retrieved successfully' })
-  async getUserPermissions(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('locationId') locationId: string,
-  ) {
-    const permissions = await this.permissionService.getUserPermissions(user, locationId);
-    
-    return {
-      success: true,
-      locationId,
-      permissions,
-      totalPermissions: permissions.length,
-    };
-  }
-
-  @Get('permissions')
-  @UseGuards(LambdaAuthorizerGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get user permissions for all locations' })
-  @ApiResponse({ status: 200, description: 'User permissions retrieved successfully' })
-  async getUserPermissionsAllLocations(@CurrentUser() user: AuthenticatedUser) {
-    const permissionsByLocation = await this.permissionService.getUserPermissionsAllLocations(user);
-    
-    return {
-      success: true,
-      permissionsByLocation,
-      totalLocations: Object.keys(permissionsByLocation).length,
-    };
-  }
-
-  @Post('check-permission/:locationId/:resourceType/:action')
-  @UseGuards(LambdaAuthorizerGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Check if user has specific permission' })
-  @ApiResponse({ status: 200, description: 'Permission check completed' })
-  @ApiResponse({ status: 403, description: 'Permission denied' })
-  async checkPermission(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('locationId') locationId: string,
-    @Param('resourceType') resourceType: ResourceType,
-    @Param('action') action: ResourceAction,
-  ) {
-    try {
-      await this.permissionService.checkPermission(user, locationId, resourceType, action);
-      
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       return {
-        success: true,
-        message: `Permission granted: ${resourceType}:${action}`,
-        locationId,
-        resourceType,
-        action,
-        permission: `${resourceType}:${action}`,
+        success: false,
+        error: 'Failed to parse authorizer data',
+        message: errorMessage,
       };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.FORBIDDEN);
     }
-  }
-
-  @Post('test-permissions/:locationId')
-  @UseGuards(LambdaAuthorizerGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Test multiple permissions for a location' })
-  @ApiResponse({ status: 200, description: 'Permission tests completed' })
-  async testPermissions(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('locationId') locationId: string,
-    @Body() body: { permissions: Array<{ resourceType: ResourceType; action: ResourceAction }> },
-  ) {
-    const results: Array<{
-      permission: string;
-      granted: boolean;
-      error: string | null;
-    }> = [];
-    
-    for (const permission of body.permissions) {
-      try {
-        await this.permissionService.checkPermission(
-          user, 
-          locationId, 
-          permission.resourceType, 
-          permission.action
-        );
-        
-        results.push({
-          permission: `${permission.resourceType}:${permission.action}`,
-          granted: true,
-          error: null,
-        });
-      } catch (error) {
-        results.push({
-          permission: `${permission.resourceType}:${permission.action}`,
-          granted: false,
-          error: error.message,
-        });
-      }
-    }
-    
-    const grantedCount = results.filter(r => r.granted).length;
-    const deniedCount = results.filter(r => !r.granted).length;
-    
-    return {
-      success: true,
-      locationId,
-      results,
-      summary: {
-        total: results.length,
-        granted: grantedCount,
-        denied: deniedCount,
-      },
-    };
   }
 
   @Get('health')
-  @Public()
   @ApiOperation({ summary: 'Health check endpoint' })
   @ApiResponse({ status: 200, description: 'Service is healthy' })
-  async healthCheck() {
+  healthCheck() {
     return {
       success: true,
       message: 'Auth service is healthy',
       timestamp: new Date().toISOString(),
     };
   }
-} 
+}

@@ -4,7 +4,7 @@ export default () => ({
   // Database Configuration - supports both Citrus and RDS
   database: {
     type: process.env.DATABASE_TYPE || 'citrus', // 'citrus' or 'rds'
-    
+
     // RDS Configuration
     rds: {
       host: process.env.RDS_HOST || 'localhost',
@@ -16,7 +16,7 @@ export default () => ({
       synchronize: process.env.RDS_SYNCHRONIZE === 'true' || false,
       logging: process.env.RDS_LOGGING === 'true' || false,
     },
-    
+
     // Citrus Sharding Configuration
     citrus: {
       serverUrl: process.env.CITRUS_SERVER_URL || 'http://localhost:8080',
@@ -53,18 +53,29 @@ export default () => ({
   lambdaAuthorizer: {
     enabled: process.env.LAMBDA_AUTHORIZER_ENABLED !== 'false', // Default: true
     bypassForDevelopment: process.env.LAMBDA_AUTHORIZER_BYPASS === 'true', // Default: false
-    mockUser: process.env.LAMBDA_AUTHORIZER_MOCK_USER === 'true' ? {
-      userId: process.env.LAMBDA_AUTHORIZER_MOCK_USER_ID || 'mock-user-123',
-      userName: process.env.LAMBDA_AUTHORIZER_MOCK_USER_NAME || 'mock.user@example.com',
-      businessId: process.env.LAMBDA_AUTHORIZER_MOCK_BUSINESS_ID || 'mock-business-456',
-      roles: JSON.parse(process.env.LAMBDA_AUTHORIZER_MOCK_ROLES || JSON.stringify([
-        {
-          locationId: 'mock-location-789',
-          locationName: 'Mock Location',
-          role: 'admin',
-          permissions: ['read', 'write', 'delete']
-        }
-      ]))
-    } : null,
+    mockUser:
+      process.env.LAMBDA_AUTHORIZER_MOCK_USER === 'true'
+        ? {
+            userId:
+              process.env.LAMBDA_AUTHORIZER_MOCK_USER_ID || 'mock-user-123',
+            userName:
+              process.env.LAMBDA_AUTHORIZER_MOCK_USER_NAME ||
+              'mock.user@example.com',
+            businessId:
+              process.env.LAMBDA_AUTHORIZER_MOCK_BUSINESS_ID ||
+              'mock-business-456',
+            roles: JSON.parse(
+              process.env.LAMBDA_AUTHORIZER_MOCK_ROLES ||
+                JSON.stringify([
+                  {
+                    locationId: 'mock-location-789',
+                    locationName: 'Mock Location',
+                    role: 'admin',
+                    permissions: ['read', 'write', 'delete'],
+                  },
+                ]),
+            ),
+          }
+        : null,
   },
 });

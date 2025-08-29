@@ -1,6 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { HealthService, HealthResult, ReadinessResult, LivenessResult } from './health.service';
+import {
+  HealthService,
+  HealthResult,
+  ReadinessResult,
+  LivenessResult,
+} from './health.service';
 
 @ApiTags('Health')
 @Controller('health')
@@ -21,7 +26,7 @@ export class HealthController {
     errors?: string[];
   }> {
     const health = await this.healthService.checkHealth();
-    
+
     if (health.status === 'healthy') {
       return {
         status: 'healthy',
@@ -46,7 +51,10 @@ export class HealthController {
 
   @Get('ready')
   @ApiOperation({ summary: 'Readiness check endpoint' })
-  @ApiResponse({ status: 200, description: 'Application is ready to serve traffic' })
+  @ApiResponse({
+    status: 200,
+    description: 'Application is ready to serve traffic',
+  })
   @ApiResponse({ status: 503, description: 'Application is not ready' })
   async getReadiness(): Promise<{
     status: string;
@@ -55,7 +63,7 @@ export class HealthController {
     errors?: string[];
   }> {
     const readiness = await this.healthService.checkReadiness();
-    
+
     if (readiness.status === 'ready') {
       return {
         status: 'ready',
@@ -84,7 +92,7 @@ export class HealthController {
     errors?: string[];
   }> {
     const liveness = await this.healthService.checkLiveness();
-    
+
     if (liveness.status === 'alive') {
       return {
         status: 'alive',

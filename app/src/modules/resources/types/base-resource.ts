@@ -12,35 +12,34 @@ export interface BaseResource {
 
 // Valid resource types - simplified list matching resources-server
 export const VALID_RESOURCE_TYPES = [
-  'timeline',    // Reservations, appointments, events
-  'clients',     // Customers, members, patients
-  'visits',      // Customer visits and check-ins
-  'staff',       // Employees, team members
-  'invoices',    // Billing and payments
-  'stocks',      // Inventory management
-  'activities',  // Business activities and logs
-  'workflows',   // Business processes
+  'timeline', // Reservations, appointments, events
+  'clients', // Customers, members, patients
+  'visits', // Customer visits and check-ins
+  'staff', // Employees, team members
+  'invoices', // Billing and payments
+  'stocks', // Inventory management
+  'activities', // Business activities and logs
+  'workflows', // Business processes
   'permissions', // Access control
-  'userData',    // User-specific data
-  'history',      // Alias for activities (frontend compatibility)
-  'pickups',     // Automated pickup operations
+  'userData', // User-specific data
+  'history', // Alias for activities (frontend compatibility)
+  'pickups', // Automated pickup operations
 
   'appointment',
   'patient',
   'medic',
   'treatment',
   'product',
-  'roles',       // User roles and permissions
-  'reports',     // Analytics and reporting
-  'sales',       // Sales data
-
+  'roles', // User roles and permissions
+  'reports', // Analytics and reporting
+  'sales', // Sales data
 
   // Statistics resource types
-  'statistics',      // General business statistics
+  'statistics', // General business statistics
   'recent-activities', // Recent activities for current day
 ] as const;
 
-export type ResourceType = typeof VALID_RESOURCE_TYPES[number];
+export type ResourceType = (typeof VALID_RESOURCE_TYPES)[number];
 
 // Permission format: resourceType:action
 export type ResourceAction = 'create' | 'update' | 'patch' | 'delete' | 'read';
