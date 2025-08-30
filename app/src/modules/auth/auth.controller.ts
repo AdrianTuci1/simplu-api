@@ -19,7 +19,7 @@ interface RoleData {
 export class AuthController {
   constructor() {}
 
-  @Get('me')
+  @Get('me/:businessId')
   @ApiOperation({
     summary:
       'Get current user profile with all locations and roles from authorizer',

@@ -21,30 +21,50 @@ class CustomNamingStrategy extends DefaultNamingStrategy {
       isGlobal: true,
       load: [configuration],
     }),
-    // TypeORM configuration for RDS
+    // TypeORM configuration - only when using RDS
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        const rdsConfig = configService.get('database.rds');
-        return {
-          type: 'postgres',
-          host: rdsConfig.host,
-          port: rdsConfig.port,
-          username: rdsConfig.username,
-          password: rdsConfig.password,
-          database: rdsConfig.database,
-          ssl: rdsConfig.ssl ? { rejectUnauthorized: false } : false,
-          synchronize: rdsConfig.synchronize,
-          logging: rdsConfig.logging,
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          namingStrategy: new CustomNamingStrategy(),
-          // Additional connection options
-          extra: {
-            connectionTimeoutMillis: 10000,
-            idleTimeoutMillis: 30000,
-            max: 20,
-          },
-        };
+        const dbType = configService.get<string>('database.type');
+        
+        if (dbType === 'rds') {
+          const rdsConfig = configService.get('database.rds');
+          return {
+            type: 'postgres',
+            host: rdsConfig.host,
+            port: rdsConfig.port,
+            username: rdsConfig.username,
+            password: rdsConfig.password,
+            database: rdsConfig.database,
+            ssl: rdsConfig.ssl ? { rejectUnauthorized: false } : false,
+            synchronize: rdsConfig.synchronize,
+            logging: rdsConfig.logging,
+            entities: [__dirname + '/**/*.entity{.ts,.js}'],
+            namingStrategy: new CustomNamingStrategy(),
+            // Additional connection options
+            extra: {
+              connectionTimeoutMillis: 10000,
+              idleTimeoutMillis: 30000,
+              max: 20,
+            },
+          };
+        } else {
+          // For citrus sharding, we'll use a minimal connection or skip TypeORM
+          // since Citrus manages its own database connections
+          return {
+            type: 'postgres',
+            host: 'localhost',
+            port: 5432,
+            username: 'postgres',
+            password: 'postgres',
+            database: 'default',
+            entities: [__dirname + '/**/*.entity{.ts,.js}'],
+            synchronize: false,
+            logging: false,
+            // Disable auto-connection for Citrus mode
+            autoLoadEntities: false,
+          };
+        }
       },
       inject: [ConfigService],
     }),
