@@ -7,7 +7,7 @@ import {
 } from '../types/base-resource';
 import { ResourceQueryService } from './resource-query.service';
 
-// Interfaces for user data from Lambda authorizer
+// Interfaces for user data from Cognito
 export interface UserLocationRole {
   locationId: string;
   locationName: string;
@@ -35,11 +35,13 @@ export class PermissionService {
    * Check if user has permission for resource operation in a specific location
    * Format: resourceType:action (e.g., "clients:create", "invoices:delete")
    *
-   * Flow:
-   * 1. User comes with data from Lambda authorizer (includes locationId in roles)
-   * 2. Check if user has access to the specified locationId
-   * 3. Query database using businessId-locationId combination
-   * 4. Find role resource and check if it has the required permission
+   * New Flow:
+   * 1. User comes with Cognito user ID
+   * 2. Query resursa "medic" using Cognito user ID as resource_id
+   * 3. Extract role from medic.data.role
+   * 4. Query resursa "roles" using role name
+   * 5. Extract permissions from roles.data.permissions
+   * 6. Check if user has the required permission
    */
   async checkPermission(
     user: AuthenticatedUser,
@@ -53,11 +55,9 @@ export class PermissionService {
       `Checking permission: ${user.userId} -> ${permission} in location ${locationId}`,
     );
 
-    // Check if Lambda authorizer bypass is enabled for development
-    const lambdaAuthorizerConfig = this.configService.get<{
-      bypassForDevelopment?: boolean;
-    }>('lambdaAuthorizer');
-    if (lambdaAuthorizerConfig?.bypassForDevelopment) {
+    // Check if authentication bypass is enabled for development
+    const authBypass = this.configService.get<boolean>('AUTH_BYPASS');
+    if (authBypass) {
       this.logger.warn(
         `Permission check bypassed for development: ${permission}`,
       );
@@ -77,6 +77,7 @@ export class PermissionService {
       userRole,
       permission,
       user.businessId,
+      locationId,
     );
 
     if (!hasPermission) {
@@ -87,27 +88,28 @@ export class PermissionService {
   }
 
   /**
-   * Check if a role has a specific permission by querying the RDS database
+   * Check if a role has a specific permission by querying the database
+   * New flow: Query medic -> extract role -> query roles -> check permissions
    */
   private async hasPermissionForRole(
     userRole: UserLocationRole,
     permission: Permission,
     businessId: string,
+    locationId: string,
   ): Promise<boolean> {
     try {
-      // Query the database for role permissions using ResourceQueryService
-      // Use businessId-locationId combination for the query
-      const rolePermissions = await this.getRolePermissionsFromDatabase(
+      // Get permissions for the user's role in this location
+      const permissions = await this.getRolePermissionsFromDatabase(
         userRole.role,
         businessId,
-        userRole.locationId,
+        locationId,
       );
 
       // Check if the role has the required permission
-      const hasPermission = rolePermissions.includes(permission);
+      const hasPermission = permissions.includes(permission);
 
       this.logger.debug(
-        `Role ${userRole.role} permissions: ${rolePermissions.join(', ')}`,
+        `Role ${userRole.role} permissions: ${permissions.join(', ')}`,
       );
       this.logger.debug(
         `Required permission: ${permission}, Has permission: ${hasPermission}`,
@@ -125,9 +127,8 @@ export class PermissionService {
   }
 
   /**
-   * Get permissions for a role from the RDS database
-   * This queries the 'resource' table where resourceType = 'role'
-   * Uses businessId-locationId combination for the query
+   * Get permissions for a role from the database
+   * New flow: Query medic -> extract role -> query roles -> extract permissions
    */
   private async getRolePermissionsFromDatabase(
     roleName: string,
@@ -139,7 +140,7 @@ export class PermissionService {
       // Use businessId-locationId combination for the query
       const roleResources = await this.resourceQueryService.queryResources(
         businessId,
-        locationId, // Use the specific locationId from the user's role
+        locationId,
         {
           resourceType: 'role',
           filters: {
@@ -185,6 +186,137 @@ export class PermissionService {
 
       return defaultPermissions;
     }
+  }
+
+  /**
+   * Get user permissions by querying medic resource first, then roles resource
+   * This is the new main method for getting permissions
+   */
+  async getUserPermissionsFromMedic(
+    cognitoUserId: string,
+    businessId: string,
+    locationId: string,
+  ): Promise<Permission[]> {
+    try {
+      this.logger.debug(
+        `Getting permissions for Cognito user ${cognitoUserId} in ${businessId}/${locationId}`,
+      );
+
+      // Step 1: Query resursa "medic" using Cognito user ID as resource_id
+      const medicResource = await this.resourceQueryService.getResourceById(
+        businessId,
+        locationId,
+        'medic',
+        cognitoUserId, // Use Cognito user ID to find medic resource
+      );
+
+      if (!medicResource) {
+        this.logger.warn(
+          `No medic resource found for Cognito user ${cognitoUserId} in ${businessId}/${locationId}`,
+        );
+        return [];
+      }
+      const roleName = medicResource.data?.role;
+
+      if (!roleName) {
+        this.logger.warn(
+          `No role found in medic resource for user ${cognitoUserId}`,
+        );
+        return [];
+      }
+
+      this.logger.debug(`Found role ${roleName} for user ${cognitoUserId}`);
+
+      // Step 2: Query resursa "roles" using role name
+      // For roles, we need to find by name, so we'll use queryResources with name filter
+      const roleResources = await this.resourceQueryService.queryResources(
+        businessId,
+        locationId,
+        {
+          resourceType: 'role',
+          filters: {
+            name: roleName,
+          },
+          limit: 1,
+        },
+      );
+
+      if (roleResources.data.length === 0) {
+        this.logger.warn(
+          `No role resource found for role ${roleName} in ${businessId}/${locationId}`,
+        );
+        return [];
+      }
+
+      const roleResource = roleResources.data[0];
+      const permissions = roleResource.data?.permissions;
+
+      if (!permissions || !Array.isArray(permissions)) {
+        this.logger.warn(
+          `No permissions found in role resource for role ${roleName}`,
+        );
+        return [];
+      }
+
+      this.logger.debug(
+        `Retrieved permissions for role ${roleName}: ${permissions.join(', ')}`,
+      );
+
+      return permissions as Permission[];
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Error getting permissions for user ${cognitoUserId}: ${errorMessage}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Check permission using the new medic -> roles flow
+   */
+  async checkPermissionFromMedic(
+    cognitoUserId: string,
+    businessId: string,
+    locationId: string,
+    resourceType: ResourceType,
+    action: ResourceAction,
+  ): Promise<void> {
+    const permission: Permission = `${resourceType}:${action}`;
+
+    this.logger.debug(
+      `Checking permission from medic: ${cognitoUserId} -> ${permission} in ${businessId}/${locationId}`,
+    );
+
+    // Check if authentication bypass is enabled for development
+    const authBypass = this.configService.get<boolean>('AUTH_BYPASS');
+    if (authBypass) {
+      this.logger.warn(
+        `Permission check bypassed for development: ${permission}`,
+      );
+      return; // Allow all permissions in development mode
+    }
+
+    // Get user permissions using the new medic -> roles flow
+    const permissions = await this.getUserPermissionsFromMedic(
+      cognitoUserId,
+      businessId,
+      locationId,
+    );
+
+    // Check if user has the required permission
+    const hasPermission = permissions.includes(permission);
+
+    if (!hasPermission) {
+      throw new ForbiddenException(
+        `Permission denied: ${permission} for user ${cognitoUserId} in location ${locationId}`,
+      );
+    }
+
+    this.logger.debug(
+      `Permission ${permission} granted for user ${cognitoUserId}`,
+    );
   }
 
   /**
@@ -305,8 +437,7 @@ export class PermissionService {
   }
 
   /**
-   * Get all permissions for a user in a specific location
-   * Useful for frontend to know what actions are available
+   * Get all permissions for a user in a specific location using the new medic -> roles flow
    */
   async getUserPermissions(
     user: AuthenticatedUser,
@@ -324,18 +455,12 @@ export class PermissionService {
         return [];
       }
 
-      // Get permissions for the user's role in this location
-      const permissions = await this.getRolePermissionsFromDatabase(
-        userRole.role,
+      // Use the new medic -> roles flow
+      return await this.getUserPermissionsFromMedic(
+        user.userId,
         user.businessId,
-        userRole.locationId,
+        locationId,
       );
-
-      this.logger.debug(
-        `User ${user.userId} permissions in location ${locationId}: ${permissions.join(', ')}`,
-      );
-
-      return permissions;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -347,8 +472,7 @@ export class PermissionService {
   }
 
   /**
-   * Get all permissions for a user across all locations
-   * Returns a map of locationId -> permissions[]
+   * Get all permissions for a user across all locations using the new medic -> roles flow
    */
   async getUserPermissionsAllLocations(
     user: AuthenticatedUser,
@@ -357,8 +481,8 @@ export class PermissionService {
 
     for (const role of user.roles) {
       try {
-        const permissions = await this.getRolePermissionsFromDatabase(
-          role.role,
+        const permissions = await this.getUserPermissionsFromMedic(
+          user.userId,
           user.businessId,
           role.locationId,
         );
@@ -367,12 +491,100 @@ export class PermissionService {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         this.logger.error(
-          `Error getting permissions for role ${role.role} in location ${role.locationId}: ${errorMessage}`,
+          `Error getting permissions for user ${user.userId} in location ${role.locationId}: ${errorMessage}`,
         );
         permissionsByLocation[role.locationId] = [];
       }
     }
 
     return permissionsByLocation;
+  }
+
+  /**
+   * Get all user roles from all locations in a business
+   * Uses LIKE operator to search for business_location_id starting with businessId
+   */
+  async getAllUserRolesFromBusiness(
+    cognitoUserId: string,
+    businessId: string,
+  ): Promise<Array<{
+    locationId: string;
+    locationName: string;
+    roleName: string;
+  }>> {
+    try {
+      this.logger.debug(
+        `Getting all roles for Cognito user ${cognitoUserId} in business ${businessId}`,
+      );
+
+      // Search for all medic resources where business_location_id starts with businessId
+      // This will find resources from all locations in the business
+      const medicResources = await this.resourceQueryService.searchResourcesByBusinessPattern(
+        businessId,
+        'medic',
+        cognitoUserId,
+      );
+
+      if (medicResources.length === 0) {
+        this.logger.warn(
+          `No medic resources found for Cognito user ${cognitoUserId} in business ${businessId}`,
+        );
+        return [];
+      }
+
+      const userRoles: Array<{
+        locationId: string;
+        locationName: string;
+        roleName: string;
+      }> = [];
+
+      // Process each medic resource to extract role information
+      for (const medicResource of medicResources) {
+        try {
+          const roleName = medicResource.data?.role;
+          if (!roleName) {
+            this.logger.warn(
+              `No role found in medic resource for user ${cognitoUserId} in business location ${medicResource.business_location_id}`,
+            );
+            continue;
+          }
+
+          // Extract locationId from business_location_id (format: B010001-L010001)
+          const businessLocationId = medicResource.business_location_id;
+          const locationId = businessLocationId.split('-')[1]; // Extract L010001 part
+          
+          // For now, use locationId as locationName (you might want to fetch this from a service)
+          const locationName = locationId;
+
+          userRoles.push({
+            locationId,
+            locationName,
+            roleName,
+          });
+
+          this.logger.debug(
+            `Found role ${roleName} for user ${cognitoUserId} in location ${locationId}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Error processing medic resource for user ${cognitoUserId}: ${error.message}`,
+          );
+          continue;
+        }
+      }
+
+      this.logger.debug(
+        `Retrieved ${userRoles.length} roles for user ${cognitoUserId} in business ${businessId}`,
+      );
+
+      return userRoles;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Error getting all user roles from business ${businessId}: ${errorMessage}`,
+      );
+      return [];
+    }
   }
 }

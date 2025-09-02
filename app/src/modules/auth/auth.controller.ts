@@ -1,85 +1,70 @@
-import { Controller, Get, Headers } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-
-interface AuthorizerHeaders {
-  'x-authorizer-user-id'?: string;
-  'x-authorizer-user-name'?: string;
-  'x-authorizer-business-id'?: string;
-  'x-authorizer-roles'?: string;
-}
-
-interface RoleData {
-  locationId: string;
-  locationName: string;
-  role: string;
-}
+import { Controller, Get, UseGuards, Param } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
+import { CognitoAuthGuard } from './guards/cognito-auth.guard';
+import { AuthService, CognitoUser, UserRole } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor() {}
+  constructor(
+    private readonly authService: AuthService,
+  ) {}
 
   @Get('me/:businessId')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'businessId', description: 'Business ID to search for medic resources' })
   @ApiOperation({
-    summary:
-      'Get current user profile with all locations and roles from authorizer',
+    summary: 'Get current user profile with all roles from all locations in business',
   })
   @ApiResponse({
     status: 200,
     description: 'User profile retrieved successfully',
   })
-  getMe(@Headers() headers: AuthorizerHeaders) {
-    // Extract user data from Lambda authorizer headers
-    const userId = headers['x-authorizer-user-id'];
-    const userName = headers['x-authorizer-user-name'];
-    const businessId = headers['x-authorizer-business-id'];
-    const rolesHeader = headers['x-authorizer-roles'];
-
-    // If no authorizer data, return error
-    if (!userId || !userName || !businessId || !rolesHeader) {
-      return {
-        success: false,
-        error: 'Missing authorizer data',
-        message: 'User data not available from Lambda authorizer',
-      };
-    }
-
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
+  async getMe(
+    @CurrentUser() user: CognitoUser,
+    @Param('businessId') businessId: string,
+  ) {
     try {
-      // Parse roles from header
-      const roles = JSON.parse(rolesHeader) as RoleData[];
-
-      if (!Array.isArray(roles)) {
-        return {
-          success: false,
-          error: 'Invalid roles format',
-          message: 'Roles must be an array',
-        };
-      }
-
-      // Map roles to locations format
-      const locations = roles.map((role: RoleData) => ({
-        locationId: role.locationId,
-        locationName: role.locationName,
-        role: role.role,
-      }));
+      // Get all user roles from all locations in this business
+      const userRoles: UserRole[] = await this.authService.getAllUserRolesFromBusiness(
+        user.userId,
+        businessId,
+      );
 
       return {
         success: true,
         user: {
-          userId,
-          userName,
-          email: userName, // Use userName as email if not provided
+          userId: user.userId,
+          userName: user.username,
+          email: user.email,
+          name: user.name,
+          firstName: user.firstName,
+          lastName: user.lastName,
           businessId,
-          locations,
+          locations: userRoles.map(role => ({
+            locationId: role.locationId,
+            locationName: role.locationName,
+            role: role.roleName,
+          })),
         },
       };
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
       return {
         success: false,
-        error: 'Failed to parse authorizer data',
-        message: errorMessage,
+        error: 'Failed to retrieve user roles',
+        message: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }

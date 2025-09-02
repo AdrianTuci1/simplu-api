@@ -1190,4 +1190,117 @@ export class ResourceQueryService {
       );
     }
   }
+
+  /**
+   * Search resources by business pattern using LIKE operator
+   * This searches for resources where business_location_id starts with businessId
+   * Useful for finding resources across all locations in a business
+   */
+  async searchResourcesByBusinessPattern(
+    businessId: string,
+    resourceType: string,
+    resourceId?: string,
+  ): Promise<ResourceRecord[]> {
+    try {
+      this.logger.debug(
+        `Searching for ${resourceType} resources in business ${businessId} with pattern matching`,
+      );
+
+      if (this.shouldUseCitrusForRead()) {
+        return await this.searchResourcesByBusinessPatternFromCitrus(
+          businessId,
+          resourceType,
+          resourceId,
+        );
+      } else {
+        return await this.searchResourcesByBusinessPatternFromRDS(
+          businessId,
+          resourceType,
+          resourceId,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error searching resources by business pattern: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Search resources by business pattern from Citrus
+   */
+  private async searchResourcesByBusinessPatternFromCitrus(
+    businessId: string,
+    resourceType: string,
+    resourceId?: string,
+  ): Promise<ResourceRecord[]> {
+    try {
+      // Use Citrus service to search for resources
+      // This would need to be implemented in Citrus service
+      this.logger.debug(
+        `Searching Citrus for ${resourceType} resources in business ${businessId}`,
+      );
+
+      // For now, return empty array - implement Citrus search logic here
+      this.logger.warn('Citrus search not yet implemented for business pattern search');
+      return [];
+    } catch (error) {
+      this.logger.error(
+        `Error searching Citrus for business pattern: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Search resources by business pattern from RDS using LIKE operator
+   */
+  private async searchResourcesByBusinessPatternFromRDS(
+    businessId: string,
+    resourceType: string,
+    resourceId?: string,
+  ): Promise<ResourceRecord[]> {
+    try {
+      this.logger.debug(
+        `Searching RDS for ${resourceType} resources in business ${businessId} using LIKE operator`,
+      );
+
+      // Build the query using LIKE operator to find resources where businessLocationId starts with businessId
+      let query = this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId LIKE :businessPattern', {
+          businessPattern: `${businessId}-%`,
+        })
+        .andWhere('resource.resourceType = :resourceType', { resourceType });
+
+      // Add resourceId filter if provided
+      if (resourceId) {
+        query = query.andWhere('resource.resourceId = :resourceId', { resourceId });
+      }
+
+      const resources = await query.getMany();
+
+      this.logger.debug(
+        `Found ${resources.length} ${resourceType} resources in business ${businessId}`,
+      );
+
+      return resources.map(resource => ({
+        id: resource.id,
+        business_location_id: resource.businessLocationId,
+        resource_type: resource.resourceType,
+        resource_id: resource.resourceId,
+        data: resource.data,
+        start_date: resource.startDate,
+        end_date: resource.endDate,
+        created_at: resource.createdAt,
+        updated_at: resource.updatedAt,
+      }));
+    } catch (error) {
+      this.logger.error(
+        `Error searching RDS for business pattern: ${error.message}`,
+      );
+      throw error;
+    }
+  }
 }

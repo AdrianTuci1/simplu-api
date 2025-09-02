@@ -11,6 +11,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,6 +20,7 @@ import {
   ApiHeader,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ResourcesService } from './resources.service';
 import {
@@ -27,7 +29,13 @@ import {
 } from './services/resource-query.service';
 import { StatisticsService } from './services/statistics.service';
 import { ResourceType } from './types/base-resource';
-import { AuthenticatedUser } from './services/permission.service';
+import {
+  PermissionService,
+  AuthenticatedUser,
+} from './services/permission.service';
+import { CognitoAuthGuard } from '../auth/guards/cognito-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CognitoUser } from '../auth/auth.service';
 
 // Simplified request interface - just the data
 interface ResourceDataRequest {
@@ -41,60 +49,40 @@ interface StandardResponse {
   timestamp: string;
 }
 
-interface AuthorizerHeaders {
-  'x-authorizer-user-id'?: string;
-  'x-authorizer-user-name'?: string;
-  'x-authorizer-business-id'?: string;
-  'x-authorizer-roles'?: string;
-}
-
 @ApiTags('Resources')
 @Controller('resources')
+@UseGuards(CognitoAuthGuard)
+@ApiBearerAuth()
 export class ResourcesController {
   constructor(
     private readonly resourcesService: ResourcesService,
     private readonly resourceQueryService: ResourceQueryService,
     private readonly statisticsService: StatisticsService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   /**
-   * Extract user data from Lambda authorizer headers
+   * Create a minimal user object for the service
+   * The actual role and permissions are checked by PermissionService
    */
-  private extractUserFromHeaders(headers: AuthorizerHeaders): AuthenticatedUser | undefined {
-    const userId = headers['x-authorizer-user-id'];
-    const userName = headers['x-authorizer-user-name'];
-    const businessId = headers['x-authorizer-business-id'];
-    const rolesHeader = headers['x-authorizer-roles'];
-
-    if (!userId || !userName || !businessId || !rolesHeader) {
-      return undefined;
-    }
-
-    try {
-      const roles = JSON.parse(rolesHeader) as Array<{
-        locationId: string;
-        locationName: string;
-        role: string;
-      }>;
-
-      if (!Array.isArray(roles)) {
-        return undefined;
-      }
-
-      return {
-        userId,
-        userName,
-        email: userName,
-        businessId,
-        roles: roles.map(role => ({
-          locationId: role.locationId,
-          locationName: role.locationName,
-          role: role.role
-        }))
-      };
-    } catch {
-      return undefined;
-    }
+  private createMinimalUser(
+    user: CognitoUser,
+    businessId: string,
+    locationId: string,
+  ): AuthenticatedUser {
+    return {
+      userId: user.userId,
+      userName: user.username,
+      email: user.email,
+      businessId,
+      roles: [
+        {
+          locationId,
+          locationName: locationId,
+          role: 'user', // This will be overridden by the actual role from medic resource
+        },
+      ],
+    };
   }
 
   @Post(':businessId-:locationId')
@@ -104,6 +92,10 @@ export class ResourcesController {
     status: 202,
     description: 'Request accepted and sent to stream',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiHeader({
@@ -112,13 +104,26 @@ export class ResourcesController {
     description: 'Resource type',
   })
   async createResource(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Body() resourceRequest: ResourceDataRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
-    @Headers() headers: AuthorizerHeaders,
   ): Promise<StandardResponse> {
-    const user = this.extractUserFromHeaders(headers);
+    // Check permission using the new medic -> roles flow
+    await this.permissionService.checkPermissionFromMedic(
+      user.userId,
+      businessId,
+      locationId,
+      resourceType,
+      'create',
+    );
+
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
 
     return this.resourcesService.processResourceOperation({
       operation: 'create',
@@ -126,7 +131,7 @@ export class ResourcesController {
       locationId,
       resourceType,
       data: resourceRequest.data,
-      user,
+      user: authenticatedUser,
     });
   }
 
@@ -140,6 +145,10 @@ export class ResourcesController {
     status: 202,
     description: 'Request accepted and sent to stream',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiQuery({
@@ -148,13 +157,26 @@ export class ResourcesController {
     description: 'Resource type',
   })
   async createResourceWithQuery(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Body() resourceRequest: ResourceDataRequest,
     @Query('X-Resource-Type') resourceType: ResourceType,
-    @Headers() headers: AuthorizerHeaders,
   ): Promise<StandardResponse> {
-    const user = this.extractUserFromHeaders(headers);
+    // Check permission using the new medic -> roles flow
+    await this.permissionService.checkPermissionFromMedic(
+      user.userId,
+      businessId,
+      locationId,
+      resourceType,
+      'create',
+    );
+
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
 
     return this.resourcesService.processResourceOperation({
       operation: 'create',
@@ -162,7 +184,7 @@ export class ResourcesController {
       locationId,
       resourceType,
       data: resourceRequest.data,
-      user,
+      user: authenticatedUser,
     });
   }
 
@@ -173,6 +195,10 @@ export class ResourcesController {
     status: 202,
     description: 'Request accepted and sent to stream',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
@@ -182,14 +208,27 @@ export class ResourcesController {
     description: 'Resource type',
   })
   async updateResource(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceDataRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
-    @Headers() headers: AuthorizerHeaders,
   ): Promise<StandardResponse> {
-    const user = this.extractUserFromHeaders(headers);
+    // Check permission using the new medic -> roles flow
+    await this.permissionService.checkPermissionFromMedic(
+      user.userId,
+      businessId,
+      locationId,
+      resourceType,
+      'update',
+    );
+
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
 
     return this.resourcesService.processResourceOperation({
       operation: 'update',
@@ -198,7 +237,7 @@ export class ResourcesController {
       resourceType,
       resourceId,
       data: resourceRequest.data,
-      user,
+      user: authenticatedUser,
     });
   }
 
@@ -209,6 +248,10 @@ export class ResourcesController {
     status: 202,
     description: 'Request accepted and sent to stream',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
@@ -218,14 +261,27 @@ export class ResourcesController {
     description: 'Resource type',
   })
   async patchResource(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Param('resourceId') resourceId: string,
     @Body() resourceRequest: ResourceDataRequest,
     @Headers('X-Resource-Type') resourceType: ResourceType,
-    @Headers() headers: AuthorizerHeaders,
   ): Promise<StandardResponse> {
-    const user = this.extractUserFromHeaders(headers);
+    // Check permission using the new medic -> roles flow
+    await this.permissionService.checkPermissionFromMedic(
+      user.userId,
+      businessId,
+      locationId,
+      resourceType,
+      'update',
+    );
+
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
 
     return this.resourcesService.processResourceOperation({
       operation: 'patch',
@@ -234,7 +290,7 @@ export class ResourcesController {
       resourceType,
       resourceId,
       data: resourceRequest.data,
-      user,
+      user: authenticatedUser,
     });
   }
 
@@ -245,6 +301,10 @@ export class ResourcesController {
     status: 202,
     description: 'Request accepted and sent to stream',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
@@ -254,13 +314,26 @@ export class ResourcesController {
     description: 'Resource type',
   })
   async deleteResource(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Param('resourceId') resourceId: string,
     @Headers('X-Resource-Type') resourceType: ResourceType,
-    @Headers() headers: AuthorizerHeaders,
   ): Promise<StandardResponse> {
-    const user = this.extractUserFromHeaders(headers);
+    // Check permission using the new medic -> roles flow
+    await this.permissionService.checkPermissionFromMedic(
+      user.userId,
+      businessId,
+      locationId,
+      resourceType,
+      'delete',
+    );
+
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
 
     return this.resourcesService.processResourceOperation({
       operation: 'delete',
@@ -268,7 +341,7 @@ export class ResourcesController {
       locationId,
       resourceType,
       resourceId,
-      user,
+      user: authenticatedUser,
     });
   }
 
@@ -279,6 +352,10 @@ export class ResourcesController {
     summary: 'Get specific resource by ID - reads from database',
   })
   @ApiResponse({ status: 200, description: 'Resource retrieved successfully' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiParam({ name: 'resourceId', description: 'Resource ID' })
@@ -288,11 +365,26 @@ export class ResourcesController {
     description: 'Resource type',
   })
   async getResourceById(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Param('resourceId') resourceId: string,
     @Headers('X-Resource-Type') resourceType: ResourceType,
   ) {
+    // Check permission using the new medic -> roles flow
+    await this.permissionService.checkPermissionFromMedic(
+      user.userId,
+      businessId,
+      locationId,
+      resourceType,
+      'read',
+    );
+
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
     const resource = await this.resourceQueryService.getResourceById(
       businessId,
       locationId,
@@ -332,6 +424,10 @@ export class ResourcesController {
   @Get(':businessId-:locationId')
   @ApiOperation({ summary: 'Get resources based on X-Resource-Type header' })
   @ApiResponse({ status: 200, description: 'Resources retrieved successfully' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiHeader({
@@ -373,6 +469,7 @@ export class ResourcesController {
     description: 'Query type: date-range, stats, or general',
   })
   async getResources(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Headers('X-Resource-Type') resourceType: string,
@@ -387,6 +484,20 @@ export class ResourcesController {
     @Query('queryType') queryType?: string,
     @Query() allFilters?: any,
   ) {
+    // Check permission using the new medic -> roles flow
+    await this.permissionService.checkPermissionFromMedic(
+      user.userId,
+      businessId,
+      locationId,
+      resourceType as ResourceType,
+      'read',
+    );
+
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
     try {
       const pageNum = page ? parseInt(page, 10) : 1;
       const limitNum = limit ? parseInt(limit, 10) : 50;
@@ -531,6 +642,10 @@ export class ResourcesController {
   @Get(':businessId-:locationId/search/name/:nameField')
   @ApiOperation({ summary: 'Search resources by specific name field' })
   @ApiResponse({ status: 200, description: 'Resources found by name' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiParam({
@@ -559,6 +674,7 @@ export class ResourcesController {
     description: 'Items per page (default: 50)',
   })
   async searchResourcesByName(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Param('nameField')
@@ -568,6 +684,11 @@ export class ResourcesController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
     try {
       const pageNum = page ? parseInt(page, 10) : 1;
       const limitNum = limit ? parseInt(limit, 10) : 50;
@@ -624,9 +745,14 @@ export class ResourcesController {
     status: 200,
     description: 'Resources found by multiple names',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   async searchResourcesByMultipleNames(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Body()
@@ -640,6 +766,11 @@ export class ResourcesController {
       limit?: number;
     },
   ) {
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
     try {
       const { page = 1, limit = 50, resourceType, ...names } = nameFilters;
       const offset = (page - 1) * limit;
@@ -692,6 +823,10 @@ export class ResourcesController {
     status: 200,
     description: 'Statistics retrieved successfully',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
   @ApiParam({ name: 'businessId', description: 'Business ID' })
   @ApiParam({ name: 'locationId', description: 'Location ID' })
   @ApiHeader({
@@ -710,12 +845,18 @@ export class ResourcesController {
     description: 'End date filter (YYYY-MM-DD)',
   })
   async getStatistics(
+    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Headers('X-Resource-Type') resourceType: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
     try {
       let data: any;
       let operation: string;
