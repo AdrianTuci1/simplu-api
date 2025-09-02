@@ -21,7 +21,7 @@ export class CognitoAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const authHeader = request.headers.authorization;
+    let authHeader = request.headers.authorization;
     const url = request.url;
     const method = request.method;
 
@@ -40,6 +40,12 @@ export class CognitoAuthGuard implements CanActivate {
     if (!authHeader) {
       this.logger.warn(`No authorization header for ${method} ${url}`);
       throw new UnauthorizedException('Authorization header required');
+    }
+
+    // Clean the authorization header by removing backticks and extra whitespace
+    if (typeof authHeader === 'string') {
+      authHeader = authHeader.replace(/`/g, '').trim();
+      this.logger.debug(`Cleaned auth header: ${authHeader.substring(0, 20)}...`);
     }
 
     if (!authHeader.startsWith('Bearer ')) {

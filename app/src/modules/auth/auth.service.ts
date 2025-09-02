@@ -1,8 +1,6 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { cognitoService } from '../../config/cognito.config';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import * as jwksClient from 'jwks-rsa';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -38,8 +36,6 @@ export class AuthService {
   private jwksClient: jwksClient.JwksClient;
 
   constructor(
-    private readonly configService: ConfigService,
-    private readonly jwtService: JwtService,
     @InjectRepository(ResourceEntity)
     private readonly resourceRepository: Repository<ResourceEntity>,
   ) {

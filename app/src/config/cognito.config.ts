@@ -11,7 +11,7 @@ export interface CognitoConfig {
 export const cognitoConfig = (): CognitoConfig => ({
   userPoolId: process.env.COGNITO_USER_POOL_ID || '',
   clientId: process.env.COGNITO_CLIENT_ID || '',
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.COGNITOR_REGION || 'eu-central-1',
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
 });
