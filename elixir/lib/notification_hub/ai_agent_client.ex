@@ -2,52 +2,80 @@ defmodule NotificationHub.AiAgentClient do
   require Logger
 
   @doc """
-  Send a message to the AI agent via HTTP
+  Check AI Agent Server health
   """
-  def send_message(tenant_id, user_id, session_id, message_id, content, context \\ %{}) do
+  def check_health do
     try do
-      # Get AI agent HTTP URL from config
-      ai_agent_url = Application.get_env(:notification_hub, :ai_agent_http_url, "http://ai-agent-server:3000")
+      ai_agent_url = Application.get_env(:notification_hub, :ai_agent_http_url, "http://ai-agent-server:3003")
+      health_url = "#{ai_agent_url}/health"
 
-      # Create message request
-      request_body = %{
-        tenant_id: tenant_id,
-        user_id: user_id,
-        session_id: session_id,
-        message_id: message_id,
-        payload: %{
-          content: content,
-          context: context
-        },
-        timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
-      }
+      Logger.info("Checking AI Agent Server health: #{health_url}")
 
-      # Send HTTP POST request to AI agent
-      case HTTPoison.post("#{ai_agent_url}/api/messages", Jason.encode!(request_body), [
-        {"Content-Type", "application/json"}
-      ]) do
+      case HTTPoison.get(health_url, [], [timeout: 5000]) do
         {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, response} ->
-              Logger.info("Successfully sent message to AI agent: #{inspect(response)}")
-              {:ok, response}
-            {:error, error} ->
-              Logger.error("Failed to decode AI agent response: #{inspect(error)}")
-              {:error, error}
-          end
+          Logger.info("AI Agent Server is healthy: #{body}")
+          {:ok, "healthy"}
 
         {:ok, %HTTPoison.Response{status_code: status_code, body: body}} ->
-          Logger.error("AI agent returned error status #{status_code}: #{body}")
-          {:error, "HTTP #{status_code}: #{body}"}
+          Logger.warning("AI Agent Server returned status #{status_code}: #{body}")
+          {:warning, "Status #{status_code}: #{body}"}
 
         {:error, error} ->
-          Logger.error("Failed to send message to AI agent: #{inspect(error)}")
-          {:error, error}
+          Logger.error("Failed to check AI Agent Server health: #{inspect(error)}")
+          {:error, "Health check failed: #{error}"}
       end
+
     rescue
       error ->
-        Logger.error("Error communicating with AI agent: #{inspect(error)}")
-        {:error, error}
+        Logger.error("Error checking AI Agent Server health: #{inspect(error)}")
+        {:error, "Health check error: #{error}"}
+    end
+  end
+
+  @doc """
+  Get AI Agent Server configuration
+  """
+  def get_config do
+    %{
+      ai_agent_url: Application.get_env(:notification_hub, :ai_agent_http_url, "http://ai-agent-server:3003"),
+      websocket_url: "ws://ai-agent-server:3003/socket/websocket",
+      timeout: 5000
+    }
+  end
+
+  @doc """
+  Test connection to AI Agent Server
+  """
+  def test_connection do
+    try do
+      ai_agent_url = Application.get_env(:notification_hub, :ai_agent_http_url, "http://ai-agent-server:3003")
+      test_url = "#{ai_agent_url}/health"
+
+      Logger.info("Testing connection to AI Agent Server: #{test_url}")
+
+      start_time = System.monotonic_time(:millisecond)
+
+      case HTTPoison.get(test_url, [], [timeout: 3000]) do
+        {:ok, %HTTPoison.Response{status_code: 200}} ->
+          end_time = System.monotonic_time(:millisecond)
+          latency = end_time - start_time
+
+          Logger.info("Connection test successful - Latency: #{latency}ms")
+          {:ok, %{success: true, latency: latency}}
+
+        {:ok, %HTTPoison.Response{status_code: status_code}} ->
+          Logger.warning("Connection test returned status #{status_code}")
+          {:warning, %{success: false, status: status_code}}
+
+        {:error, error} ->
+          Logger.error("Connection test failed: #{inspect(error)}")
+          {:error, %{success: false, error: error}}
+      end
+
+    rescue
+      error ->
+        Logger.error("Connection test error: #{inspect(error)}")
+        {:error, %{success: false, error: error}}
     end
   end
 end

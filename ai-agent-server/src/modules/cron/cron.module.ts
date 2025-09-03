@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronController } from './cron.controller';
 import { CronService } from './cron.service';
@@ -14,7 +14,7 @@ import { WebSocketModule } from '../websocket/websocket.module';
   imports: [
     ScheduleModule.forRoot(),
     SessionModule,
-    AgentModule,
+    forwardRef(() => AgentModule),
     BusinessInfoModule,
     ExternalApisModule,
     WebSocketModule,

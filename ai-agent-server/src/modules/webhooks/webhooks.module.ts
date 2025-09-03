@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 import { AgentModule } from '../agent/agent.module';
@@ -8,7 +8,7 @@ import { ExternalApisModule } from '../external-apis/external-apis.module';
 
 @Module({
   imports: [
-    AgentModule,
+    forwardRef(() => AgentModule),
     SessionModule,
     BusinessInfoModule,
     ExternalApisModule,

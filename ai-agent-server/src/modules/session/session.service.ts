@@ -14,7 +14,14 @@ export class SessionService {
     userId: string,
     businessType: string
   ): Promise<Session> {
-    const sessionId = `${businessId}:${userId}:${Date.now()}`;
+    // Încearcă să folosească crypto.randomUUID dacă este disponibil
+    let sessionId: string;
+    if (typeof global !== 'undefined' && global.crypto?.randomUUID) {
+      sessionId = global.crypto.randomUUID();
+    } else {
+      // Fallback la implementarea existentă
+      sessionId = `${businessId}:${userId}:${Date.now()}`;
+    }
     
     const session: Session = {
       sessionId,

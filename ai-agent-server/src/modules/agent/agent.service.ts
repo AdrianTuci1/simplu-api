@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
 import { StateGraph } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
@@ -32,6 +32,7 @@ export class AgentService {
     private readonly businessInfoService: BusinessInfoService,
     private readonly ragService: RagService,
     private readonly sessionService: SessionService,
+    @Inject(forwardRef(() => WebSocketGateway))
     private readonly websocketGateway: WebSocketGateway,
     private readonly resourcesService: ResourcesService,
     private readonly externalApisService: ExternalApisService
@@ -555,11 +556,15 @@ export class AgentService {
         topP: openaiConfig.topP,
         openAIApiKey: process.env.OPENAI_API_KEY,
       });
+      console.log('OpenAI model initialized successfully');
     } catch (error) {
       console.warn('Failed to initialize OpenAI model:', error.message);
-      // Pentru teste, creăm un mock model
+      // Pentru producție, creăm un mock model simplu
       this.openaiModel = {
-        invoke: jest.fn().mockResolvedValue({ content: 'Mock response' })
+        invoke: async (messages: any[]) => {
+          console.warn('Using fallback OpenAI model - no real AI processing');
+          return { content: 'Îmi pare rău, serviciul AI nu este disponibil momentan. Vă rog să încercați din nou mai târziu.' };
+        }
       } as any;
     }
   }
@@ -596,10 +601,22 @@ export class AgentService {
   }
 
   private generateResponseId(): string {
+    // Încearcă să folosească crypto.randomUUID dacă este disponibil
+    if (typeof global !== 'undefined' && global.crypto?.randomUUID) {
+      return global.crypto.randomUUID();
+    }
+    
+    // Fallback la implementarea existentă
     return `resp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   private generateSessionId(data: MessageDto): string {
+    // Încearcă să folosească crypto.randomUUID dacă este disponibil
+    if (typeof global !== 'undefined' && global.crypto?.randomUUID) {
+      return global.crypto.randomUUID();
+    }
+    
+    // Fallback la implementarea existentă
     return `${data.businessId}:${data.userId}:${Date.now()}`;
   }
 

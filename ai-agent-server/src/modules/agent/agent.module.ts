@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { AgentController } from './agent.controller';
 import { BusinessInfoModule } from '../business-info/business-info.module';
@@ -13,7 +13,7 @@ import { ExternalApisModule } from '../external-apis/external-apis.module';
     BusinessInfoModule,
     RagModule,
     SessionModule,
-    WebSocketModule,
+    forwardRef(() => WebSocketModule),
     ResourcesModule,
     ExternalApisModule,
   ],

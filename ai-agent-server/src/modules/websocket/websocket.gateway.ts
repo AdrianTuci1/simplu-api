@@ -195,19 +195,52 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         response: response.message
       });
 
-      // TODO: Implementează notificarea către Elixir despre conversația AI
-      // await this.elixirHttpService.notifyNewAIConversation(data);
+      // Trimitere răspuns AI către Elixir prin HTTP
+      // Elixir va primi acest răspuns prin endpoint-ul /api/ai-responses
+      const elixirPayload = {
+        tenant_id: data.businessId,
+        user_id: data.userId,
+        session_id: response.sessionId,
+        message_id: response.responseId,
+        content: response.message,
+        context: {
+          actions: response.actions || [],
+          timestamp: response.timestamp,
+          source: 'ai_agent_server'
+        },
+        timestamp: response.timestamp,
+        type: 'agent.response'
+      };
 
-      // TODO: Implementează trimiterea contextului AI către Elixir
-      // const context = {
-      //   sessionId: data.sessionId,
-      //   businessId: data.businessId,
-      //   userId: data.userId,
-      //   lastMessage: data.message,
-      //   aiResponse: response.message,
-      //   timestamp: response.timestamp
-      // };
-      // await this.elixirHttpService.sendAIContextToElixir(data.sessionId, context);
+      try {
+        // Trimitere către Elixir prin HTTP
+        await this.elixirHttpService.sendAIResponse(
+          data.businessId,
+          data.userId,
+          response.sessionId,
+          response.responseId,
+          response.message,
+          { actions: response.actions || [] }
+        );
+        
+        console.log('AI response sent to Elixir via HTTP:', elixirPayload);
+      } catch (httpError) {
+        console.error('Failed to send AI response to Elixir via HTTP:', httpError);
+        
+        // Fallback: încercăm să trimitem prin WebSocket broadcast
+        // Elixir va intercepta acest mesaj și îl va trimite către clientul WebSocket
+        this.broadcastToBusiness(data.businessId, 'new_message', {
+          responseId: response.responseId,
+          message: response.message,
+          timestamp: response.timestamp,
+          sessionId: response.sessionId,
+          actions: response.actions || [],
+          businessId: data.businessId,
+          userId: data.userId
+        });
+        
+        console.log('AI response sent to Elixir via WebSocket fallback');
+      }
 
     } catch (error) {
       console.error('Error forwarding AI conversation to Elixir:', error);

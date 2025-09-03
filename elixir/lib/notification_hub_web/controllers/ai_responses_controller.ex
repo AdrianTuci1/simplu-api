@@ -3,11 +3,13 @@ defmodule NotificationHubWeb.AiResponsesController do
   require Logger
 
   def create(conn, params) do
-    Logger.info("Received AI response: #{inspect(params)}")
+    Logger.info("=== AI RESPONSES CONTROLLER: Received AI response ===")
+    Logger.info("Raw params: #{inspect(params)}")
 
     # Handle the AI response
     case handle_ai_response(params) do
       :ok ->
+        Logger.info("AI response processed successfully")
         json(conn, %{status: "ok", message: "AI response processed"})
 
       {:error, reason} ->
@@ -21,6 +23,8 @@ defmodule NotificationHubWeb.AiResponsesController do
   defp handle_ai_response(%{"tenant_id" => tenant_id} = response) do
     try do
       if tenant_id do
+        Logger.info("Processing AI response for tenant: #{tenant_id}")
+
         # Broadcast to WebSocket channel
         broadcast_ai_response(tenant_id, response)
         :ok
@@ -43,16 +47,25 @@ defmodule NotificationHubWeb.AiResponsesController do
   defp broadcast_ai_response(tenant_id, response) do
     # Broadcast to messages channel
     channel_topic = "messages:#{tenant_id}"
-    NotificationHubWeb.Endpoint.broadcast(channel_topic, "new_message", %{
-      message_id: response["message_id"],
-      content: response["content"],
-      context: response["context"] || %{},
-      user_id: response["user_id"],
-      session_id: response["session_id"],
-      timestamp: response["timestamp"],
-      role: "agent"
-    })
 
-    Logger.info("Broadcasted AI response to channel: #{channel_topic}")
+    Logger.info("Broadcasting AI response to channel: #{channel_topic}")
+    Logger.info("Response content: #{response["content"]}")
+
+    # Map response fields to match expected format
+    broadcast_payload = %{
+      responseId: response["message_id"] || response["responseId"],
+      message: response["content"] || response["message"],
+      timestamp: response["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601(),
+      sessionId: response["session_id"] || response["sessionId"],
+      actions: get_in(response, ["context", "actions"]) || response["actions"] || [],
+      businessId: tenant_id,
+      userId: response["user_id"] || response["userId"]
+    }
+
+    Logger.info("Broadcast payload: #{inspect(broadcast_payload)}")
+
+    NotificationHubWeb.Endpoint.broadcast(channel_topic, "new_message", broadcast_payload)
+
+    Logger.info("Successfully broadcasted AI response to channel: #{channel_topic}")
   end
 end

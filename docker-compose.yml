@@ -131,11 +131,10 @@ services:
       # Application Configuration
       - EXS_SECRET=${EXS_SECRET}
     depends_on:
-       - resources-server
-       - ai-agent-server
+      - resources-server
+      - ai-agent-server
     networks:
       - app-network
-
   # AI Agent Server - processes AI messages and produces Kinesis streams
   ai-agent-server:
     build:

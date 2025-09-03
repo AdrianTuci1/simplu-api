@@ -1,7 +1,8 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Post, Body, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ElixirHttpService } from '../websocket/elixir-http.service';
 import { AgentService } from '../agent/agent.service';
 import { MessageDto } from '@/shared/interfaces/message.interface';
+import { WebSocketGateway } from '../websocket/websocket.gateway';
 
 interface MessageRequest {
   tenant_id: string;
@@ -30,7 +31,9 @@ export class MessagesController {
 
   constructor(
     private readonly elixirHttpService: ElixirHttpService,
-    private readonly agentService: AgentService
+    @Inject(forwardRef(() => AgentService))
+    private readonly agentService: AgentService,
+    private readonly webSocketGateway: WebSocketGateway
   ) {}
 
   @Post()
@@ -49,10 +52,7 @@ export class MessagesController {
       this.logger.log('Starting AI processing with LLM...');
       const aiResponse = await this.processWithAI(
         messageRequest.payload.content,
-        messageRequest.payload.context || {},
-        messageRequest.tenant_id,
-        messageRequest.user_id,
-        messageRequest.session_id
+        messageRequest.payload.context || {}
       );
 
       this.logger.log('=== AI Processing Results ===');
@@ -107,7 +107,67 @@ export class MessagesController {
     }
   }
 
-  private async processWithAI(content: string, context: any, tenantId: string, userId: string, sessionId: string): Promise<AIResponse> {
+  @Post('websocket/message')
+  async handleWebSocketMessage(@Body() messageDto: MessageDto) {
+    this.logger.log('=== Processing WebSocket Message from Elixir ===');
+    this.logger.log(`Business ID: ${messageDto.businessId}`);
+    this.logger.log(`User ID: ${messageDto.userId}`);
+    this.logger.log(`Location ID: ${messageDto.locationId}`);
+    this.logger.log(`Session ID: ${messageDto.sessionId}`);
+    this.logger.log(`Message: "${messageDto.message}"`);
+    this.logger.log(`Timestamp: ${messageDto.timestamp}`);
+
+    try {
+      // Procesare mesaj prin Agent Service
+      const response = await this.agentService.processMessage(messageDto);
+
+      this.logger.log('=== WebSocket Message Processing Results ===');
+      this.logger.log(`Response ID: ${response.responseId}`);
+      this.logger.log(`Session ID: ${response.sessionId}`);
+      this.logger.log(`AI Response: "${response.message}"`);
+      this.logger.log(`Timestamp: ${response.timestamp}`);
+
+      // Trimitere răspuns înapoi către Elixir prin HTTP
+      await this.elixirHttpService.sendAIResponse(
+        messageDto.businessId,
+        messageDto.userId,
+        response.sessionId,
+        response.responseId,
+        response.message,
+        {
+          actions: response.actions || [],
+          timestamp: response.timestamp,
+          source: 'websocket_gateway'
+        }
+      );
+
+      this.logger.log('=== WebSocket Message Processing Completed Successfully ===');
+
+      return {
+        status: 'success',
+        message: 'WebSocket message processed and response sent',
+        data: {
+          responseId: response.responseId,
+          sessionId: response.sessionId,
+          timestamp: response.timestamp
+        }
+      };
+      
+    } catch (error) {
+      this.logger.error('=== Error Processing WebSocket Message ===');
+      this.logger.error(`Business ID: ${messageDto.businessId}`);
+      this.logger.error(`Error: ${error.message}`);
+      this.logger.error(`Stack: ${error.stack}`);
+      
+      return {
+        status: 'error',
+        message: 'Failed to process WebSocket message',
+        error: error.message
+      };
+    }
+  }
+
+  private async processWithAI(content: string, context: any): Promise<AIResponse> {
     this.logger.log('=== LLM Processing Started ===');
     this.logger.log(`Input content: "${content}"`);
     this.logger.log(`Context: ${JSON.stringify(context)}`);
@@ -116,30 +176,38 @@ export class MessagesController {
       // Folosește AgentService pentru procesarea LLM
       this.logger.log('Calling AgentService for LLM processing...');
       
-      // Creează MessageDto din parametrii disponibili
+      // Creează MessageDto pentru AgentService
       const messageData: MessageDto = {
-        businessId: tenantId,
+        businessId: context.businessId || 'default',
         locationId: context.locationId || 'default',
-        userId: userId,
+        userId: context.userId || 'default',
         message: content,
-        sessionId: sessionId,
+        sessionId: context.sessionId || 'default',
         timestamp: new Date().toISOString()
       };
       
-      const llmResponse = await this.agentService.processMessage(messageData);
+      const agentResponse = await this.agentService.processMessage(messageData);
       
-      this.logger.log('=== LLM Response Received ===');
-      this.logger.log(`Raw LLM response: ${JSON.stringify(llmResponse)}`);
+      this.logger.log('=== Agent Response Received ===');
+      this.logger.log(`Raw agent response: ${JSON.stringify(agentResponse)}`);
 
-      // Parsează răspunsul LLM pentru a extrage intenția și entitățile
-      const parsedResponse = this.parseLLMResponse(llmResponse, content);
+      // AgentService returnează deja un AgentResponse formatat
+      // Nu mai este nevoie să parsezi răspunsul LLM
+      const aiResponse: AIResponse = {
+        content: agentResponse.message, // Folosește direct răspunsul AI
+        intent: this.detectIntentFromContent(content),
+        confidence: 0.9, // Încredere mare pentru răspunsurile AI
+        entities: this.extractEntities(content),
+        suggestedActions: this.generateSuggestedActions('general'),
+        context: context
+      };
       
-      this.logger.log('=== Parsed LLM Response ===');
-      this.logger.log(`Intent: ${parsedResponse.intent}`);
-      this.logger.log(`Confidence: ${parsedResponse.confidence}`);
-      this.logger.log(`Entities: ${JSON.stringify(parsedResponse.entities)}`);
+      this.logger.log('=== AI Response Created ===');
+      this.logger.log(`Content: "${aiResponse.content}"`);
+      this.logger.log(`Intent: ${aiResponse.intent}`);
+      this.logger.log(`Confidence: ${aiResponse.confidence}`);
 
-      return parsedResponse;
+      return aiResponse;
     } catch (error) {
       this.logger.error('=== LLM Processing Error ===');
       this.logger.error(`Error: ${error.message}`);

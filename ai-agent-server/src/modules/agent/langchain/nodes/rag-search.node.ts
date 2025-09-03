@@ -11,19 +11,26 @@ export class RagSearchNode {
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
+      console.log(`RagSearchNode: Processing message: "${state.message}"`);
+      console.log(`RagSearchNode: Business type: ${state.businessInfo?.businessType || 'unknown'}`);
+      
       const prompt = `
       Analizează mesajul utilizatorului și determină ce informații sunt necesare din baza de date RAG.
       
-      Mesaj utilizator: ${state.message}
-      Tip business: ${state.businessInfo?.businessType}
-      Context: ${JSON.stringify(state.businessInfo?.settings)}
+      Mesaj utilizator: "${state.message}"
+      Tip business: ${state.businessInfo?.businessType || 'general'}
+      Context: ${JSON.stringify(state.businessInfo?.settings || {})}
       
       Generează o interogare optimizată pentru căutarea în baza de date RAG.
       Returnează doar interogarea, fără explicații suplimentare.
       `;
 
+      console.log(`RagSearchNode: Sending prompt to OpenAI: "${prompt}"`);
+      
       const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       const query = response.content as string;
+      
+      console.log(`RagSearchNode: OpenAI generated query: "${query}"`);
 
       // Executare căutare RAG
       const ragResults = await this.ragService.getInstructionsForRequest(
@@ -31,13 +38,15 @@ export class RagSearchNode {
         state.businessInfo?.businessType || 'general',
         state.businessInfo?.settings || {}
       );
+      
+      console.log(`RagSearchNode: Found ${ragResults.length} RAG instructions`);
 
       return {
         ragResults,
         needsResourceSearch: this.shouldSearchResources(state.message, ragResults)
       };
     } catch (error) {
-      console.error('Error in RagSearchNode:', error);
+      console.error('RagSearchNode: Error processing message:', error);
       return {
         ragResults: [],
         needsResourceSearch: false

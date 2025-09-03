@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { SessionService } from '../session/session.service';
 import { AgentService } from '../agent/agent.service';
@@ -12,9 +12,10 @@ export class CronService {
 
   constructor(
     private readonly sessionService: SessionService,
-    private readonly agentService: AgentService,
+    @Inject(forwardRef(() => AgentService))
     private readonly businessInfoService: BusinessInfoService,
     private readonly externalApisService: ExternalApisService,
+    @Inject(forwardRef(() => WebSocketGateway))
     private readonly websocketGateway: WebSocketGateway
   ) {}
 

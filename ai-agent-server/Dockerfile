@@ -1,30 +1,94 @@
-# Use Node.js 24 Alpine as base image
-FROM node:24-alpine
+# Multi-stage build pentru optimizare
+FROM node:23-alpine AS builder
 
-# Set working directory
+# Setează working directory
 WORKDIR /app
 
-# Copy package files
+# Copiază package files
 COPY package*.json ./
+COPY tsconfig*.json ./
 
-# Install dependencies
-RUN npm ci
+# Instalează dependențele
+RUN npm ci --only=production && npm cache clean --force
 
-# Copy source code
-COPY . .
+# Copiază source code
+COPY src/ ./src/
+COPY config/ ./config/
 
-# Build the application
+# Build aplicația
 RUN npm run build
 
-# Remove dev dependencies
-RUN npm prune --production
+# Production stage
+FROM node:18-alpine AS production
 
-# Expose port (ai-agent-server runs on 3003)
+# Instalează curl pentru health checks
+RUN apk add --no-cache curl
+
+# Creează user non-root pentru securitate
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
+
+# Setează working directory
+WORKDIR /app
+
+# Copiază package files
+COPY package*.json ./
+
+# Instalează doar dependențele de producție
+RUN npm ci --only=production && npm cache clean --force
+
+# Copiază built application din builder stage
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
+
+# Copiază config files
+COPY --from=builder --chown=nestjs:nodejs /app/config ./config
+
+# Copiază și alte fișiere necesare
+COPY --chown=nestjs:nodejs .env.example ./
+COPY --chown=nestjs:nodejs README.md ./
+
+# Setează ownership
+RUN chown -R nestjs:nodejs /app
+
+# Schimbă la user non-root
+USER nestjs
+
+# Expune portul
 EXPOSE 3003
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3003/health || exit 1
+  CMD curl -f http://localhost:3003/health || exit 1
 
-# Start the application
-CMD ["npm", "run", "start:prod"]
+# Setează variabilele de mediu
+ENV NODE_ENV=production
+ENV PORT=3003
+
+# Comanda de start
+CMD ["node", "dist/main.js"]
+
+# Development stage (opțional)
+FROM node:18-alpine AS development
+
+# Setează working directory
+WORKDIR /app
+
+# Copiază package files
+COPY package*.json ./
+
+# Instalează toate dependențele (inclusiv dev dependencies)
+RUN npm install
+
+# Copiază source code
+COPY . .
+
+# Expune portul
+EXPOSE 3003
+
+# Setează variabilele de mediu
+ENV NODE_ENV=development
+ENV PORT=3003
+
+# Comanda de start pentru development
+CMD ["npm", "run", "start:dev"]

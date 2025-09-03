@@ -127,22 +127,32 @@ export class RagService {
     
     return instructions
       .filter(instruction => {
+        // Verificare dacă metadata există
+        if (!instruction.metadata) {
+          return false;
+        }
+
         // Verificare cuvinte cheie
-        const keywordMatch = instruction.metadata.keywords.some(keyword =>
+        const keywordMatch = instruction.metadata.keywords?.some(keyword =>
           queryLower.includes(keyword.toLowerCase())
-        );
+        ) || false;
 
         // Verificare exemple
-        const exampleMatch = instruction.metadata.examples.some(example =>
+        const exampleMatch = instruction.metadata.examples?.some(example =>
           queryLower.includes(example.toLowerCase())
-        );
+        ) || false;
 
         // Verificare categorie
         const categoryMatch = queryLower.includes(instruction.category.toLowerCase());
 
         return keywordMatch || exampleMatch || categoryMatch;
       })
-      .sort((a, b) => b.metadata.confidence - a.metadata.confidence);
+      .sort((a, b) => {
+        // Verificare dacă metadata există pentru sortare
+        const confidenceA = a.metadata?.confidence || 0;
+        const confidenceB = b.metadata?.confidence || 0;
+        return confidenceB - confidenceA;
+      });
   }
 
   private filterAndRankInstructions(
@@ -155,8 +165,11 @@ export class RagService {
       .filter(instruction => instruction.isActive)
       .sort((a, b) => {
         // Sortare primară după încredere
-        if (b.metadata.confidence !== a.metadata.confidence) {
-          return b.metadata.confidence - a.metadata.confidence;
+        const confidenceA = a.metadata?.confidence || 0;
+        const confidenceB = b.metadata?.confidence || 0;
+        
+        if (confidenceB !== confidenceA) {
+          return confidenceB - confidenceA;
         }
         
         // Sortare secundară după data creării (cele mai noi primele)
