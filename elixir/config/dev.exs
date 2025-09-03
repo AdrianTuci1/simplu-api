@@ -21,7 +21,7 @@ config :notification_hub, NotificationHubWeb.Endpoint,
 
 # HTTP configuration for development
 config :notification_hub,
-  ai_agent_http_url: System.get_env("AI_AGENT_HTTP_URL", "http://localhost:3001")
+  ai_agent_http_url: System.get_env("AI_AGENT_HTTP_URL", "http://localhost:3003")
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"

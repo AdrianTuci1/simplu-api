@@ -13,6 +13,7 @@ import { ExternalApisModule } from './modules/external-apis/external-apis.module
 import { CredentialsModule } from './modules/external-apis/credentials/credentials.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { CronModule } from './modules/cron/cron.module';
+import { MessagesModule } from './modules/messages/messages.module';
 import { WebhookSecurityMiddleware } from './modules/webhooks/middleware/webhook-security.middleware';
 import configuration from './config/configuration';
 
@@ -34,6 +35,7 @@ import configuration from './config/configuration';
     CredentialsModule,
     WebhooksModule,
     CronModule,
+    MessagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -49,7 +49,10 @@ export class MessagesController {
       this.logger.log('Starting AI processing with LLM...');
       const aiResponse = await this.processWithAI(
         messageRequest.payload.content,
-        messageRequest.payload.context || {}
+        messageRequest.payload.context || {},
+        messageRequest.tenant_id,
+        messageRequest.user_id,
+        messageRequest.session_id
       );
 
       this.logger.log('=== AI Processing Results ===');
@@ -104,7 +107,7 @@ export class MessagesController {
     }
   }
 
-  private async processWithAI(content: string, context: any): Promise<AIResponse> {
+  private async processWithAI(content: string, context: any, tenantId: string, userId: string, sessionId: string): Promise<AIResponse> {
     this.logger.log('=== LLM Processing Started ===');
     this.logger.log(`Input content: "${content}"`);
     this.logger.log(`Context: ${JSON.stringify(context)}`);
@@ -115,11 +118,11 @@ export class MessagesController {
       
       // Creează MessageDto din parametrii disponibili
       const messageData: MessageDto = {
-        businessId: context.tenant_id || context.businessId || 'default',
+        businessId: tenantId,
         locationId: context.locationId || 'default',
-        userId: context.user_id || context.userId || 'default',
+        userId: userId,
         message: content,
-        sessionId: context.session_id || context.sessionId,
+        sessionId: sessionId,
         timestamp: new Date().toISOString()
       };
       
@@ -170,7 +173,7 @@ export class MessagesController {
       this.logger.log(`Parsed JSON: ${JSON.stringify(parsed)}`);
 
       return {
-        content: parsed.content || parsed.response || parsed.message || `Răspuns la: "${originalContent}"`,
+        content: parsed.content || parsed.response || `Răspuns la: "${originalContent}"`,
         intent: parsed.intent || this.detectIntentFromContent(originalContent),
         confidence: parsed.confidence || 0.8,
         entities: parsed.entities || this.extractEntities(originalContent),
@@ -184,11 +187,11 @@ export class MessagesController {
 
       // Fallback parsing
       return {
-        content: llmResponse.content || llmResponse.response || llmResponse.message || `Răspuns la: "${originalContent}"`,
+        content: llmResponse.content || llmResponse.response || `Răspuns la: "${originalContent}"`,
         intent: this.detectIntentFromContent(originalContent),
         confidence: 0.6,
         entities: this.extractEntities(originalContent),
-        suggestedActions: this.generateSuggestedActions('general_inquiry'),
+        suggestedActions: this.generateSuggestedActions('general'),
         context: {}
       };
     }

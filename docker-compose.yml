@@ -125,14 +125,14 @@ services:
       - "4000:4000"
     environment:
       # HTTP Configuration (receives communication from AI agent and Resources server)
-      - AI_AGENT_HTTP_URL=http://ai-agent-server:3001
+      - AI_AGENT_HTTP_URL=http://ai-agent-server:3003
       - RESOURCES_SERVER_HTTP_URL=http://resources-server:3000
       
       # Application Configuration
       - EXS_SECRET=${EXS_SECRET}
     depends_on:
-      - resources-server
-      # - ai-agent-server
+       - resources-server
+       - ai-agent-server
     networks:
       - app-network
 
@@ -186,13 +186,7 @@ services:
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
       - WEBHOOK_LOG_LEVEL=${WEBHOOK_LOG_LEVEL:-info}
-      
-      # Redis Configuration
-      - REDIS_URL=redis://redis:6379
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DB=${REDIS_DB:-0}
+
       
       # Logging Configuration
       - LOG_LEVEL=${LOG_LEVEL:-info}

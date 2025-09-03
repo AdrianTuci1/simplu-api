@@ -35,4 +35,4 @@ config :phoenix_live_view,
 
 # HTTP configuration for AI agent communication
 config :notification_hub,
-  ai_agent_http_url: System.get_env("AI_AGENT_HTTP_URL", "http://ai-agent-server:3000")
+  ai_agent_http_url: System.get_env("AI_AGENT_HTTP_URL", "http://ai-agent-server:3003")
