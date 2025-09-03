@@ -136,91 +136,88 @@ services:
     networks:
       - app-network
 
-  # # AI Agent Server - processes AI messages and produces Kinesis streams
-  # ai-agent-server:
-  #   build:
-  #     context: ./ai-agent-server
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3001:3000"
-  #   environment:
-  #     - NODE_ENV=development
-  #     - PORT=3000
+  # AI Agent Server - processes AI messages and produces Kinesis streams
+  ai-agent-server:
+    build:
+      context: ./ai-agent-server
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
       
-  #     # HTTP Configuration (sends notifications to Elixir)
-  #     - NOTIFICATION_HUB_HTTP_URL=http://notification-hub:4000
-  #     - API_SERVER_URL=http://app:3000
-  #     - API_SERVER_KEY=${API_SERVER_KEY}
+      # HTTP Configuration (sends notifications to Elixir)
+      - NOTIFICATION_HUB_HTTP_URL=http://notification-hub:4000
+      - API_SERVER_URL=http://app:3000
+      - API_SERVER_KEY=${API_SERVER_KEY}
       
-  #     # Elixir Configuration
-  #     - ELIXIR_WEBSOCKET_URL=ws://notification-hub:4000/socket/websocket
-  #     - ELIXIR_HTTP_URL=http://notification-hub:4000
-  #     - ELIXIR_TIMEOUT=${ELIXIR_TIMEOUT:-5000}
-  #     - ELIXIR_RETRY_ATTEMPTS=${ELIXIR_RETRY_ATTEMPTS:-3}
+      # Elixir Configuration
+      - ELIXIR_WEBSOCKET_URL=ws://notification-hub:4000/socket/websocket
+      - ELIXIR_HTTP_URL=http://notification-hub:4000
+      - ELIXIR_TIMEOUT=${ELIXIR_TIMEOUT:-5000}
+      - ELIXIR_RETRY_ATTEMPTS=${ELIXIR_RETRY_ATTEMPTS:-3}
       
-  #     # AWS Configuration
-  #     - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-  #     - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-  #     - AWS_REGION=${AWS_REGION:-us-east-1}
+      # AWS Configuration
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
       
-  #     # DynamoDB Configuration
-  #     - DYNAMODB_SESSIONS_TABLE=${DYNAMODB_SESSIONS_TABLE:-ai-agent-sessions}
-  #     - DYNAMODB_MESSAGES_TABLE=${DYNAMODB_MESSAGES_TABLE:-ai-agent-messages}
-  #     - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
-  #     - DYNAMODB_RAG_TABLE=${DYNAMODB_RAG_TABLE:-rag-instructions}
-  #     - DYNAMODB_EXTERNAL_CREDENTIALS_TABLE=${DYNAMODB_EXTERNAL_CREDENTIALS_TABLE:-business-external-credentials}
-  #     - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+      # DynamoDB Configuration
+      - DYNAMODB_SESSIONS_TABLE=${DYNAMODB_SESSIONS_TABLE:-ai-agent-sessions}
+      - DYNAMODB_MESSAGES_TABLE=${DYNAMODB_MESSAGES_TABLE:-ai-agent-messages}
+      - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
+      - DYNAMODB_RAG_TABLE=${DYNAMODB_RAG_TABLE:-rag-instructions}
+      - DYNAMODB_EXTERNAL_CREDENTIALS_TABLE=${DYNAMODB_EXTERNAL_CREDENTIALS_TABLE:-business-external-credentials}
+      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
       
-  #     # OpenAI Configuration
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #     - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o-mini}
-  #     - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-8192}
-  #     - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.1}
-  #     - OPENAI_TOP_P=${OPENAI_TOP_P:-0.8}
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o-mini}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-8192}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.1}
+      - OPENAI_TOP_P=${OPENAI_TOP_P:-0.8}
       
-  #     # Webhooks Configuration
-  #     - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
-  #     - META_PHONE_NUMBER_ID=${META_PHONE_NUMBER_ID}
-  #     - META_WEBHOOK_VERIFY_TOKEN=${META_WEBHOOK_VERIFY_TOKEN}
-  #     - META_APP_SECRET=${META_APP_SECRET}
-  #     - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
-  #     - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
-  #     - WEBHOOK_LOG_LEVEL=${WEBHOOK_LOG_LEVEL:-info}
+      # Webhooks Configuration
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
+      - META_PHONE_NUMBER_ID=${META_PHONE_NUMBER_ID}
+      - META_WEBHOOK_VERIFY_TOKEN=${META_WEBHOOK_VERIFY_TOKEN}
+      - META_APP_SECRET=${META_APP_SECRET}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - WEBHOOK_LOG_LEVEL=${WEBHOOK_LOG_LEVEL:-info}
       
-  #     # Redis Configuration
-  #     - REDIS_URL=redis://redis:6379
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
-  #     - REDIS_DB=${REDIS_DB:-0}
+      # Redis Configuration
+      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
       
-  #     # Logging Configuration
-  #     - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       
-  #     # Cron Jobs Configuration
-  #     - CRON_ENABLED=${CRON_ENABLED:-true}
-  #     - CRON_TIMEZONE=${CRON_TIMEZONE:-Europe/Bucharest}
-  #     - CRON_MEMORY_THRESHOLD_MB=${CRON_MEMORY_THRESHOLD_MB:-500}
-  #     - CRON_CPU_THRESHOLD_PERCENT=${CRON_CPU_THRESHOLD_PERCENT:-80}
-  #     - CRON_BACKUP_ENABLED=${CRON_BACKUP_ENABLED:-true}
-  #     - CRON_BACKUP_RETENTION_DAYS=${CRON_BACKUP_RETENTION_DAYS:-30}
-  #     - CRON_CLEANUP_RESOLVED_SESSIONS_DAYS=${CRON_CLEANUP_RESOLVED_SESSIONS_DAYS:-30}
-  #     - CRON_CLEANUP_OLD_SESSIONS_DAYS=${CRON_CLEANUP_OLD_SESSIONS_DAYS:-180}
-  #     - CRON_CLEANUP_INACTIVE_SESSIONS_HOURS=${CRON_CLEANUP_INACTIVE_SESSIONS_HOURS:-24}
-  #     - CRON_CLEANUP_ABANDONED_SESSIONS_HOURS=${CRON_CLEANUP_ABANDONED_SESSIONS_HOURS:-48}
-  #     - CRON_CLEANUP_OLD_MESSAGES_DAYS=${CRON_CLEANUP_OLD_MESSAGES_DAYS:-90}
-  #     - CRON_CLEANUP_OLD_LOGS_DAYS=${CRON_CLEANUP_OLD_LOGS_DAYS:-30}
-  #     - CRON_REMINDERS_ENABLED=${CRON_REMINDERS_ENABLED:-true}
-  #     - CRON_REMINDERS_HOURS_BEFORE=${CRON_REMINDERS_HOURS_BEFORE:-2}
-  #     - CRON_REPORTS_ENABLED=${CRON_REPORTS_ENABLED:-true}
-  #     - CRON_REPORTS_RECIPIENTS=${CRON_REPORTS_RECIPIENTS:-admin@example.com,manager@example.com}
-  #     - CRON_MONITORING_ENABLED=${CRON_MONITORING_ENABLED:-true}
-  #     - CRON_MONITORING_CHECK_INTERVAL_MINUTES=${CRON_MONITORING_CHECK_INTERVAL_MINUTES:-30}
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
+      # Cron Jobs Configuration
+      - CRON_ENABLED=${CRON_ENABLED:-true}
+      - CRON_TIMEZONE=${CRON_TIMEZONE:-Europe/Bucharest}
+      - CRON_MEMORY_THRESHOLD_MB=${CRON_MEMORY_THRESHOLD_MB:-500}
+      - CRON_CPU_THRESHOLD_PERCENT=${CRON_CPU_THRESHOLD_PERCENT:-80}
+      - CRON_BACKUP_ENABLED=${CRON_BACKUP_ENABLED:-true}
+      - CRON_BACKUP_RETENTION_DAYS=${CRON_BACKUP_RETENTION_DAYS:-30}
+      - CRON_CLEANUP_RESOLVED_SESSIONS_DAYS=${CRON_CLEANUP_RESOLVED_SESSIONS_DAYS:-30}
+      - CRON_CLEANUP_OLD_SESSIONS_DAYS=${CRON_CLEANUP_OLD_SESSIONS_DAYS:-180}
+      - CRON_CLEANUP_INACTIVE_SESSIONS_HOURS=${CRON_CLEANUP_INACTIVE_SESSIONS_HOURS:-24}
+      - CRON_CLEANUP_ABANDONED_SESSIONS_HOURS=${CRON_CLEANUP_ABANDONED_SESSIONS_HOURS:-48}
+      - CRON_CLEANUP_OLD_MESSAGES_DAYS=${CRON_CLEANUP_OLD_MESSAGES_DAYS:-90}
+      - CRON_CLEANUP_OLD_LOGS_DAYS=${CRON_CLEANUP_OLD_LOGS_DAYS:-30}
+      - CRON_REMINDERS_ENABLED=${CRON_REMINDERS_ENABLED:-true}
+      - CRON_REMINDERS_HOURS_BEFORE=${CRON_REMINDERS_HOURS_BEFORE:-2}
+      - CRON_REPORTS_ENABLED=${CRON_REPORTS_ENABLED:-true}
+      - CRON_REPORTS_RECIPIENTS=${CRON_REPORTS_RECIPIENTS:-admin@example.com,manager@example.com}
+      - CRON_MONITORING_ENABLED=${CRON_MONITORING_ENABLED:-true}
+      - CRON_MONITORING_CHECK_INTERVAL_MINUTES=${CRON_MONITORING_CHECK_INTERVAL_MINUTES:-30}
+    networks:
+      - app-network
 
   # # Management Server - handles business management and payments
   # management-server:
