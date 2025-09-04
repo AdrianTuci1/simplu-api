@@ -1,6 +1,6 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
-import { StateGraph } from '@langchain/langgraph';
+import { StateGraph, START, END } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import { openaiConfig } from '@/config/openai.config';
 import { BusinessInfoService } from '../business-info/business-info.service';
@@ -22,11 +22,15 @@ import { RagSearchNode } from './langchain/nodes/rag-search.node';
 import { ResourceOperationsNode } from './langchain/nodes/resource-operations.node';
 import { ExternalApiNode } from './langchain/nodes/external-api.node';
 import { ResponseNode } from './langchain/nodes/response.node';
+import { IdentificationNode } from './langchain/nodes/identification.node';
+import { DynamicMemoryNode } from './langchain/nodes/dynamic-memory.node';
+import { ResourcesIntrospectionNode } from './langchain/nodes/resources-introspection.node';
+import { RagUpdateNode } from './langchain/nodes/rag-update.node';
 
 @Injectable()
 export class AgentService {
   private openaiModel: ChatOpenAI;
-  private graph: StateGraph<AgentState>;
+  private graphApp: any;
 
   constructor(
     private readonly businessInfoService: BusinessInfoService,
@@ -50,47 +54,26 @@ export class AgentService {
       message: data.message,
       sessionId: data.sessionId || this.generateSessionId(data),
       source: 'websocket',
+      role: undefined,
       businessInfo: null,
       ragResults: [],
       resourceOperations: [],
       externalApiResults: [],
+      dynamicBusinessMemory: null,
+      dynamicUserMemory: null,
       needsResourceSearch: false,
       needsExternalApi: false,
       needsHumanApproval: false,
+      needsIntrospection: false,
+      needsRagUpdate: false,
       response: '',
       actions: []
     };
 
-    // Procesare cu nodurile LangGraph
+    // Procesare cu LangGraph StateGraph
     try {
-      // 1. Business Info Node
-      const businessInfoNode = new BusinessInfoNode(this.businessInfoService);
-      const businessInfoResult = await businessInfoNode.invoke(state);
-      Object.assign(state, businessInfoResult);
-      
-      // 2. RAG Search Node
-      const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService);
-      const ragResult = await ragSearchNode.invoke(state);
-      Object.assign(state, ragResult);
-      
-      // 3. Resource Operations Node (dacă este necesar)
-      if (state.needsResourceSearch) {
-        const resourceOperationsNode = new ResourceOperationsNode(this.openaiModel);
-        const resourceResult = await resourceOperationsNode.invoke(state);
-        Object.assign(state, resourceResult);
-        
-        // 4. External API Node (dacă este necesar)
-        if (state.needsExternalApi) {
-          const externalApiNode = new ExternalApiNode(this.openaiModel);
-          const externalResult = await externalApiNode.invoke(state);
-          Object.assign(state, externalResult);
-        }
-      }
-      
-      // 5. Response Node
-      const responseNode = new ResponseNode(this.openaiModel);
-      const responseResult = await responseNode.invoke(state);
-      Object.assign(state, responseResult);
+      const finalState = await this.graphApp.invoke(state);
+      Object.assign(state, finalState);
       
       return {
         responseId: this.generateResponseId(),
@@ -115,6 +98,117 @@ export class AgentService {
         sessionId: state.sessionId
       };
     }
+  }
+
+  private setupGraph(): void {
+    // Wrap existing nodes into runnable functions
+    const identification = async (s: AgentState) => {
+      const node = new IdentificationNode(this.openaiModel);
+      return await node.invoke(s);
+    };
+
+    const businessInfo = async (s: AgentState) => {
+      const node = new BusinessInfoNode(this.businessInfoService);
+      return await node.invoke(s);
+    };
+
+    const dynamicMemory = async (s: AgentState) => {
+      const node = new DynamicMemoryNode(this.ragService);
+      return await node.invoke(s);
+    };
+
+    const ragSearch = async (s: AgentState) => {
+      const node = new RagSearchNode(this.openaiModel, this.ragService);
+      return await node.invoke(s);
+    };
+
+    const resourcesIntrospection = async (s: AgentState) => {
+      const node = new ResourcesIntrospectionNode(this.openaiModel, this.resourcesService);
+      return await node.invoke(s);
+    };
+
+    const ragUpdate = async (s: AgentState) => {
+      const node = new RagUpdateNode(this.ragService);
+      return await node.invoke(s);
+    };
+
+    const resourceOperations = async (s: AgentState) => {
+      const node = new ResourceOperationsNode(this.openaiModel);
+      return await node.invoke(s);
+    };
+
+    const externalApis = async (s: AgentState) => {
+      const node = new ExternalApiNode(this.openaiModel);
+      return await node.invoke(s);
+    };
+
+    const respond = async (s: AgentState) => {
+      const node = new ResponseNode(this.openaiModel);
+      return await node.invoke(s);
+    };
+
+    const routerFromRag = (s: AgentState): 'respond' | 'internal' | 'external' => {
+      // If we already have a clear answer and no resource ops needed, respond
+      if ((s.ragResults?.length || 0) > 0 && !s.needsResourceSearch) return 'respond';
+      // Operator or needs introspection → internal path
+      if (s.role === 'operator' || s.needsIntrospection) return 'internal';
+      // Default external path
+      return 'external';
+    };
+
+    const externalOpsOrRespond = (s: AgentState): 'resource_ops' | 'respond' => {
+      return s.needsResourceSearch ? 'resource_ops' : 'respond';
+    };
+
+    const externalNeedApis = (s: AgentState): 'external_apis' | 'respond' => {
+      return s.needsExternalApi ? 'external_apis' : 'respond';
+    };
+
+    // Build graph
+    const graph: any = new StateGraph<AgentState>({ channels: {} as any });
+
+    (graph as any).addNode('identify', identification);
+    (graph as any).addNode('business_info', businessInfo);
+    (graph as any).addNode('memory_load', dynamicMemory);
+    (graph as any).addNode('rag_search', ragSearch);
+    (graph as any).addNode('internal_introspection', resourcesIntrospection);
+    (graph as any).addNode('rag_update', ragUpdate);
+    (graph as any).addNode('resource_operations', resourceOperations);
+    (graph as any).addNode('external_apis', externalApis);
+    (graph as any).addNode('response', respond);
+
+    (graph as any).addEdge(START, 'identify');
+    (graph as any).addEdge('identify', 'business_info');
+    (graph as any).addEdge('business_info', 'memory_load');
+    (graph as any).addEdge('memory_load', 'rag_search');
+
+    (graph as any).addConditionalEdges('rag_search', routerFromRag, {
+      respond: 'response',
+      internal: 'internal_introspection',
+      external: 'resource_operations_router'
+    } as any);
+
+    // Router node for external path (virtual) by using conditional edges from a no-op node
+    (graph as any).addNode('resource_operations_router', async (s: AgentState) => s);
+    (graph as any).addConditionalEdges('resource_operations_router', externalOpsOrRespond, {
+      resource_ops: 'resource_operations',
+      respond: 'response'
+    } as any);
+
+    (graph as any).addConditionalEdges('resource_operations', externalNeedApis, {
+      external_apis: 'external_apis',
+      respond: 'response'
+    } as any);
+
+    (graph as any).addEdge('external_apis', 'response');
+
+    // Internal path edges
+    (graph as any).addEdge('internal_introspection', 'rag_update');
+    (graph as any).addEdge('rag_update', 'response');
+
+    (graph as any).addEdge('response', END);
+
+    this.graphApp = graph.compile();
   }
 
   // Procesare autonomă pentru webhook-uri
@@ -569,36 +663,7 @@ export class AgentService {
     }
   }
 
-  private setupGraph(): void {
-    try {
-      // Creare instanțe pentru noduri
-      const businessInfoNode = new BusinessInfoNode(this.businessInfoService);
-      const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService);
-      const resourceOperationsNode = new ResourceOperationsNode(this.openaiModel);
-      const externalApiNode = new ExternalApiNode(this.openaiModel);
-      const responseNode = new ResponseNode(this.openaiModel);
-
-      // Pentru moment, simulăm graful LangGraph
-      // În etapa următoare vom implementa graful complet cu StateGraph
-      console.log('LangGraph nodes initialized:', {
-        businessInfoNode: !!businessInfoNode,
-        ragSearchNode: !!ragSearchNode,
-        resourceOperationsNode: !!resourceOperationsNode,
-        externalApiNode: !!externalApiNode,
-        responseNode: !!responseNode
-      });
-    } catch (error) {
-      console.error('Error setting up LangGraph:', error);
-    }
-  }
-
-  private shouldSearchResources(state: AgentState): string {
-    return state.needsResourceSearch ? 'resource-operations' : 'response';
-  }
-
-  private shouldCallExternalApis(state: AgentState): string {
-    return state.needsExternalApi ? 'external-apis' : 'response';
-  }
+  
 
   private generateResponseId(): string {
     // Încearcă să folosească crypto.randomUUID dacă este disponibil

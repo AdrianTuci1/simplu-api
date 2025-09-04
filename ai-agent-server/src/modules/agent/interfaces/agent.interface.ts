@@ -6,17 +6,26 @@ export interface AgentState {
   message: string;
   sessionId: string;
   source: 'websocket' | 'webhook' | 'cron';
+  role?: 'operator' | 'client_nou' | 'client_existent' | 'webhook';
 
   // Context
   businessInfo: BusinessInfo | null;
   ragResults: RagResult[];
   resourceOperations: ResourceOperation[];
   externalApiResults: ExternalApiResult[];
+  // Dynamic memory snapshots
+  dynamicUserMemory?: Record<string, any> | null;
+  dynamicBusinessMemory?: Record<string, any> | null;
+  // Discovery results
+  discoveredResourceTypes?: string[];
+  discoveredSchemas?: Record<string, any>;
 
   // Logică
   needsResourceSearch: boolean;
   needsExternalApi: boolean;
   needsHumanApproval: boolean;
+  needsIntrospection?: boolean;
+  needsRagUpdate?: boolean;
 
   // Output
   response: string;

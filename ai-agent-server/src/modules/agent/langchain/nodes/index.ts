@@ -3,3 +3,7 @@ export * from './rag-search.node';
 export * from './resource-operations.node';
 export * from './external-api.node';
 export * from './response.node'; 
+export * from './identification.node';
+export * from './dynamic-memory.node';
+export * from './resources-introspection.node';
+export * from './rag-update.node';

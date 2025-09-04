@@ -30,7 +30,7 @@ services:
       # External AWS DynamoDB Configuration (Business Info)
       - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
 
-      
+    
       # # External Citrus Sharding Service Configuration
       # - CITRUS_SERVER_URL=${CITRUS_SERVER_URL:-http://citrus:8080}
       # - CITRUS_API_KEY=${CITRUS_API_KEY}
@@ -169,6 +169,7 @@ services:
       - DYNAMODB_RAG_TABLE=${DYNAMODB_RAG_TABLE:-rag-instructions}
       - DYNAMODB_EXTERNAL_CREDENTIALS_TABLE=${DYNAMODB_EXTERNAL_CREDENTIALS_TABLE:-business-external-credentials}
       - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+      - AWS_DYNAMODB_REGION=${AWS_DYNAMODB_REGION:-eu-central-1}
       
       # OpenAI Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY}

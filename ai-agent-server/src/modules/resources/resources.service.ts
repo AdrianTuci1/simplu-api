@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 
 export interface ResourceOperation {
   type: 'create' | 'read' | 'update' | 'delete';
-  resourceType: string;
+  resourceType: string; // can be like "patients" or "patients/123"
   businessId: string;
   locationId: string;
   data: any;
@@ -34,8 +34,9 @@ export class ResourcesService {
 
   async executeOperation(operation: ResourceOperation): Promise<ResourceResponse> {
     try {
-      const url = this.buildResourceUrl(operation);
-      const headers = this.buildHeaders(operation.headers);
+      const { resourceTypeOnly, resourceId } = this.parseResourceType(operation.resourceType);
+      const url = this.buildResourceUrl(operation.type, operation.businessId, operation.locationId, resourceId);
+      const headers = this.buildHeaders({ 'X-Resource-Type': resourceTypeOnly, ...(operation.headers || {}) });
       
       let response: any;
 
@@ -81,6 +82,68 @@ export class ResourcesService {
     }
   }
 
+  // Introspection helpers (stubs)
+  async listResourceTypes(businessId: string, locationId: string): Promise<string[]> {
+    // Later: fetch from API server meta endpoint
+    return ['reservations', 'customers', 'services'];
+  }
+
+  async getResourceSchema(resourceType: string): Promise<any> {
+    // Later: fetch JSON schema from API server
+    return { type: resourceType, fields: [] };
+  }
+
+  // Discovery helpers
+  async discoverResourceTypes(businessId: string, locationId: string): Promise<string[]> {
+    try {
+      const url = this.buildStatisticsUrl(businessId, locationId);
+      const headers = this.buildHeaders({ 'X-Resource-Type': 'business-statistics' });
+      const response = await firstValueFrom(this.httpService.get(url, { headers }));
+      const byType = response.data?.data?.byResourceType || response.data?.meta?.byResourceType;
+      if (byType && typeof byType === 'object') {
+        return Object.keys(byType);
+      }
+      // Fallback: try recent-activities and extract types from items
+      const raHeaders = this.buildHeaders({ 'X-Resource-Type': 'recent-activities' });
+      const raResp = await firstValueFrom(this.httpService.get(url, { headers: raHeaders }));
+      const items = raResp.data?.data || [];
+      const types = new Set<string>();
+      items.forEach((it: any) => {
+        const t = it?.resourceType || it?.resource_type;
+        if (t) types.add(t);
+      });
+      return Array.from(types);
+    } catch (error) {
+      console.warn('Failed to discover resource types, using fallback list', error.message);
+      return ['patients', 'appointments', 'members', 'memberships', 'guests', 'reservations', 'stocks', 'invoices'];
+    }
+  }
+
+  async inferResourceSchema(businessId: string, locationId: string, resourceType: string, sampleSize: number = 5): Promise<any> {
+    try {
+      const url = this.buildResourcesListUrl(businessId, locationId);
+      const headers = this.buildHeaders({ 'X-Resource-Type': resourceType });
+      const params = { page: '1', limit: String(sampleSize) } as any;
+      const response = await firstValueFrom(this.httpService.get(url, { headers, params }));
+      const items = response.data?.data || response.data?.items || response.data?.data?.items || [];
+      const schema: Record<string, string> = {};
+      items.forEach((item: any) => {
+        const data = item?.data || item;
+        if (data && typeof data === 'object') {
+          Object.entries(data).forEach(([key, value]) => {
+            if (['startDate', 'endDate', 'resourceType', 'resourceId'].includes(key)) return;
+            const type = Array.isArray(value) ? 'array' : typeof value;
+            schema[key] = schema[key] || type;
+          });
+        }
+      });
+      return { type: resourceType, fields: Object.keys(schema).map(k => ({ name: k, type: schema[k] })) };
+    } catch (error) {
+      console.warn(`Failed to infer schema for ${resourceType}:`, error.message);
+      return { type: resourceType, fields: [] };
+    }
+  }
+
   // Operații specifice pentru rezervări
   async createReservation(
     businessId: string,
@@ -101,22 +164,11 @@ export class ResourcesService {
     locationId: string,
     filters?: any
   ): Promise<ResourceResponse> {
-    const url = this.buildResourceUrl({
-      type: 'read',
-      resourceType: 'reservations',
-      businessId,
-      locationId,
-      data: {}
-    });
-
-    const queryParams = filters ? `?${new URLSearchParams(filters).toString()}` : '';
-    
+    const url = this.buildResourcesListUrl(businessId, locationId);
+    const headers = this.buildHeaders({ 'X-Resource-Type': 'reservations' });
+    const params = filters || {};
     try {
-      const response = await firstValueFrom(
-        this.httpService.get(`${url}${queryParams}`, {
-          headers: this.buildHeaders()
-        })
-      );
+      const response = await firstValueFrom(this.httpService.get(url, { headers, params }));
 
       return {
         success: true,
@@ -190,8 +242,30 @@ export class ResourcesService {
     });
   }
 
-  private buildResourceUrl(operation: ResourceOperation): string {
-    return `${this.apiBaseUrl}/resources/${operation.businessId}/${operation.locationId}/${operation.resourceType}`;
+  private buildResourcesListUrl(businessId: string, locationId: string): string {
+    // GET/POST base (no resource type in path); controller expects `${businessId}-${locationId}`
+    return `${this.apiBaseUrl}/resources/${businessId}-${locationId}`;
+  }
+
+  private buildStatisticsUrl(businessId: string, locationId: string): string {
+    return `${this.apiBaseUrl}/resources/${businessId}-${locationId}/statistics`;
+  }
+
+  private buildResourceUrl(type: ResourceOperation['type'], businessId: string, locationId: string, resourceId?: string): string {
+    const base = this.buildResourcesListUrl(businessId, locationId);
+    if ((type === 'update' || type === 'delete' || (type === 'read' && resourceId)) && resourceId) {
+      return `${base}/${resourceId}`;
+    }
+    return base;
+  }
+
+  private parseResourceType(resourceType: string): { resourceTypeOnly: string; resourceId?: string } {
+    if (!resourceType) return { resourceTypeOnly: '' } as any;
+    const parts = resourceType.split('/');
+    if (parts.length > 1) {
+      return { resourceTypeOnly: parts[0], resourceId: parts.slice(1).join('/') };
+    }
+    return { resourceTypeOnly: resourceType };
   }
 
   private buildHeaders(customHeaders?: Record<string, string>): Record<string, string> {
@@ -199,7 +273,7 @@ export class ResourcesService {
       'Authorization': `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      ...customHeaders
+      ...(customHeaders || {})
     };
   }
 } 

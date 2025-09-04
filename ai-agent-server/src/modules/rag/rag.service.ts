@@ -176,4 +176,54 @@ export class RagService {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }
+
+  // Dynamic memory: business-level
+  async getDynamicBusinessMemory(businessId: string): Promise<Record<string, any> | null> {
+    try {
+      const result = await this.dynamoClient.send(new GetCommand({
+        TableName: tableNames.ragDynamicBusiness,
+        Key: { businessId }
+      }));
+      return (result as any).Item || null;
+    } catch (error) {
+      console.error('Error getting dynamic business memory:', error);
+      return null;
+    }
+  }
+
+  async putDynamicBusinessMemory(businessId: string, memory: Record<string, any>): Promise<void> {
+    try {
+      await this.dynamoClient.send(new (require('@aws-sdk/lib-dynamodb').PutCommand)({
+        TableName: tableNames.ragDynamicBusiness,
+        Item: { businessId, ...memory, updatedAt: new Date().toISOString() }
+      }));
+    } catch (error) {
+      console.error('Error putting dynamic business memory:', error);
+    }
+  }
+
+  // Dynamic memory: user-level
+  async getDynamicUserMemory(businessId: string, userId: string): Promise<Record<string, any> | null> {
+    try {
+      const result = await this.dynamoClient.send(new GetCommand({
+        TableName: tableNames.ragDynamicUser,
+        Key: { businessId, userId }
+      }));
+      return (result as any).Item || null;
+    } catch (error) {
+      console.error('Error getting dynamic user memory:', error);
+      return null;
+    }
+  }
+
+  async putDynamicUserMemory(businessId: string, userId: string, memory: Record<string, any>): Promise<void> {
+    try {
+      await this.dynamoClient.send(new (require('@aws-sdk/lib-dynamodb').PutCommand)({
+        TableName: tableNames.ragDynamicUser,
+        Item: { businessId, userId, ...memory, updatedAt: new Date().toISOString() }
+      }));
+    } catch (error) {
+      console.error('Error putting dynamic user memory:', error);
+    }
+  }
 } 
