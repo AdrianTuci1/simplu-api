@@ -7,7 +7,7 @@
     "isActive": true,
     "instructionsJson": {
       "routing": {
-        "reservation_keywords": ["programare", "rezervare", "appointment", "booking"],
+        "reservation_keywords": ["appointment"],
         "resource_update_keywords": ["actualizeaza", "modifica", "update"],
         "external_api_keywords": ["sms", "email", "whatsapp", "instagram"]
       },

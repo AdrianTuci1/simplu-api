@@ -51,19 +51,34 @@ export class ReasoningNode {
           lastUpdatedAt: new Date().toISOString(),
           intent,
         } as any;
-        const businessKey = state.businessId || state.businessInfo?.businessId || state.businessInfo?.businessType || 'general';
-        const userKey = state.userId || 'unknown';
+        const businessId = state.businessId || state.businessInfo?.businessId || 'unknown';
+        const businessType = state.businessInfo?.businessType || 'general';
+        const userId = state.userId || 'unknown';
+        const platform = state.clientSource || 'unknown';
+        
+        // Determine action based on intent
+        const action = intent.operation || intent.action || 'general';
+        
+        const businessMemoryUpdate = {
+          ...dynamicUpdate,
+          businessType: state.businessInfo?.businessType,
+          discoveredResourceTypes: state.discoveredResourceTypes || [],
+          ragResults: (state.ragResults || []).map(r => r.instruction)
+        };
+        
+        const userMemoryUpdate = {
+          role: state.role || 'client_existent',
+          lastInteractionAt: new Date().toISOString(),
+          context: { businessId, locationId: state.locationId || 'default' },
+          intent,
+          platform,
+          message: state.message,
+          businessType
+        };
+        
         await Promise.all([
-          this.ragService.putDynamicBusinessMemory(businessKey, {
-            ...dynamicUpdate,
-            businessType: state.businessInfo?.businessType,
-          }),
-          this.ragService.putDynamicUserMemory(businessKey, userKey, {
-            role: state.role || 'client_existent',
-            lastInteractionAt: new Date().toISOString(),
-            context: { businessId: businessKey, locationId: state.locationId || 'default' },
-            intent,
-          }),
+          this.ragService.putDynamicBusinessMemory(businessId, businessType, action, businessMemoryUpdate),
+          this.ragService.putDynamicUserMemory(businessId, userId, platform, userMemoryUpdate),
         ]);
       } catch (e) {
         console.warn('ReasoningNode: failed to persist dynamic memory', (e as any)?.message || e);
@@ -77,8 +92,11 @@ export class ReasoningNode {
         // Hints for downstream nodes
         userFoundInResourceType: parsed.intent?.resourceType,
         dynamicUserMemory: {
-          ...(state as any).dynamicUserMemory,
-          intent: parsed.intent || (state as any).dynamicUserMemory?.intent,
+          current: {
+            ...(state as any).dynamicUserMemory?.current,
+            intent: parsed.intent || (state as any).dynamicUserMemory?.current?.intent,
+          },
+          allPlatforms: (state as any).dynamicUserMemory?.allPlatforms || []
         },
       } as any;
     } catch (error) {

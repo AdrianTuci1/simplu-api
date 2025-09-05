@@ -1,12 +1,9 @@
-import { ChatOpenAI } from '@langchain/openai';
 import { AgentState } from '../../../interfaces/agent.interface';
-import { ResourcesService } from '../../../../resources/resources.service';
 import { RagService } from '../../../../rag/rag.service';
 
 export class IdentificationNode {
   constructor(
-    private openaiModel: ChatOpenAI,
-    private resourcesService: ResourcesService,
+
     private ragService: RagService,
   ) {}
 
@@ -19,9 +16,24 @@ export class IdentificationNode {
 
       // If request comes from webhook (external user), set role as webhook and attach any known dynamic memory
       if (state.source === 'webhook') {
-        const userMem = await this.ragService.getDynamicUserMemory(state.businessId, state.userId);
+        const businessId = state.businessId || 'unknown';
+        const userId = state.userId || 'unknown';
+        const platform = 'webhook'; // Default for webhook source
+        
+        // Try to get user memory from webhook platform first, then fallback to all platforms
+        let userMem = await this.ragService.getDynamicUserMemory(businessId, userId, platform);
+        if (!userMem) {
+          const allPlatforms = await this.ragService.getDynamicUserMemoryAllPlatforms(businessId, userId);
+          userMem = allPlatforms.length > 0 ? allPlatforms[0] : null;
+        }
+        
         const clientSource = 'unknown';
-        return { role: 'webhook', dynamicUserMemory: userMem || null, startRoute: 'external', clientSource } as any;
+        return { 
+          role: 'webhook', 
+          dynamicUserMemory: { current: userMem || {}, allPlatforms: [] }, 
+          startRoute: 'external', 
+          clientSource 
+        } as any;
       }
       // Default for remaining sources (e.g., cron)
       return { role: 'client_nou', needsIntrospection: false, startRoute: 'external' } as any;

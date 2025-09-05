@@ -130,7 +130,7 @@ export class AgentService {
 
 
       // 2) Identify role/client status using discovered resources and source
-      const identificationNode = new IdentificationNode(this.openaiModel, this.resourcesService, this.ragService);
+      const identificationNode = new IdentificationNode(this.ragService);
       state = { ...state, ...(await identificationNode.invoke(state)) } as AgentState;
 
       // 3) Load dynamic memory snapshots
@@ -235,8 +235,11 @@ export class AgentService {
       invoke: async (initialState: AgentState) => {
         let state = { ...initialState } as AgentState;
         state = await startFlow(state);
-        state = await internalFlow(state);
-        state = await externalFlow(state);
+        if (state.startRoute === 'internal') {
+          state = await internalFlow(state);
+        } else {
+          state = await externalFlow(state);
+        }
         state = await endNode(state);
         return state;
       }

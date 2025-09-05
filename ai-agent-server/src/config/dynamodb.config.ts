@@ -16,9 +16,7 @@ export const tableNames = {
   messages: process.env.DYNAMODB_MESSAGES_TABLE || 'ai-agent-messages',
   businessInfo: process.env.DYNAMODB_BUSINESS_INFO_TABLE || 'business-info',
 
-  // RAG instructions (business workflows)
-  ragInstructions: process.env.DYNAMODB_RAG_INSTRUCTIONS_TABLE || 'rag-instructions',
-
+  // RAG system instructions
   ragSystemInstructions: process.env.DYNAMODB_RAG_SYSTEM_TABLE || 'rag-system-instructions',
   // Dynamic RAG tables
   ragDynamicBusiness: process.env.DYNAMODB_RAG_DYNAMIC_BUSINESS_TABLE || 'rag-dynamic-business',

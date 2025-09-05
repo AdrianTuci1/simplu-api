@@ -48,7 +48,10 @@ export class RagSearchNode {
       if (state.source === 'webhook' || state.source === 'websocket') {
         const memory = {
           business: state.dynamicBusinessMemory || {},
-          user: state.dynamicUserMemory || {},
+          user: {
+            current: state.dynamicUserMemory?.current || {},
+            allPlatforms: state.dynamicUserMemory?.allPlatforms || []
+          },
         };
         const recentDb = await this.resourcesService.getRecentUserRelatedResources(
           state.businessId || (state.businessInfo?.businessId as any) || '',
