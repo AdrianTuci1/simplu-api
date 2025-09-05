@@ -1,10 +1,29 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
+import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ResourcesController } from './resources.controller';
 import { ResourcesService } from './resources.service';
+import { ResourceQueryService } from './services/resource-query.service';
+import { StatisticsService } from './services/statistics.service';
+import { KinesisService } from '../../kinesis.service';
+import { ResourceEntity } from './entities/resource.entity';
 
 @Module({
-  imports: [HttpModule],
-  providers: [ResourcesService],
-  exports: [ResourcesService],
+  imports: [
+    ConfigModule,
+    TypeOrmModule.forFeature([ResourceEntity]),
+  ],
+  controllers: [ResourcesController],
+  providers: [
+    ResourcesService,
+    ResourceQueryService,
+    StatisticsService,
+    KinesisService,
+  ],
+  exports: [
+    ResourcesService,
+    ResourceQueryService,
+    StatisticsService,
+  ],
 })
-export class ResourcesModule {} 
+export class ResourcesModule {}

@@ -17,15 +17,22 @@ import {
   WorkflowContext 
 } from './interfaces/agent.interface';
 import { MessageDto, AgentResponse } from '@/shared/interfaces/message.interface';
-import { BusinessInfoNode } from './langchain/nodes/business-info.node';
-import { RagSearchNode } from './langchain/nodes/rag-search.node';
-import { ResourceOperationsNode } from './langchain/nodes/resource-operations.node';
-import { ExternalApiNode } from './langchain/nodes/external-api.node';
-import { ResponseNode } from './langchain/nodes/response.node';
-import { IdentificationNode } from './langchain/nodes/identification.node';
-import { DynamicMemoryNode } from './langchain/nodes/dynamic-memory.node';
-import { ResourcesIntrospectionNode } from './langchain/nodes/resources-introspection.node';
-import { RagUpdateNode } from './langchain/nodes/rag-update.node';
+import { BusinessInfoNode } from './langchain/nodes/start/business-info.node';
+import { RagSearchNode } from './langchain/nodes/external/rag-search.node';
+import { ResourceOperationsNode } from './langchain/nodes/external/resource-operations.node';
+import { ExternalApiNode } from './langchain/nodes/external/external-api.node';
+import { ResponseNode } from './langchain/nodes/final/response.node';
+import { InternalLoopNode } from './langchain/nodes/final/internal-loop.node';
+import { LoopNode } from './langchain/nodes/final/loop.node';
+import { IdentificationNode } from './langchain/nodes/start/identification.node';
+import { DynamicMemoryNode } from './langchain/nodes/start/dynamic-memory.node';
+import { ResourcesIntrospectionNode } from './langchain/nodes/internal/introspection.node';
+import { RagUpdateNode } from './langchain/nodes/internal/rag-update.node';
+import { ReasoningNode } from './langchain/nodes/start/reasoning.node';
+import { SystemRagNode } from './langchain/nodes/start/system-rag.node';
+import { SqlGenerateNode } from './langchain/nodes/internal/sql-generate.node';
+import { SqlExecuteNode } from './langchain/nodes/internal/sql-execute.node';
+import { ResourceQueryService } from '../resources/services/resource-query.service';
 
 @Injectable()
 export class AgentService {
@@ -39,6 +46,7 @@ export class AgentService {
     @Inject(forwardRef(() => WebSocketGateway))
     private readonly websocketGateway: WebSocketGateway,
     private readonly resourcesService: ResourcesService,
+    private readonly resourceQueryService: ResourceQueryService,
     private readonly externalApisService: ExternalApisService
   ) {
     this.initializeOpenAI();
@@ -47,10 +55,16 @@ export class AgentService {
 
   // Procesare mesaje de la WebSocket (coordonatori)
   async processMessage(data: MessageDto): Promise<AgentResponse> {
+    // Normalize identifiers to avoid undefined in downstream nodes
+    const inferredFromSession = (data.sessionId || '').split(':');
+    const safeBusinessId = data.businessId || inferredFromSession[0] || '';
+    const safeUserId = data.userId || inferredFromSession[1] || '';
+    const safeLocationId = data.locationId || 'default';
+
     const state: AgentState = {
-      businessId: data.businessId,
-      locationId: data.locationId,
-      userId: data.userId,
+      businessId: safeBusinessId,
+      locationId: safeLocationId,
+      userId: safeUserId,
       message: data.message,
       sessionId: data.sessionId || this.generateSessionId(data),
       source: 'websocket',
@@ -69,6 +83,15 @@ export class AgentService {
       response: '',
       actions: []
     };
+
+    // Eagerly load business info into state before graph execution
+    try {
+      if (state.businessId) {
+        state.businessInfo = await this.businessInfoService.getBusinessInfo(state.businessId);
+      }
+    } catch (e) {
+      console.warn('processMessage: failed to pre-load businessInfo', (e as any)?.message || e);
+    }
 
     // Procesare cu LangGraph StateGraph
     try {
@@ -101,112 +124,127 @@ export class AgentService {
   }
 
   private setupGraph(): void {
-    // Wrap existing nodes into runnable functions
-    const identification = async (s: AgentState) => {
-      const node = new IdentificationNode(this.openaiModel);
-      return await node.invoke(s);
+    // Start → choose internal/external → End
+    // Wrap existing nodes into grouped flow functions for clarity
+    const startFlow = async (s: AgentState) => {
+      let state = { ...s } as AgentState;
+
+
+      // 2) Identify role/client status using discovered resources and source
+      const identificationNode = new IdentificationNode(this.openaiModel, this.resourcesService, this.ragService);
+      state = { ...state, ...(await identificationNode.invoke(state)) } as AgentState;
+
+      // 3) Load dynamic memory snapshots
+      const dynamicMemoryNode = new DynamicMemoryNode(this.ragService);
+      state = { ...state, ...(await dynamicMemoryNode.invoke(state)) } as AgentState;
+
+      // 4) Load system instructions (with base strategy instruction)
+      const systemRagNode = new SystemRagNode(this.ragService);
+      state = { ...state, ...(await systemRagNode.invoke(state)) } as AgentState;
+
+      // 5) Try RAG search early for direct instructions
+      try {
+        const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService, this.resourcesService);
+        const ragOut = await ragSearchNode.invoke(state);
+        state = { ...state, ...ragOut } as AgentState;
+      } catch (e) {
+        console.warn('startFlow: rag search failed gracefully', (e as any)?.message || e);
+      }
+
+      // 6) Discover capabilities/resources upfront so downstream nodes know what's possible
+      try {
+        const introspectionNode = new ResourcesIntrospectionNode(this.openaiModel, this.resourcesService);
+        const discovery = await introspectionNode.invoke(state);
+        state = { ...state, ...discovery } as AgentState;
+        // If introspection indicates RAG update is needed, perform it immediately
+        if (state.needsRagUpdate) {
+          const ragUpdateNode = new RagUpdateNode(this.ragService);
+          state = { ...state, ...(await ragUpdateNode.invoke(state)) } as AgentState;
+        }
+      } catch (e) {
+        console.warn('startFlow: skipping introspection due to error', (e as any)?.message || e);
+      }
+
+      // 7) Decide next actions
+      const reasoningNode = new ReasoningNode(this.openaiModel);
+      state = { ...state, ...(await reasoningNode.invoke(state)) } as AgentState;
+
+      return state;
     };
 
-    const businessInfo = async (s: AgentState) => {
-      const node = new BusinessInfoNode(this.businessInfoService);
-      return await node.invoke(s);
+    const internalFlow = async (s: AgentState) => {
+      let state = { ...s } as AgentState;
+
+      if (!state.discoveredResourceTypes || !state.discoveredSchemas) {
+        const introspectionNode = new ResourcesIntrospectionNode(this.openaiModel, this.resourcesService);
+        state = { ...state, ...(await introspectionNode.invoke(state)) } as AgentState;
+      }
+
+      // Optional: generate and execute SQL-like intent for internal reporting/use-cases
+      const sqlGenerateNode = new SqlGenerateNode(this.openaiModel);
+      state = { ...state, ...(await sqlGenerateNode.invoke(state)) } as AgentState;
+
+      const sqlExecuteNode = new SqlExecuteNode(this.resourcesService, this.resourceQueryService);
+      state = { ...state, ...(await sqlExecuteNode.invoke(state)) } as AgentState;
+
+      if (state.needsRagUpdate) {
+        const ragUpdateNode = new RagUpdateNode(this.ragService);
+        state = { ...state, ...(await ragUpdateNode.invoke(state)) } as AgentState;
+      }
+
+      return state;
     };
 
-    const dynamicMemory = async (s: AgentState) => {
-      const node = new DynamicMemoryNode(this.ragService);
-      return await node.invoke(s);
+    const externalFlow = async (s: AgentState) => {
+      let state = { ...s } as AgentState;
+
+      // External: understanding -> rag check -> router -> finalize
+      const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService, this.resourcesService);
+      state = { ...state, ...(await ragSearchNode.invoke(state)) } as AgentState;
+
+      if (state.needsResourceSearch) {
+        const resourceOpsNode = new ResourceOperationsNode(this.openaiModel);
+        state = { ...state, ...(await resourceOpsNode.invoke(state)) } as AgentState;
+      }
+
+      if (state.needsExternalApi) {
+        const externalApiNode = new ExternalApiNode(this.openaiModel);
+        state = { ...state, ...(await externalApiNode.invoke(state)) } as AgentState;
+      }
+
+      return state;
     };
 
-    const ragSearch = async (s: AgentState) => {
-      const node = new RagSearchNode(this.openaiModel, this.ragService);
-      return await node.invoke(s);
+    const endNode = async (s: AgentState) => {
+      let state = { ...s } as AgentState;
+      const responseNode = new ResponseNode(this.openaiModel);
+      state = { ...state, ...(await responseNode.invoke(state)) } as AgentState;
+
+      // Internal loop: update RAG with final response context
+      const internalLoopNode = new InternalLoopNode(this.ragService);
+      state = { ...state, ...(await internalLoopNode.invoke(state)) } as AgentState;
+
+      // Loop: signal return to listening
+      const loopNode = new LoopNode();
+      state = { ...state, ...(await loopNode.invoke(state)) } as AgentState;
+
+      return state;
     };
 
-    const resourcesIntrospection = async (s: AgentState) => {
-      const node = new ResourcesIntrospectionNode(this.openaiModel, this.resourcesService);
-      return await node.invoke(s);
-    };
-
-    const ragUpdate = async (s: AgentState) => {
-      const node = new RagUpdateNode(this.ragService);
-      return await node.invoke(s);
-    };
-
-    const resourceOperations = async (s: AgentState) => {
-      const node = new ResourceOperationsNode(this.openaiModel);
-      return await node.invoke(s);
-    };
-
-    const externalApis = async (s: AgentState) => {
-      const node = new ExternalApiNode(this.openaiModel);
-      return await node.invoke(s);
-    };
-
-    const respond = async (s: AgentState) => {
-      const node = new ResponseNode(this.openaiModel);
-      return await node.invoke(s);
-    };
-
-    const routerFromRag = (s: AgentState): 'respond' | 'internal' | 'external' => {
-      // If we already have a clear answer and no resource ops needed, respond
-      if ((s.ragResults?.length || 0) > 0 && !s.needsResourceSearch) return 'respond';
-      // Operator or needs introspection → internal path
-      if (s.role === 'operator' || s.needsIntrospection) return 'internal';
-      // Default external path
-      return 'external';
-    };
-
-    const externalOpsOrRespond = (s: AgentState): 'resource_ops' | 'respond' => {
-      return s.needsResourceSearch ? 'resource_ops' : 'respond';
-    };
-
-    const externalNeedApis = (s: AgentState): 'external_apis' | 'respond' => {
-      return s.needsExternalApi ? 'external_apis' : 'respond';
-    };
-
-    // Build graph
+    // Build simplified graph with high-level nodes
     const graph: any = new StateGraph<AgentState>({ channels: {} as any });
 
-    (graph as any).addNode('identify', identification);
-    (graph as any).addNode('business_info', businessInfo);
-    (graph as any).addNode('memory_load', dynamicMemory);
-    (graph as any).addNode('rag_search', ragSearch);
-    (graph as any).addNode('internal_introspection', resourcesIntrospection);
-    (graph as any).addNode('rag_update', ragUpdate);
-    (graph as any).addNode('resource_operations', resourceOperations);
-    (graph as any).addNode('external_apis', externalApis);
-    (graph as any).addNode('response', respond);
+    (graph as any).addNode('start', startFlow);
+    (graph as any).addNode('internal_flow', internalFlow);
+    (graph as any).addNode('external_flow', externalFlow);
+    (graph as any).addNode('end', endNode);
 
-    (graph as any).addEdge(START, 'identify');
-    (graph as any).addEdge('identify', 'business_info');
-    (graph as any).addEdge('business_info', 'memory_load');
-    (graph as any).addEdge('memory_load', 'rag_search');
-
-    (graph as any).addConditionalEdges('rag_search', routerFromRag, {
-      respond: 'response',
-      internal: 'internal_introspection',
-      external: 'resource_operations_router'
-    } as any);
-
-    // Router node for external path (virtual) by using conditional edges from a no-op node
-    (graph as any).addNode('resource_operations_router', async (s: AgentState) => s);
-    (graph as any).addConditionalEdges('resource_operations_router', externalOpsOrRespond, {
-      resource_ops: 'resource_operations',
-      respond: 'response'
-    } as any);
-
-    (graph as any).addConditionalEdges('resource_operations', externalNeedApis, {
-      external_apis: 'external_apis',
-      respond: 'response'
-    } as any);
-
-    (graph as any).addEdge('external_apis', 'response');
-
-    // Internal path edges
-    (graph as any).addEdge('internal_introspection', 'rag_update');
-    (graph as any).addEdge('rag_update', 'response');
-
-    (graph as any).addEdge('response', END);
+    (graph as any).addEdge(START, 'start');
+    // Always go through internal then external, then end
+    (graph as any).addEdge('start', 'internal_flow');
+    (graph as any).addEdge('internal_flow', 'external_flow');
+    (graph as any).addEdge('external_flow', 'end');
+    (graph as any).addEdge('end', END);
 
     this.graphApp = graph.compile();
   }
@@ -371,22 +409,23 @@ export class AgentService {
     context: WorkflowContext
   ): Promise<any> {
     if (step.apiCall) {
-      // Executare operație pe resurse
-      const operation = {
-        type: this.mapHttpMethodToOperationType(step.apiCall.method),
-        resourceType: step.apiCall.endpoint.split('/').pop(),
+      // Executare operație pe resurse (writes via Kinesis)
+      const operationType = this.mapHttpMethodToOperationType(step.apiCall.method);
+      const resourceType = step.apiCall.endpoint.split('/').pop();
+      const data = this.parseDataTemplate(step.apiCall.dataTemplate, context);
+      const result = await this.resourcesService.processResourceOperation({
+        operation: operationType as any,
         businessId: context.webhookData.businessId,
         locationId: context.webhookData.locationId,
-        data: this.parseDataTemplate(step.apiCall.dataTemplate, context)
-      };
+        resourceType: resourceType as any,
+        data,
+      } as any);
 
-      const result = await this.resourcesService.executeOperation(operation);
-      
       return {
         step: step.step,
         action: step.action,
-        success: result.success,
-        data: result.data,
+        success: !!result?.success,
+        data: { requestId: result?.requestId, message: result?.message },
         timestamp: new Date().toISOString()
       };
     }
@@ -435,19 +474,21 @@ export class AgentService {
     }
     
     if (step.action === 'create_reservation') {
-      // Creare rezervare prin Resources Service
+      // Creare rezervare prin ResourcesService (enqueue via Kinesis)
       const reservationData = this.parseDataTemplate(step.dataTemplate, context);
-      const result = await this.resourcesService.createReservation(
-        context.webhookData.businessId,
-        context.webhookData.locationId,
-        reservationData
-      );
-      
+      const result = await this.resourcesService.processResourceOperation({
+        operation: 'create' as any,
+        businessId: context.webhookData.businessId,
+        locationId: context.webhookData.locationId,
+        resourceType: 'reservations' as any,
+        data: reservationData,
+      } as any);
+
       return {
         step: step.step,
         action: step.action,
-        success: result.success,
-        data: result.data,
+        success: !!result?.success,
+        data: { requestId: result?.requestId, message: result?.message },
         timestamp: new Date().toISOString()
       };
     }

@@ -19,6 +19,32 @@ export default () => ({
     ragTable: process.env.DYNAMODB_RAG_TABLE || 'rag-instructions',
     externalCredentialsTable: process.env.DYNAMODB_EXTERNAL_CREDENTIALS_TABLE || 'business-external-credentials',
   },
+
+  // Database Configuration - supports both Citrus and RDS
+  database: {
+    type: process.env.DATABASE_TYPE || 'citrus', // 'citrus' or 'rds'
+
+    // RDS Configuration
+    rds: {
+      host: process.env.RDS_HOST || 'localhost',
+      port: parseInt(process.env.RDS_PORT || '5432', 10),
+      username: process.env.RDS_USERNAME || 'postgres',
+      password: process.env.RDS_PASSWORD || 'postgres',
+      database: process.env.RDS_DATABASE || 'simplu',
+      ssl: process.env.RDS_SSL === 'true',
+      synchronize: process.env.RDS_SYNCHRONIZE === 'true' || false,
+      logging: process.env.RDS_LOGGING === 'true' || false,
+    },
+
+    // Citrus Sharding Configuration
+    citrus: {
+      serverUrl: process.env.CITRUS_SERVER_URL || 'http://localhost:8080',
+      apiKey: process.env.CITRUS_API_KEY || '',
+      timeout: parseInt(process.env.CITRUS_TIMEOUT || '5000', 10),
+      retryAttempts: parseInt(process.env.CITRUS_RETRY_ATTEMPTS || '3', 10),
+    },
+  },
+
   
   // API Server
   apiServer: {

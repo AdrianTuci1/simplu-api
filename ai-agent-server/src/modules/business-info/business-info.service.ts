@@ -66,31 +66,25 @@ export class BusinessInfoService {
 
   async getBusinessInfo(businessId: string): Promise<BusinessInfo | null> {
     try {
-      console.log(`Fetching business info for businessId: ${businessId}`);
-      console.log(`Using table: ${tableNames.businessInfo}`);
-      console.log(`AWS Region: ${process.env.AWS_REG|| 'eu-central-1'}`);
       
       const command = new GetCommand({
         TableName: tableNames.businessInfo,
         Key: { businessId },
       });
 
-      console.log(`DynamoDB command:`, JSON.stringify(command, null, 2));
 
       const result = await this.dynamoClient.send(command);
       
-      console.log(`DynamoDB result:`, JSON.stringify(result, null, 2));
       
       if (!result.Item) {
         console.log(`No business info found for businessId: ${businessId}`);
         return null;
       }
 
-      console.log(`Raw DynamoDB data for ${businessId}:`, JSON.stringify(result.Item, null, 2));
+      // console.log(`Raw DynamoDB data for ${businessId}:`, JSON.stringify(result.Item, null, 2));
       
       // Transform DynamoDB data to expected interface
       const transformedData = this.transformDynamoDBData(result.Item as DynamoDBBusinessInfo);
-      console.log(`Transformed business info for ${businessId}:`, JSON.stringify(transformedData, null, 2));
       
       return transformedData;
     } catch (error) {
@@ -102,11 +96,45 @@ export class BusinessInfoService {
         stack: error.stack
       });
       
-      // Return mock data as fallback for development
-      console.log(`Falling back to mock data for ${businessId}`);
-      return this.getMockBusinessInfo(businessId);
+
     }
   }
+
+    /**
+   * Transform DynamoDB data format to BusinessInfo interface
+   */
+    private transformDynamoDBData(dynamoData: DynamoDBBusinessInfo): BusinessInfo {
+      const businessId = (dynamoData as any).businessId || (dynamoData as any).id || 'UNKNOWN';
+      const businessName = (dynamoData as any).companyName || (dynamoData as any).name || `Business ${businessId}`;
+      const businessTypeRaw = (dynamoData as any).businessType || (dynamoData as any).type || 'general';
+      const currency = (dynamoData as any).settings?.currency || (dynamoData as any).credits?.currency || 'RON';
+      const language = (dynamoData as any).settings?.language || (dynamoData as any).customTld || 'ro';
+  
+      return {
+        businessId,
+        businessName,
+        businessType: this.mapBusinessType(businessTypeRaw),
+        locations: (dynamoData.locations || []).map(location => ({
+          locationId: location.id,
+          name: location.name,
+          address: location.address,
+          phone: location.phone,
+          email: location.email,
+          timezone: location.timezone,
+          isActive: location.active
+        })),
+        settings: {
+          currency,
+          language,
+          dateFormat: 'DD/MM/YYYY', // Default value
+          timeFormat: 'HH:mm', // Default value
+          workingHours: this.getDefaultWorkingHours()
+        },
+        permissions: this.getDefaultPermissions(String(businessTypeRaw)),
+        createdAt: (dynamoData as any).createdAt || new Date().toISOString(),
+        updatedAt: (dynamoData as any).updatedAt || new Date().toISOString()
+      };
+    }
 
   async getLocationInfo(businessId: string, locationId: string): Promise<LocationInfo | null> {
     const businessInfo = await this.getBusinessInfo(businessId);
@@ -138,35 +166,6 @@ export class BusinessInfoService {
     return businessInfo?.businessType || 'general';
   }
 
-  /**
-   * Transform DynamoDB data format to BusinessInfo interface
-   */
-  private transformDynamoDBData(dynamoData: DynamoDBBusinessInfo): BusinessInfo {
-    return {
-      businessId: dynamoData.businessId,
-      businessName: dynamoData.companyName,
-      businessType: this.mapBusinessType(dynamoData.businessType),
-      locations: dynamoData.locations.map(location => ({
-        locationId: location.id,
-        name: location.name,
-        address: location.address,
-        phone: location.phone,
-        email: location.email,
-        timezone: location.timezone,
-        isActive: location.active
-      })),
-      settings: {
-        currency: dynamoData.settings?.currency || 'RON',
-        language: dynamoData.settings?.language || 'ro',
-        dateFormat: 'DD/MM/YYYY', // Default value
-        timeFormat: 'HH:mm', // Default value
-        workingHours: this.getDefaultWorkingHours()
-      },
-      permissions: this.getDefaultPermissions(dynamoData.businessType),
-      createdAt: dynamoData.createdAt,
-      updatedAt: dynamoData.updatedAt
-    };
-  }
 
   /**
    * Map business type from DynamoDB to expected enum
@@ -212,46 +211,4 @@ export class BusinessInfoService {
     }
   }
 
-  /**
-   * Mock data fallback for development when DynamoDB is not available
-   */
-  private getMockBusinessInfo(businessId: string): BusinessInfo {
-    const businessTypes = ['dental', 'gym', 'hotel'] as const;
-    const businessType = businessTypes[parseInt(businessId.slice(-1)) % 3];
-
-    return {
-      businessId,
-      businessName: `Mock Business ${businessId}`,
-      businessType,
-      locations: [
-        {
-          locationId: `${businessId}-loc-1`,
-          name: 'Locația Principală',
-          address: 'Strada Exemplu, Nr. 123, București',
-          phone: '+40712345678',
-          email: 'contact@business.com',
-          timezone: 'Europe/Bucharest',
-          isActive: true
-        }
-      ],
-      settings: {
-        currency: 'RON',
-        language: 'ro',
-        dateFormat: 'DD/MM/YYYY',
-        timeFormat: 'HH:mm',
-        workingHours: {
-          monday: { open: '09:00', close: '18:00', isOpen: true },
-          tuesday: { open: '09:00', close: '18:00', isOpen: true },
-          wednesday: { open: '09:00', close: '18:00', isOpen: true },
-          thursday: { open: '09:00', close: '18:00', isOpen: true },
-          friday: { open: '09:00', close: '18:00', isOpen: true },
-          saturday: { open: '09:00', close: '14:00', isOpen: true },
-          sunday: { open: '00:00', close: '00:00', isOpen: false }
-        }
-      },
-      permissions: ['reservations:create', 'customers:read', 'services:read'],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-  }
-} 
+}

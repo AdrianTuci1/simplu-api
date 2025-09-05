@@ -7,6 +7,7 @@ export interface AgentState {
   sessionId: string;
   source: 'websocket' | 'webhook' | 'cron';
   role?: 'operator' | 'client_nou' | 'client_existent' | 'webhook';
+  clientSource?: 'meta' | 'twilio' | 'email' | 'web' | 'unknown';
 
   // Context
   businessInfo: BusinessInfo | null;
@@ -19,13 +20,22 @@ export interface AgentState {
   // Discovery results
   discoveredResourceTypes?: string[];
   discoveredSchemas?: Record<string, any>;
+  discoveredUserIdFields?: Record<string, string>;
+  userFoundInResourceType?: string;
+  userFoundField?: string;
+  // System RAG
+  systemInstructions?: any[];
+  // External understanding context (memory + db signals)
+  understandingContext?: Record<string, any>;
 
   // Logică
+  startRoute?: 'internal' | 'external' | 'respond';
   needsResourceSearch: boolean;
   needsExternalApi: boolean;
   needsHumanApproval: boolean;
   needsIntrospection?: boolean;
   needsRagUpdate?: boolean;
+  introspectionAttempted?: boolean;
 
   // Output
   response: string;

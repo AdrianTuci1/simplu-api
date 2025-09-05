@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
-import { AgentState } from '../../interfaces/agent.interface';
-import { ResourcesService } from '../../../resources/resources.service';
+import { AgentState } from '../../../interfaces/agent.interface';
+import { ResourcesService } from '../../../../resources/resources.service';
 
 export class ResourcesIntrospectionNode {
   constructor(
@@ -11,12 +11,20 @@ export class ResourcesIntrospectionNode {
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
-      // Discover resource types dynamically
       const types = await this.resourcesService.discoverResourceTypes(state.businessId, state.locationId);
       const schemaEntries = await Promise.all(
         types.map(async (t) => [t, await this.resourcesService.inferResourceSchema(state.businessId, state.locationId, t)])
       );
       const schemas = Object.fromEntries(schemaEntries);
+
+      const candidateFields = ['resource_id'];
+      const userIdFields: Record<string, string> = {};
+      for (const [rtype, schema] of Object.entries(schemas)) {
+        const fields: any[] = (schema as any)?.fields || [];
+        const names = fields.map((f: any) => String(f.name || '').toLowerCase());
+        const found = candidateFields.find(cf => names.includes(cf.toLowerCase()));
+        userIdFields[rtype] = found || 'resource_id';
+      }
 
       const prompt = `
       Avem următoarele resurse disponibile: ${JSON.stringify(types)}.
@@ -32,7 +40,8 @@ export class ResourcesIntrospectionNode {
       return {
         needsRagUpdate: !!parsed.needsRagUpdate,
         discoveredResourceTypes: types,
-        discoveredSchemas: schemas
+        discoveredSchemas: schemas,
+        discoveredUserIdFields: userIdFields
       };
     } catch (error) {
       console.error('ResourcesIntrospectionNode: error', error);
@@ -40,4 +49,5 @@ export class ResourcesIntrospectionNode {
     }
   }
 }
+
 

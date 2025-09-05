@@ -1,279 +1,256 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { KinesisService, ResourceOperation } from '../../kinesis.service';
+import { ResourceQueryService } from './services/resource-query.service';
+import {
+  VALID_RESOURCE_TYPES,
+  ResourceType,
+  ResourceAction,
+} from './types/base-resource';
 
-export interface ResourceOperation {
-  type: 'create' | 'read' | 'update' | 'delete';
-  resourceType: string; // can be like "patients" or "patients/123"
+import { v4 as uuidv4 } from 'uuid';
+
+interface ResourceOperationRequest {
+  operation: ResourceAction;
   businessId: string;
   locationId: string;
-  data: any;
-  headers?: Record<string, string>;
+  resourceType?: ResourceType;
+  resourceId?: string;
+  data?: Record<string, unknown>; // The actual resource data with proper typing
 }
 
-export interface ResourceResponse {
+interface StandardResponse {
   success: boolean;
-  data?: any;
-  error?: string;
-  statusCode: number;
+  message: string;
+  requestId: string;
+  timestamp: string;
 }
 
 @Injectable()
 export class ResourcesService {
-  private readonly apiBaseUrl: string;
-  private readonly apiKey: string;
-
   constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService
-  ) {
-    this.apiBaseUrl = this.configService.get<string>('API_SERVER_URL');
-    this.apiKey = this.configService.get<string>('API_SERVER_KEY');
-  }
+    private readonly kinesisService: KinesisService,
+    private readonly resourceQueryService: ResourceQueryService,
+  ) {}
 
-  async executeOperation(operation: ResourceOperation): Promise<ResourceResponse> {
-    try {
-      const { resourceTypeOnly, resourceId } = this.parseResourceType(operation.resourceType);
-      const url = this.buildResourceUrl(operation.type, operation.businessId, operation.locationId, resourceId);
-      const headers = this.buildHeaders({ 'X-Resource-Type': resourceTypeOnly, ...(operation.headers || {}) });
-      
-      let response: any;
+  async processResourceOperation(
+    request: ResourceOperationRequest,
+  ): Promise<StandardResponse> {
+    const requestId = uuidv4();
 
-      switch (operation.type) {
-        case 'create':
-          response = await firstValueFrom(
-            this.httpService.post(url, operation.data, { headers })
-          );
-          break;
-        case 'read':
-          response = await firstValueFrom(
-            this.httpService.get(url, { headers })
-          );
-          break;
-        case 'update':
-          response = await firstValueFrom(
-            this.httpService.put(url, operation.data, { headers })
-          );
-          break;
-        case 'delete':
-          response = await firstValueFrom(
-            this.httpService.delete(url, { headers })
-          );
-          break;
-        default:
-          throw new Error(`Unsupported operation type: ${operation.type}`);
-      }
+    // Validate request
+    this.validateRequest(request);
 
-      return {
-        success: true,
-        data: response.data,
-        statusCode: response.status
-      };
 
-    } catch (error) {
-      console.error('Resource operation failed:', error);
-      
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        statusCode: error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
-      };
-    }
-  }
 
-  // Introspection helpers (stubs)
-  async listResourceTypes(businessId: string, locationId: string): Promise<string[]> {
-    // Later: fetch from API server meta endpoint
-    return ['reservations', 'customers', 'services'];
-  }
+    // Create operation for stream
+    const operation: ResourceOperation = {
+      operation: request.operation,
+      businessId: request.businessId,
+      locationId: request.locationId,
+      resourceType: request.resourceType,
+      resourceId: request.resourceId,
+      data: request.data, // Include data in the operation - startDate and endDate will be extracted from this
+      timestamp: new Date().toISOString(),
+      requestId,
+    };
 
-  async getResourceSchema(resourceType: string): Promise<any> {
-    // Later: fetch JSON schema from API server
-    return { type: resourceType, fields: [] };
-  }
+    // Send to Kinesis stream
+    await this.kinesisService.sendResourceOperation(operation);
 
-  // Discovery helpers
-  async discoverResourceTypes(businessId: string, locationId: string): Promise<string[]> {
-    try {
-      const url = this.buildStatisticsUrl(businessId, locationId);
-      const headers = this.buildHeaders({ 'X-Resource-Type': 'business-statistics' });
-      const response = await firstValueFrom(this.httpService.get(url, { headers }));
-      const byType = response.data?.data?.byResourceType || response.data?.meta?.byResourceType;
-      if (byType && typeof byType === 'object') {
-        return Object.keys(byType);
-      }
-      // Fallback: try recent-activities and extract types from items
-      const raHeaders = this.buildHeaders({ 'X-Resource-Type': 'recent-activities' });
-      const raResp = await firstValueFrom(this.httpService.get(url, { headers: raHeaders }));
-      const items = raResp.data?.data || [];
-      const types = new Set<string>();
-      items.forEach((it: any) => {
-        const t = it?.resourceType || it?.resource_type;
-        if (t) types.add(t);
-      });
-      return Array.from(types);
-    } catch (error) {
-      console.warn('Failed to discover resource types, using fallback list', error.message);
-      return ['patients', 'appointments', 'members', 'memberships', 'guests', 'reservations', 'stocks', 'invoices'];
-    }
-  }
-
-  async inferResourceSchema(businessId: string, locationId: string, resourceType: string, sampleSize: number = 5): Promise<any> {
-    try {
-      const url = this.buildResourcesListUrl(businessId, locationId);
-      const headers = this.buildHeaders({ 'X-Resource-Type': resourceType });
-      const params = { page: '1', limit: String(sampleSize) } as any;
-      const response = await firstValueFrom(this.httpService.get(url, { headers, params }));
-      const items = response.data?.data || response.data?.items || response.data?.data?.items || [];
-      const schema: Record<string, string> = {};
-      items.forEach((item: any) => {
-        const data = item?.data || item;
-        if (data && typeof data === 'object') {
-          Object.entries(data).forEach(([key, value]) => {
-            if (['startDate', 'endDate', 'resourceType', 'resourceId'].includes(key)) return;
-            const type = Array.isArray(value) ? 'array' : typeof value;
-            schema[key] = schema[key] || type;
-          });
-        }
-      });
-      return { type: resourceType, fields: Object.keys(schema).map(k => ({ name: k, type: schema[k] })) };
-    } catch (error) {
-      console.warn(`Failed to infer schema for ${resourceType}:`, error.message);
-      return { type: resourceType, fields: [] };
-    }
-  }
-
-  // Operații specifice pentru rezervări
-  async createReservation(
-    businessId: string,
-    locationId: string,
-    reservationData: any
-  ): Promise<ResourceResponse> {
-    return this.executeOperation({
-      type: 'create',
-      resourceType: 'reservations',
-      businessId,
-      locationId,
-      data: reservationData
-    });
-  }
-
-  async getReservations(
-    businessId: string,
-    locationId: string,
-    filters?: any
-  ): Promise<ResourceResponse> {
-    const url = this.buildResourcesListUrl(businessId, locationId);
-    const headers = this.buildHeaders({ 'X-Resource-Type': 'reservations' });
-    const params = filters || {};
-    try {
-      const response = await firstValueFrom(this.httpService.get(url, { headers, params }));
-
-      return {
-        success: true,
-        data: response.data,
-        statusCode: response.status
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        statusCode: error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
-      };
-    }
-  }
-
-  // Operații specifice pentru clienți
-  async getCustomer(
-    businessId: string,
-    locationId: string,
-    customerId: string
-  ): Promise<ResourceResponse> {
-    return this.executeOperation({
-      type: 'read',
-      resourceType: `customers/${customerId}`,
-      businessId,
-      locationId,
-      data: {}
-    });
-  }
-
-  async createCustomer(
-    businessId: string,
-    locationId: string,
-    customerData: any
-  ): Promise<ResourceResponse> {
-    return this.executeOperation({
-      type: 'create',
-      resourceType: 'customers',
-      businessId,
-      locationId,
-      data: customerData
-    });
-  }
-
-  // Operații specifice pentru servicii
-  async getServices(
-    businessId: string,
-    locationId: string
-  ): Promise<ResourceResponse> {
-    return this.executeOperation({
-      type: 'read',
-      resourceType: 'services',
-      businessId,
-      locationId,
-      data: {}
-    });
-  }
-
-  // Operații specifice pentru disponibilitate
-  async checkAvailability(
-    businessId: string,
-    locationId: string,
-    availabilityData: any
-  ): Promise<ResourceResponse> {
-    return this.executeOperation({
-      type: 'read',
-      resourceType: 'availability',
-      businessId,
-      locationId,
-      data: availabilityData
-    });
-  }
-
-  private buildResourcesListUrl(businessId: string, locationId: string): string {
-    // GET/POST base (no resource type in path); controller expects `${businessId}-${locationId}`
-    return `${this.apiBaseUrl}/resources/${businessId}-${locationId}`;
-  }
-
-  private buildStatisticsUrl(businessId: string, locationId: string): string {
-    return `${this.apiBaseUrl}/resources/${businessId}-${locationId}/statistics`;
-  }
-
-  private buildResourceUrl(type: ResourceOperation['type'], businessId: string, locationId: string, resourceId?: string): string {
-    const base = this.buildResourcesListUrl(businessId, locationId);
-    if ((type === 'update' || type === 'delete' || (type === 'read' && resourceId)) && resourceId) {
-      return `${base}/${resourceId}`;
-    }
-    return base;
-  }
-
-  private parseResourceType(resourceType: string): { resourceTypeOnly: string; resourceId?: string } {
-    if (!resourceType) return { resourceTypeOnly: '' } as any;
-    const parts = resourceType.split('/');
-    if (parts.length > 1) {
-      return { resourceTypeOnly: parts[0], resourceId: parts.slice(1).join('/') };
-    }
-    return { resourceTypeOnly: resourceType };
-  }
-
-  private buildHeaders(customHeaders?: Record<string, string>): Record<string, string> {
     return {
-      'Authorization': `Bearer ${this.apiKey}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...(customHeaders || {})
+      success: true,
+      message: `${request.operation} operation queued for processing`,
+      requestId,
+      timestamp: operation.timestamp,
     };
   }
-} 
+
+  private validateRequest(request: ResourceOperationRequest): void {
+    if (!request.businessId || !request.locationId) {
+      throw new BadRequestException('Business ID and Location ID are required');
+    }
+
+    // Resource type is required for create, update, patch, and delete operations
+    if (
+      ['create', 'update', 'patch', 'delete'].includes(request.operation) &&
+      !request.resourceType
+    ) {
+      throw new BadRequestException(
+        'Resource type is required for create, update, patch, and delete operations',
+      );
+    }
+
+    if (
+      request.resourceType &&
+      !VALID_RESOURCE_TYPES.includes(request.resourceType)
+    ) {
+      throw new BadRequestException(
+        `Invalid resource type: ${request.resourceType}`,
+      );
+    }
+
+    // Resource ID is required for update, patch, and delete operations
+    if (
+      ['update', 'patch', 'delete'].includes(request.operation) &&
+      !request.resourceId
+    ) {
+      throw new BadRequestException(
+        'Resource ID is required for update, patch, and delete operations',
+      );
+    }
+
+    // Validate data is provided for create, update, and patch operations
+    if (['create', 'update', 'patch'].includes(request.operation)) {
+      if (!request.data) {
+        throw new BadRequestException(
+          'Data is required for create, update, and patch operations',
+        );
+      }
+    }
+  }
+
+  // --- Agent discovery/query helpers (internal reads) ---
+
+  async discoverResourceTypes(businessId: string, locationId: string): Promise<string[]> {
+    try {
+      const stats = await this.resourceQueryService.getResourceStats(businessId, locationId);
+      return Object.keys(stats.byResourceType || {});
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async inferResourceSchema(
+    businessId: string,
+    locationId: string,
+    resourceType: string,
+  ): Promise<{ resourceType: string; fields: { name: string; type: string }[] }> {
+    try {
+      const sample = await this.resourceQueryService.getResourcesByType(
+        businessId,
+        locationId,
+        resourceType as any,
+        10,
+        0,
+      );
+      const fieldSet: Record<string, string> = {};
+      for (const item of sample) {
+        const data = (item as any)?.data || {};
+        Object.keys(data).forEach((k) => {
+          if (!fieldSet[k]) {
+            const v = (data as any)[k];
+            const t = v === null || v === undefined ? 'unknown' : Array.isArray(v) ? 'array' : typeof v;
+            fieldSet[k] = t;
+          }
+        });
+      }
+      return {
+        resourceType,
+        fields: Object.entries(fieldSet).map(([name, type]) => ({ name, type })),
+      };
+    } catch (error) {
+      return { resourceType, fields: [] };
+    }
+  }
+
+  async findUserInResource(
+    businessId: string,
+    locationId: string,
+    resourceType: string,
+    userId: string,
+    field?: string,
+  ): Promise<boolean> {
+    try {
+      // If matching by resource_id, use efficient business-pattern search
+      if ((field || '').toLowerCase() === 'resource_id') {
+        const rows = await this.resourceQueryService.searchResourcesByBusinessPattern(
+          businessId,
+          resourceType,
+          userId,
+        );
+        return rows.length > 0;
+      }
+
+      // Fallback: query by type and scan data for field match (best effort)
+      const result = await this.resourceQueryService.queryResources(businessId, locationId, {
+        resourceType,
+        page: 1,
+        limit: 100,
+      } as any);
+      const key = (field || 'userId').toLowerCase();
+      return (result.data || []).some((r: any) => {
+        const data = r?.data || {};
+        const candidates = [
+          data[key],
+          data['resourceId'],
+          data['userId'],
+          data['memberId'],
+          data['patientId'],
+          data['customerId'],
+        ].filter(Boolean);
+        return candidates.map(String).some((v) => v === String(userId));
+      });
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async findUserInRdsByResourceId(
+    businessId: string,
+    locationId: string,
+    resourceType: string,
+    userId: string,
+  ): Promise<boolean> {
+    try {
+      const rows = await this.resourceQueryService.searchResourcesByBusinessPattern(
+        businessId,
+        resourceType,
+        userId,
+      );
+      return rows.length > 0;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async getRecentUserRelatedResources(
+    businessId: string,
+    locationId: string,
+    userId: string,
+    limit: number = 25,
+  ): Promise<any[]> {
+    try {
+      // Try to find by resource id across business locations
+      const byId = await this.resourceQueryService.searchResourcesByBusinessPattern(
+        businessId,
+        '',
+        userId,
+      );
+      if (byId?.length) {
+        return byId.slice(0, limit);
+      }
+
+      // Fallback: query a few common resource types and scan for user related fields
+      const candidateTypes = ['appointment', 'reservation', 'messages', 'patient', 'customer'];
+      const aggregated: any[] = [];
+      for (const rt of candidateTypes) {
+        const res = await this.resourceQueryService.queryResources(businessId, locationId, {
+          resourceType: rt,
+          page: 1,
+          limit: 50,
+        } as any);
+        for (const r of res.data || []) {
+          const data = (r as any)?.data || {};
+          const candidates = [data['userId'], data['memberId'], data['patientId'], data['customerId']].filter(Boolean);
+          if (candidates.map(String).includes(String(userId))) {
+            aggregated.push(r);
+          }
+        }
+        if (aggregated.length >= limit) break;
+      }
+      return aggregated.slice(0, limit);
+    } catch (error) {
+      return [];
+    }
+  }
+}

@@ -1,0 +1,46 @@
+[
+  {
+    "key": "dental.operator.request_handling.v1",
+    "businessType": "dental",
+    "category": "operator_guidelines",
+    "version": "1.0.0",
+    "isActive": true,
+    "instructionsJson": {
+      "routing": {
+        "reservation_keywords": ["programare", "rezervare", "appointment", "booking"],
+        "resource_update_keywords": ["actualizeaza", "modifica", "update"],
+        "external_api_keywords": ["sms", "email", "whatsapp", "instagram"]
+      },
+      "defaults": {
+        "needsHumanApprovalFor": ["delete_critical", "sensitive_data"],
+        "resourceTypes": ["appointments", "patients", "services"]
+      },
+      "fallback": {
+        "on_no_rag": "set needsResourceSearch=true; try to derive intent from message; if insufficient data, ask for missing fields"
+      }
+    },
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "key": "general.webhook.new_client_flow.v1",
+    "businessType": "general",
+    "category": "webhook_guidelines",
+    "version": "1.0.0",
+    "isActive": true,
+    "instructionsJson": {
+      "identify_existing": {
+        "probe_fields": ["phone", "email"],
+        "resourceTypes": ["patients", "customers", "members"]
+      },
+      "on_not_found": {
+        "collect_fields": ["fullName", "phone", "serviceInterested", "preferredDate"],
+        "next": "create reservation if intent=booking"
+      }
+    },
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-01T00:00:00.000Z"
+  }
+]
+
+

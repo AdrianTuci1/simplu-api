@@ -187,6 +187,19 @@ services:
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
       - WEBHOOK_LOG_LEVEL=${WEBHOOK_LOG_LEVEL:-info}
 
+
+      - DATABASE_TYPE=${DATABASE_TYPE:-rds}
+
+      #RDS Configuration
+      - RDS_HOST=${RDS_HOST}
+      - RDS_PORT=${RDS_PORT}
+      - RDS_USERNAME=${RDS_USERNAME}
+      - RDS_PASSWORD=${RDS_PASSWORD}
+      - RDS_DATABASE=${RDS_DATABASE}
+      - RDS_SSL=${RDS_SSL:-true}
+      - RDS_SYNCHRONIZE=${RDS_SYNCHRONIZE:-true}
+      - RDS_LOGGING=${RDS_LOGGING:-true}
+
       
       # Logging Configuration
       - LOG_LEVEL=${LOG_LEVEL:-info}

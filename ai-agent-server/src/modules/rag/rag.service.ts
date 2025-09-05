@@ -22,6 +22,17 @@ export interface RagInstruction {
   };
 }
 
+export interface RagSystemInstruction {
+  key: string;               // e.g., "dental.operator.request_handling.v1"
+  businessType: string;      // 'dental' | 'gym' | 'hotel' | 'general'
+  category: string;          // high-level category
+  instructionsJson: any;     // arbitrary JSON with rules/playbooks
+  version?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkflowStep {
   step: number;
   action: string;
@@ -85,7 +96,11 @@ export class RagService {
 
       return result.Item ? result.Item as RagInstruction : null;
     } catch (error) {
-      console.error('Error getting instruction by category:', error);
+      if ((error as any)?.name === 'ResourceNotFoundException') {
+        console.info('RAG: instruction by category not found (initial empty state)');
+      } else {
+        console.warn('RAG: issue getting instruction by category:', error);
+      }
       return null;
     }
   }
@@ -113,7 +128,11 @@ export class RagService {
       // Filtrare pe categorii relevante
       return this.filterByRelevance(instructions, query, context);
     } catch (error) {
-      console.error('Error searching RAG content:', error);
+      if ((error as any)?.name === 'ResourceNotFoundException') {
+        console.info('RAG: instructions table not found (initial empty state)');
+      } else {
+        console.warn('RAG: issue searching content:', error);
+      }
       return [];
     }
   }
@@ -177,25 +196,72 @@ export class RagService {
       });
   }
 
-  // Dynamic memory: business-level
-  async getDynamicBusinessMemory(businessId: string): Promise<Record<string, any> | null> {
+  // System RAG (read-only)
+  async getSystemInstructionByKey(key: string): Promise<RagSystemInstruction | null> {
     try {
       const result = await this.dynamoClient.send(new GetCommand({
-        TableName: tableNames.ragDynamicBusiness,
-        Key: { businessId }
+        TableName: tableNames.ragSystemInstructions,
+        Key: { key },
       }));
       return (result as any).Item || null;
     } catch (error) {
-      console.error('Error getting dynamic business memory:', error);
+      if ((error as any)?.name === 'ResourceNotFoundException') {
+        console.info('RAG: system instruction not found by key (initial empty state)');
+      } else {
+        console.warn('RAG: issue getting system instruction by key:', error);
+      }
       return null;
     }
   }
 
-  async putDynamicBusinessMemory(businessId: string, memory: Record<string, any>): Promise<void> {
+  async listSystemInstructionsByBusinessType(businessType: string): Promise<RagSystemInstruction[]> {
+    try {
+      const result = await this.dynamoClient.send(new QueryCommand({
+        TableName: tableNames.ragSystemInstructions,
+        KeyConditionExpression: 'businessType = :businessType',
+        ExpressionAttributeValues: {
+          ':businessType': businessType,
+        },
+      }));
+      return (result.Items || []) as RagSystemInstruction[];
+    } catch (error) {
+      if ((error as any)?.name === 'ResourceNotFoundException') {
+        console.info('RAG: system instructions table not found (initial empty state)');
+      } else {
+        console.warn('RAG: issue listing system instructions by business type:', error);
+      }
+      return [];
+    }
+  }
+
+  async listActiveSystemInstructions(businessType: string): Promise<RagSystemInstruction[]> {
+    const all = await this.listSystemInstructionsByBusinessType(businessType);
+    return all.filter((i) => i.isActive);
+  }
+
+  // Dynamic memory: business-level
+  async getDynamicBusinessMemory(businessIdOrType: string): Promise<Record<string, any> | null> {
+    try {
+      const result = await this.dynamoClient.send(new GetCommand({
+        TableName: tableNames.ragDynamicBusiness,
+        Key: { businessId: businessIdOrType }
+      }));
+      return (result as any).Item || null;
+    } catch (error) {
+      if ((error as any)?.name === 'ResourceNotFoundException') {
+        console.info('RAG: dynamic business memory not found (initial empty state)');
+      } else {
+        console.warn('RAG: issue getting dynamic business memory:', error);
+      }
+      return null;
+    }
+  }
+
+  async putDynamicBusinessMemory(businessIdOrType: string, memory: Record<string, any>): Promise<void> {
     try {
       await this.dynamoClient.send(new (require('@aws-sdk/lib-dynamodb').PutCommand)({
         TableName: tableNames.ragDynamicBusiness,
-        Item: { businessId, ...memory, updatedAt: new Date().toISOString() }
+        Item: { businessId: businessIdOrType, ...memory, updatedAt: new Date().toISOString() }
       }));
     } catch (error) {
       console.error('Error putting dynamic business memory:', error);
@@ -203,24 +269,28 @@ export class RagService {
   }
 
   // Dynamic memory: user-level
-  async getDynamicUserMemory(businessId: string, userId: string): Promise<Record<string, any> | null> {
+  async getDynamicUserMemory(businessIdOrType: string, userId: string): Promise<Record<string, any> | null> {
     try {
       const result = await this.dynamoClient.send(new GetCommand({
         TableName: tableNames.ragDynamicUser,
-        Key: { businessId, userId }
+        Key: { businessId: businessIdOrType, userId }
       }));
       return (result as any).Item || null;
     } catch (error) {
-      console.error('Error getting dynamic user memory:', error);
+      if ((error as any)?.name === 'ResourceNotFoundException') {
+        console.info('RAG: dynamic user memory not found (initial empty state)');
+      } else {
+        console.warn('RAG: issue getting dynamic user memory:', error);
+      }
       return null;
     }
   }
 
-  async putDynamicUserMemory(businessId: string, userId: string, memory: Record<string, any>): Promise<void> {
+  async putDynamicUserMemory(businessIdOrType: string, userId: string, memory: Record<string, any>): Promise<void> {
     try {
       await this.dynamoClient.send(new (require('@aws-sdk/lib-dynamodb').PutCommand)({
         TableName: tableNames.ragDynamicUser,
-        Item: { businessId, userId, ...memory, updatedAt: new Date().toISOString() }
+        Item: { businessId: businessIdOrType, userId, ...memory, updatedAt: new Date().toISOString() }
       }));
     } catch (error) {
       console.error('Error putting dynamic user memory:', error);

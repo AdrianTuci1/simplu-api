@@ -1,5 +1,5 @@
-import { AgentState } from '../../interfaces/agent.interface';
-import { RagService } from '../../../rag/rag.service';
+import { AgentState } from '../../../interfaces/agent.interface';
+import { RagService } from '../../../../rag/rag.service';
 
 export class RagUpdateNode {
   constructor(private ragService: RagService) {}
@@ -7,7 +7,6 @@ export class RagUpdateNode {
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
       const updates: Promise<any>[] = [];
-      // Update business-level memory with last message and RAG results summary
       updates.push(this.ragService.putDynamicBusinessMemory(state.businessId, {
         lastMessage: state.message,
         lastUpdatedAt: new Date().toISOString(),
@@ -16,17 +15,11 @@ export class RagUpdateNode {
         discoveredResourceTypes: state.discoveredResourceTypes || [],
         discoveredSchemas: state.discoveredSchemas || {}
       }));
-
-      // Update user-level memory with inferred role and last intent guess from ragResults
       updates.push(this.ragService.putDynamicUserMemory(state.businessId, state.userId, {
         role: state.role || 'client_existent',
         lastInteractionAt: new Date().toISOString(),
-        context: {
-          businessId: state.businessId,
-          locationId: state.locationId
-        }
+        context: { businessId: state.businessId, locationId: state.locationId }
       }));
-
       await Promise.all(updates);
       return {};
     } catch (error) {
@@ -35,4 +28,5 @@ export class RagUpdateNode {
     }
   }
 }
+
 

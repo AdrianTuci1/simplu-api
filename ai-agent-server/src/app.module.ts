@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,6 +24,32 @@ import configuration from './config/configuration';
       isGlobal: true,
       load: [configuration],
       envFilePath: '.env',
+    }),
+    // TypeORM configuration for RDS
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const rdsConfig = configService.get('database.rds');
+        return {
+          type: 'postgres',
+          host: rdsConfig.host,
+          port: rdsConfig.port,
+          username: rdsConfig.username,
+          password: rdsConfig.password,
+          database: rdsConfig.database,
+          ssl: rdsConfig.ssl ? { rejectUnauthorized: false } : false,
+          synchronize: rdsConfig.synchronize,
+          logging: rdsConfig.logging,
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          // Additional connection options
+          extra: {
+            connectionTimeoutMillis: 10000,
+            idleTimeoutMillis: 30000,
+            max: 20,
+          },
+        };
+      },
+      inject: [ConfigService],
     }),
     HttpModule,
     WebSocketModule,
