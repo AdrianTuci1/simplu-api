@@ -6,9 +6,11 @@ export class DynamicMemoryNode {
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
+      const businessKey = state.businessId || state.businessInfo?.businessId || state.businessInfo?.businessType || 'general';
+      const userKey = state.userId || 'unknown';
       const [businessMemory, userMemory] = await Promise.all([
-        this.ragService.getDynamicBusinessMemory(state.businessId),
-        this.ragService.getDynamicUserMemory(state.businessId, state.userId)
+        this.ragService.getDynamicBusinessMemory(businessKey),
+        this.ragService.getDynamicUserMemory(businessKey, userKey)
       ]);
 
       return {

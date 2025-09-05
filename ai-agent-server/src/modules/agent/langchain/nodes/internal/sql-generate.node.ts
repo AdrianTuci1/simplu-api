@@ -9,6 +9,9 @@ export class SqlGenerateNode {
     try {
       const discoveredTypes: string[] = (state.discoveredResourceTypes || []) as any;
       const inferredType = (state as any).userFoundInResourceType || discoveredTypes[0] || 'resource';
+      // If reasoning stored intent with filters/operation, prefer that
+      const intent = (state as any).dynamicUserMemory?.intent || (state as any).dynamicBusinessMemory?.intent || {};
+      const targetType = intent.resourceType || inferredType;
 
       const businessLocationId = `${state.businessId}-${state.locationId}`;
       const prompt = `
@@ -18,7 +21,8 @@ export class SqlGenerateNode {
       - Mesaj: "${state.message}"
       - Tip business: ${state.businessInfo?.businessType || 'general'}
       - business_location_id: ${businessLocationId}
-      - resource_type țintă: ${inferredType}
+      - resource_type țintă: ${targetType}
+      - indicii intent: ${JSON.stringify(intent)}
 
       Reguli:
       - Pentru listare/căutare: SELECT ... FROM resources WHERE business_location_id='${businessLocationId}' AND resource_type='${inferredType}' [AND condiții relevante pe resource_id/data/start_date/end_date]
@@ -29,7 +33,7 @@ export class SqlGenerateNode {
       `;
       const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       const sql = String(response.content || '').trim();
-      return { generatedSql: sql, targetResourceType: inferredType, actions: [...(state.actions || []), { type: 'sql_generate', status: 'success', details: { sql, resourceType: inferredType } }] } as any;
+      return { generatedSql: sql, targetResourceType: targetType, actions: [...(state.actions || []), { type: 'sql_generate', status: 'success', details: { sql, resourceType: targetType } }] } as any;
     } catch (error) {
       return { actions: [...(state.actions || []), { type: 'sql_generate', status: 'failed', details: { error: String(error?.message || error) } }] } as any;
     }

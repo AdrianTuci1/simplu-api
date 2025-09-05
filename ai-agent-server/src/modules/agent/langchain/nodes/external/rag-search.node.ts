@@ -13,12 +13,13 @@ export class RagSearchNode {
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
-      console.log(`RagSearchNode: Processing message: "${state.message}"`);
+      const safeMessage = state.message || '';
+      console.log(`RagSearchNode: Processing message: "${safeMessage}"`);
       console.log(`RagSearchNode: Business type: ${state.businessInfo?.businessType || 'unknown'}`);
       const prompt = `
       Analizează mesajul utilizatorului și generează un obiect JSON cu câmpuri simple pentru căutare în RAG.
       
-      Mesaj utilizator: "${state.message || ''}"
+      Mesaj utilizator: "${safeMessage}"
       Tip business: ${state.businessInfo?.businessType || 'general'}
       Context: ${JSON.stringify(state.businessInfo?.settings || {})}
       
@@ -44,15 +45,15 @@ export class RagSearchNode {
 
       // For webhook, also check dynamic memory and database for this user to build understanding context
       let understandingContext: any = state.understandingContext || {};
-      if (state.source === 'webhook') {
+      if (state.source === 'webhook' || state.source === 'websocket') {
         const memory = {
           business: state.dynamicBusinessMemory || {},
           user: state.dynamicUserMemory || {},
         };
         const recentDb = await this.resourcesService.getRecentUserRelatedResources(
-          state.businessId,
-          state.locationId,
-          state.userId,
+          state.businessId || (state.businessInfo?.businessId as any) || '',
+          state.locationId || 'default',
+          state.userId || '',
           25,
         );
         understandingContext = { memory, recentDb };

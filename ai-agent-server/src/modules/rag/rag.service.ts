@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, GetCommand, ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
 
 export interface RagInstruction {
@@ -48,7 +48,11 @@ export interface WorkflowStep {
 
 @Injectable()
 export class RagService {
-  private dynamoClient = DynamoDBDocumentClient.from(dynamoDBClient);
+  private dynamoClient = DynamoDBDocumentClient.from(dynamoDBClient, {
+    marshallOptions: {
+      removeUndefinedValues: true,
+    },
+  });
 
   async getInstructionsForRequest(
     request: string,
@@ -111,19 +115,18 @@ export class RagService {
     context: any
   ): Promise<RagInstruction[]> {
     try {
-      // Căutare în DynamoDB cu filtrare pe business type
-      const result = await this.dynamoClient.send(new QueryCommand({
+      // Fallback to Scan to avoid depending on a specific PK in early phases (no GSI)
+      const result = await this.dynamoClient.send(new ScanCommand({
         TableName: tableNames.ragInstructions,
-        KeyConditionExpression: 'businessType = :businessType',
-        FilterExpression: 'isActive = :isActive',
+        FilterExpression: 'businessType = :businessType AND isActive = :isActive',
         ExpressionAttributeValues: {
           ':businessType': businessType,
-          ':isActive': true
-        }
+          ':isActive': true,
+        },
       }));
 
-      const instructions = result.Items ? 
-        result.Items.map(item => item as RagInstruction) : [];
+      const instructions = result.Items ?
+        result.Items.map((item) => item as RagInstruction) : [];
 
       // Filtrare pe categorii relevante
       return this.filterByRelevance(instructions, query, context);
@@ -259,7 +262,7 @@ export class RagService {
 
   async putDynamicBusinessMemory(businessIdOrType: string, memory: Record<string, any>): Promise<void> {
     try {
-      await this.dynamoClient.send(new (require('@aws-sdk/lib-dynamodb').PutCommand)({
+      await this.dynamoClient.send(new PutCommand({
         TableName: tableNames.ragDynamicBusiness,
         Item: { businessId: businessIdOrType, ...memory, updatedAt: new Date().toISOString() }
       }));
@@ -288,7 +291,7 @@ export class RagService {
 
   async putDynamicUserMemory(businessIdOrType: string, userId: string, memory: Record<string, any>): Promise<void> {
     try {
-      await this.dynamoClient.send(new (require('@aws-sdk/lib-dynamodb').PutCommand)({
+      await this.dynamoClient.send(new PutCommand({
         TableName: tableNames.ragDynamicUser,
         Item: { businessId: businessIdOrType, userId, ...memory, updatedAt: new Date().toISOString() }
       }));

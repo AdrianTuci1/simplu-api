@@ -17,7 +17,6 @@ import {
   WorkflowContext 
 } from './interfaces/agent.interface';
 import { MessageDto, AgentResponse } from '@/shared/interfaces/message.interface';
-import { BusinessInfoNode } from './langchain/nodes/start/business-info.node';
 import { RagSearchNode } from './langchain/nodes/external/rag-search.node';
 import { ResourceOperationsNode } from './langchain/nodes/external/resource-operations.node';
 import { ExternalApiNode } from './langchain/nodes/external/external-api.node';
@@ -65,7 +64,7 @@ export class AgentService {
       businessId: safeBusinessId,
       locationId: safeLocationId,
       userId: safeUserId,
-      message: data.message,
+      message: (data.message || '').trim(),
       sessionId: data.sessionId || this.generateSessionId(data),
       source: 'websocket',
       role: undefined,
@@ -93,7 +92,7 @@ export class AgentService {
       console.warn('processMessage: failed to pre-load businessInfo', (e as any)?.message || e);
     }
 
-    // Procesare cu LangGraph StateGraph
+    // Procesare cu pipeline determinist (păstrează întregul state)
     try {
       const finalState = await this.graphApp.invoke(state);
       Object.assign(state, finalState);
@@ -166,7 +165,7 @@ export class AgentService {
       }
 
       // 7) Decide next actions
-      const reasoningNode = new ReasoningNode(this.openaiModel);
+      const reasoningNode = new ReasoningNode(this.openaiModel, this.ragService);
       state = { ...state, ...(await reasoningNode.invoke(state)) } as AgentState;
 
       return state;
@@ -231,22 +230,17 @@ export class AgentService {
       return state;
     };
 
-    // Build simplified graph with high-level nodes
-    const graph: any = new StateGraph<AgentState>({ channels: {} as any });
-
-    (graph as any).addNode('start', startFlow);
-    (graph as any).addNode('internal_flow', internalFlow);
-    (graph as any).addNode('external_flow', externalFlow);
-    (graph as any).addNode('end', endNode);
-
-    (graph as any).addEdge(START, 'start');
-    // Always go through internal then external, then end
-    (graph as any).addEdge('start', 'internal_flow');
-    (graph as any).addEdge('internal_flow', 'external_flow');
-    (graph as any).addEdge('external_flow', 'end');
-    (graph as any).addEdge('end', END);
-
-    this.graphApp = graph.compile();
+    // Construiește un executor secvențial care păstrează întregul state fără canale LangGraph
+    this.graphApp = {
+      invoke: async (initialState: AgentState) => {
+        let state = { ...initialState } as AgentState;
+        state = await startFlow(state);
+        state = await internalFlow(state);
+        state = await externalFlow(state);
+        state = await endNode(state);
+        return state;
+      }
+    } as any;
   }
 
   // Procesare autonomă pentru webhook-uri

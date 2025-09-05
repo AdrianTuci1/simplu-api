@@ -1,10 +1,12 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { AgentState } from '../../../interfaces/agent.interface';
+import { RagService } from '../../../../rag/rag.service';
 
 export class ReasoningNode {
   constructor(
-    private openaiModel: ChatOpenAI
+    private openaiModel: ChatOpenAI,
+    private ragService: RagService,
   ) {}
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
@@ -14,7 +16,9 @@ export class ReasoningNode {
       const prompt = `
       Ești un modul de raționament pentru un agent conversațional.
       Primesti context și trebuie să decizi următoarele flag-uri booleene:
-      { "needsResourceSearch": boolean, "needsExternalApi": boolean, "needsHumanApproval": boolean, "needsIntrospection": boolean }
+      { "needsResourceSearch": boolean, "needsExternalApi": boolean, "needsHumanApproval": boolean, "needsIntrospection": boolean,
+        "intent": { "operation": "list|create|update|delete|query_db", "resourceType": string, "filters": object }
+      }
 
       Context:
       - Rol: ${state.role}
@@ -39,12 +43,44 @@ export class ReasoningNode {
         parsed.needsResourceSearch = true;
       }
 
+      // Persist structured dynamic memory so next nodes can use it immediately
+      try {
+        const intent = parsed.intent || {};
+        const dynamicUpdate = {
+          lastMessage: state.message,
+          lastUpdatedAt: new Date().toISOString(),
+          intent,
+        } as any;
+        const businessKey = state.businessId || state.businessInfo?.businessId || state.businessInfo?.businessType || 'general';
+        const userKey = state.userId || 'unknown';
+        await Promise.all([
+          this.ragService.putDynamicBusinessMemory(businessKey, {
+            ...dynamicUpdate,
+            businessType: state.businessInfo?.businessType,
+          }),
+          this.ragService.putDynamicUserMemory(businessKey, userKey, {
+            role: state.role || 'client_existent',
+            lastInteractionAt: new Date().toISOString(),
+            context: { businessId: businessKey, locationId: state.locationId || 'default' },
+            intent,
+          }),
+        ]);
+      } catch (e) {
+        console.warn('ReasoningNode: failed to persist dynamic memory', (e as any)?.message || e);
+      }
+
       return {
         needsResourceSearch: !!parsed.needsResourceSearch,
         needsExternalApi: !!parsed.needsExternalApi,
         needsHumanApproval: !!parsed.needsHumanApproval,
-        needsIntrospection: parsed.needsIntrospection ?? (state.role === 'operator')
-      };
+        needsIntrospection: parsed.needsIntrospection ?? (state.role === 'operator'),
+        // Hints for downstream nodes
+        userFoundInResourceType: parsed.intent?.resourceType,
+        dynamicUserMemory: {
+          ...(state as any).dynamicUserMemory,
+          intent: parsed.intent || (state as any).dynamicUserMemory?.intent,
+        },
+      } as any;
     } catch (error) {
       console.warn('ReasoningNode: fallback flags due to error', error);
       return {
