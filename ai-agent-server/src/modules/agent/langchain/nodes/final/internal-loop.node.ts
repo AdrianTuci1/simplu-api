@@ -6,13 +6,19 @@ export class InternalLoopNode {
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
-      await this.ragService.putDynamicBusinessMemory(state.businessId, {
+      await this.ragService.putDynamicBusinessMemory(state.businessId, state.businessInfo?.businessType || 'general', 'general', {
         lastResponse: state.response,
         lastUpdatedAt: new Date().toISOString()
       });
-      return { actions: [...(state.actions || []), { type: 'internal_loop', status: 'success', details: { rag: 'updated' } }] } as any;
+      // CRITICAL FIX: Don't create new array, push to existing one
+      if (!state.actions) state.actions = [];
+      state.actions.push({ type: 'internal_loop', status: 'success', details: { rag: 'updated' } });
+      return {};
     } catch (_err) {
-      return { actions: [...(state.actions || []), { type: 'internal_loop', status: 'failed', details: {} }] } as any;
+      // CRITICAL FIX: Don't create new array, push to existing one
+      if (!state.actions) state.actions = [];
+      state.actions.push({ type: 'internal_loop', status: 'failed', details: {} });
+      return {};
     }
   }
 }

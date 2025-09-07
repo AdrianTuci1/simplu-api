@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import nodemailer from 'nodemailer';
 
 export interface MetaCredentials {
   accessToken: string;
@@ -16,10 +18,17 @@ export interface TwilioCredentials {
   phoneNumber: string;
 }
 
+export interface GmailCredentials {
+  accessToken: string;
+  refreshToken: string;
+  expiryDate?: number;
+  email: string;
+}
+
 export interface ExternalCredentials {
   businessId: string;
-  serviceType: 'meta' | 'twilio';
-  credentials: MetaCredentials | TwilioCredentials;
+  serviceType: string;
+  credentials: MetaCredentials | TwilioCredentials | GmailCredentials | Record<string, any>;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -33,8 +42,6 @@ export interface ExternalCredentials {
 @Injectable()
 export class ExternalApisService {
   private dynamoClient = DynamoDBDocumentClient.from(dynamoDBClient);
-  private metaClients = new Map<string, any>();
-  private twilioClients = new Map<string, any>();
 
   // Meta API Methods
   async sendMetaMessage(
@@ -114,26 +121,50 @@ export class ExternalApisService {
     message: string,
     businessId: string
   ): Promise<any> {
-    const twilioClient = await this.getTwilioClient(businessId);
-    const credentials = await this.getTwilioCredentials(businessId);
-    
+    // Prefer AWS SNS for SMS sending (our shared credentials)
     try {
-      const response = await twilioClient.messages.create({
-        body: message,
-        from: credentials.phoneNumber,
-        to: to
-      });
+      const snsClient = new SNSClient({});
+      const response = await snsClient.send(
+        new PublishCommand({
+          PhoneNumber: to,
+          Message: message,
+          MessageAttributes: {
+            'AWS.SNS.SMS.SMSType': { DataType: 'String', StringValue: 'Transactional' },
+          },
+        })
+      );
+      try { snsClient.destroy(); } catch {}
 
       return {
         success: true,
-        messageId: response.sid,
-        data: response
+        messageId: response.MessageId,
+        data: response,
       };
-    } catch (error) {
-      console.error('Twilio SMS error:', error);
+    } catch (snsError: any) {
+      console.error('AWS SNS SMS error, attempting Twilio fallback:', snsError?.message || snsError);
+      // Fallback to Twilio only if credentials exist for business
+      try {
+        const twilioClient = await this.getTwilioClient(businessId);
+        const credentials = await this.getTwilioCredentials(businessId);
+        if (twilioClient && credentials?.phoneNumber) {
+          const twilioResp = await twilioClient.messages.create({
+            body: message,
+            from: credentials.phoneNumber,
+            to: to,
+          });
+          return {
+            success: true,
+            messageId: twilioResp.sid,
+            data: twilioResp,
+          };
+        }
+      } catch (twilioError: any) {
+        console.error('Twilio fallback failed:', twilioError?.message || twilioError);
+      }
+
       return {
         success: false,
-        error: error.message
+        error: snsError?.message || 'Failed to send SMS via AWS SNS and Twilio fallback',
       };
     }
   }
@@ -144,15 +175,68 @@ export class ExternalApisService {
     body: string,
     businessId: string
   ): Promise<any> {
-    // Implementare pentru serviciu de email (SendGrid, AWS SES, etc.)
-    // Pentru moment, simulăm trimiterea
+    // Legacy simulated email method; prefer using Gmail OAuth2 per user via sendEmailFromGmail
     console.log(`Email would be sent to ${to}: ${subject}`);
-    
-    return {
-      success: true,
-      messageId: `email_${Date.now()}`,
-      data: { to, subject, body }
-    };
+    return { success: true, messageId: `email_${Date.now()}`, data: { to, subject, body } };
+  }
+
+  async sendEmailFromGmail(
+    businessId: string,
+    userId: string,
+    to: string,
+    subject: string,
+    text: string
+  ): Promise<{ success: boolean; messageId?: string; error?: string }>
+  {
+    const creds = await this.getGmailCredentials(businessId, userId);
+    if (!creds) {
+      return { success: false, error: 'Missing Gmail credentials for user' };
+    }
+    const clientId = process.env.GOOGLE_CLIENT_ID as string;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET as string;
+    if (!clientId || !clientSecret) {
+      return { success: false, error: 'Missing GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET' };
+    }
+
+    let transporter: any = null;
+    try {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          type: 'OAuth2',
+          user: creds.email,
+          clientId,
+          clientSecret,
+          accessToken: creds.accessToken,
+          refreshToken: creds.refreshToken,
+        },
+        // Add connection pooling limits to prevent memory leaks
+        pool: true,
+        maxConnections: 1,
+        maxMessages: 1,
+        rateLimit: 1,
+      } as any);
+
+      const info = await transporter.sendMail({
+        from: creds.email,
+        to,
+        subject,
+        text,
+      });
+      return { success: true, messageId: info.messageId };
+    } catch (err: any) {
+      console.error('sendEmailFromGmail failed:', err?.message || err);
+      return { success: false, error: err?.message || 'Failed to send email via Gmail' };
+    } finally {
+      // CRITICAL: Always close the transporter to prevent memory leaks
+      if (transporter) {
+        try {
+          transporter.close();
+        } catch (closeErr) {
+          console.error('Error closing nodemailer transporter:', closeErr);
+        }
+      }
+    }
   }
 
   // Credentials Management
@@ -175,8 +259,7 @@ export class ExternalApisService {
       Item: externalCredentials
     }));
 
-    // Clear cached client
-    this.metaClients.delete(businessId);
+    // No in-memory clients to clear
 
     return externalCredentials;
   }
@@ -200,8 +283,32 @@ export class ExternalApisService {
       Item: externalCredentials
     }));
 
-    // Clear cached client
-    this.twilioClients.delete(businessId);
+    // No in-memory clients to clear
+
+    return externalCredentials;
+  }
+
+  async saveGmailCredentials(
+    businessId: string,
+    userId: string,
+    credentials: GmailCredentials
+  ): Promise<ExternalCredentials> {
+    const externalCredentials: ExternalCredentials = {
+      businessId,
+      serviceType: `gmail#${userId}`,
+      credentials,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      metadata: { permissions: ['gmail.read', 'gmail.send'] },
+    };
+
+    await this.dynamoClient.send(
+      new PutCommand({
+        TableName: tableNames.externalCredentials,
+        Item: externalCredentials,
+      })
+    );
 
     return externalCredentials;
   }
@@ -260,46 +367,59 @@ export class ExternalApisService {
     }
   }
 
-  // Private methods for client management
-  private async getMetaClient(businessId: string): Promise<any> {
-    if (this.metaClients.has(businessId)) {
-      return this.metaClients.get(businessId);
-    }
+  async getGmailCredentials(
+    businessId: string,
+    userId: string
+  ): Promise<GmailCredentials | null> {
+    try {
+      const result = await this.dynamoClient.send(
+        new GetCommand({
+          TableName: tableNames.externalCredentials,
+          Key: {
+            businessId,
+            serviceType: `gmail#${userId}`,
+          },
+        })
+      );
 
+      if (!result.Item) {
+        return null;
+      }
+
+      const credentials = result.Item as ExternalCredentials;
+      return credentials.isActive ? (credentials.credentials as GmailCredentials) : null;
+    } catch (error) {
+      console.error('Error getting Gmail credentials:', error);
+      return null;
+    }
+  }
+
+  // Private methods for client creation (ephemeral per call)
+  private async getMetaClient(businessId: string): Promise<any> {
     const credentials = await this.getMetaCredentials(businessId);
     if (!credentials) {
       throw new Error(`No Meta credentials found for business ${businessId}`);
     }
-
-    // Create Meta client (using axios for simplicity)
     const { default: axios } = await import('axios');
-    const client = axios.create({
+    // Use default Node agents (no keep-alive pooling) for ephemeral requests
+    return axios.create({
       baseURL: 'https://graph.facebook.com/v18.0',
       headers: {
         'Authorization': `Bearer ${credentials.accessToken}`,
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 30000,
+      maxRedirects: 3
     });
-
-    this.metaClients.set(businessId, client);
-    return client;
   }
 
   private async getTwilioClient(businessId: string): Promise<any> {
-    if (this.twilioClients.has(businessId)) {
-      return this.twilioClients.get(businessId);
-    }
-
     const credentials = await this.getTwilioCredentials(businessId);
     if (!credentials) {
       throw new Error(`No Twilio credentials found for business ${businessId}`);
     }
-
-    // Create Twilio client
     const twilio = require('twilio');
-    const client = twilio(credentials.accountSid, credentials.authToken);
-
-    this.twilioClients.set(businessId, client);
-    return client;
+    return twilio(credentials.accountSid, credentials.authToken);
   }
+  // No long-lived clients maintained; nothing to clean up
 } 

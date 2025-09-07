@@ -1,6 +1,5 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
-import { StateGraph, START, END } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import { openaiConfig } from '@/config/openai.config';
 import { BusinessInfoService } from '../business-info/business-info.service';
@@ -37,6 +36,7 @@ import { ResourceQueryService } from '../resources/services/resource-query.servi
 export class AgentService {
   private openaiModel: ChatOpenAI;
   private graphApp: any;
+  private memoryMonitor: NodeJS.Timeout;
 
   constructor(
     private readonly businessInfoService: BusinessInfoService,
@@ -48,8 +48,18 @@ export class AgentService {
     private readonly resourceQueryService: ResourceQueryService,
     private readonly externalApisService: ExternalApisService
   ) {
+    // CRITICAL: Check memory usage at startup
+    const startupMem = process.memoryUsage();
+    const startupMB = Math.round(startupMem.heapUsed / 1024 / 1024);
+    console.log(`🚀 Agent Service starting with ${startupMB}MB memory usage`);
+    
+    if (startupMB > 200) {
+      console.error(`🚨 CRITICAL: Starting with high memory usage (${startupMB}MB). This may cause issues.`);
+    }
+    
     this.initializeOpenAI();
     this.setupGraph();
+    this.startMemoryMonitoring();
   }
 
   // Procesare mesaje de la WebSocket (coordonatori)
@@ -126,26 +136,28 @@ export class AgentService {
     // Start → choose internal/external → End
     // Wrap existing nodes into grouped flow functions for clarity
     const startFlow = async (s: AgentState) => {
-      let state = { ...s } as AgentState;
-
+      let state = s; // Don't create new object, reuse existing
 
       // 2) Identify role/client status using discovered resources and source
       const identificationNode = new IdentificationNode(this.ragService);
-      state = { ...state, ...(await identificationNode.invoke(state)) } as AgentState;
+      const identificationResult = await identificationNode.invoke(state);
+      Object.assign(state, identificationResult); // Merge into existing object
 
       // 3) Load dynamic memory snapshots
       const dynamicMemoryNode = new DynamicMemoryNode(this.ragService);
-      state = { ...state, ...(await dynamicMemoryNode.invoke(state)) } as AgentState;
+      const memoryResult = await dynamicMemoryNode.invoke(state);
+      Object.assign(state, memoryResult); // Merge into existing object
 
       // 4) Load system instructions (with base strategy instruction)
       const systemRagNode = new SystemRagNode(this.ragService);
-      state = { ...state, ...(await systemRagNode.invoke(state)) } as AgentState;
+      const systemResult = await systemRagNode.invoke(state);
+      Object.assign(state, systemResult); // Merge into existing object
 
       // 5) Try RAG search early for direct instructions
       try {
         const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService, this.resourcesService);
         const ragOut = await ragSearchNode.invoke(state);
-        state = { ...state, ...ragOut } as AgentState;
+        Object.assign(state, ragOut); // Merge into existing object
       } catch (e) {
         console.warn('startFlow: rag search failed gracefully', (e as any)?.message || e);
       }
@@ -154,11 +166,12 @@ export class AgentService {
       try {
         const introspectionNode = new ResourcesIntrospectionNode(this.openaiModel, this.resourcesService);
         const discovery = await introspectionNode.invoke(state);
-        state = { ...state, ...discovery } as AgentState;
+        Object.assign(state, discovery); // Merge into existing object
         // If introspection indicates RAG update is needed, perform it immediately
         if (state.needsRagUpdate) {
           const ragUpdateNode = new RagUpdateNode(this.ragService);
-          state = { ...state, ...(await ragUpdateNode.invoke(state)) } as AgentState;
+          const updateResult = await ragUpdateNode.invoke(state);
+          Object.assign(state, updateResult); // Merge into existing object
         }
       } catch (e) {
         console.warn('startFlow: skipping introspection due to error', (e as any)?.message || e);
@@ -166,66 +179,77 @@ export class AgentService {
 
       // 7) Decide next actions
       const reasoningNode = new ReasoningNode(this.openaiModel, this.ragService);
-      state = { ...state, ...(await reasoningNode.invoke(state)) } as AgentState;
+      const reasoningResult = await reasoningNode.invoke(state);
+      Object.assign(state, reasoningResult); // Merge into existing object
 
       return state;
     };
 
     const internalFlow = async (s: AgentState) => {
-      let state = { ...s } as AgentState;
+      let state = s; // Don't create new object, reuse existing
 
       if (!state.discoveredResourceTypes || !state.discoveredSchemas) {
         const introspectionNode = new ResourcesIntrospectionNode(this.openaiModel, this.resourcesService);
-        state = { ...state, ...(await introspectionNode.invoke(state)) } as AgentState;
+        const introspectionResult = await introspectionNode.invoke(state);
+        Object.assign(state, introspectionResult); // Merge into existing object
       }
 
       // Optional: generate and execute SQL-like intent for internal reporting/use-cases
       const sqlGenerateNode = new SqlGenerateNode(this.openaiModel);
-      state = { ...state, ...(await sqlGenerateNode.invoke(state)) } as AgentState;
+      const sqlGenerateResult = await sqlGenerateNode.invoke(state);
+      Object.assign(state, sqlGenerateResult); // Merge into existing object
 
       const sqlExecuteNode = new SqlExecuteNode(this.resourcesService, this.resourceQueryService);
-      state = { ...state, ...(await sqlExecuteNode.invoke(state)) } as AgentState;
+      const sqlExecuteResult = await sqlExecuteNode.invoke(state);
+      Object.assign(state, sqlExecuteResult); // Merge into existing object
 
       if (state.needsRagUpdate) {
         const ragUpdateNode = new RagUpdateNode(this.ragService);
-        state = { ...state, ...(await ragUpdateNode.invoke(state)) } as AgentState;
+        const ragUpdateResult = await ragUpdateNode.invoke(state);
+        Object.assign(state, ragUpdateResult); // Merge into existing object
       }
 
       return state;
     };
 
     const externalFlow = async (s: AgentState) => {
-      let state = { ...s } as AgentState;
+      let state = s; // Don't create new object, reuse existing
 
       // External: understanding -> rag check -> router -> finalize
       const ragSearchNode = new RagSearchNode(this.openaiModel, this.ragService, this.resourcesService);
-      state = { ...state, ...(await ragSearchNode.invoke(state)) } as AgentState;
+      const ragResult = await ragSearchNode.invoke(state);
+      Object.assign(state, ragResult); // Merge into existing object
 
       if (state.needsResourceSearch) {
         const resourceOpsNode = new ResourceOperationsNode(this.openaiModel);
-        state = { ...state, ...(await resourceOpsNode.invoke(state)) } as AgentState;
+        const resourceResult = await resourceOpsNode.invoke(state);
+        Object.assign(state, resourceResult); // Merge into existing object
       }
 
       if (state.needsExternalApi) {
         const externalApiNode = new ExternalApiNode(this.openaiModel);
-        state = { ...state, ...(await externalApiNode.invoke(state)) } as AgentState;
+        const apiResult = await externalApiNode.invoke(state);
+        Object.assign(state, apiResult); // Merge into existing object
       }
 
       return state;
     };
 
     const endNode = async (s: AgentState) => {
-      let state = { ...s } as AgentState;
+      let state = s; // Don't create new object, reuse existing
       const responseNode = new ResponseNode(this.openaiModel);
-      state = { ...state, ...(await responseNode.invoke(state)) } as AgentState;
+      const responseResult = await responseNode.invoke(state);
+      Object.assign(state, responseResult); // Merge into existing object
 
       // Internal loop: update RAG with final response context
       const internalLoopNode = new InternalLoopNode(this.ragService);
-      state = { ...state, ...(await internalLoopNode.invoke(state)) } as AgentState;
+      const loopResult = await internalLoopNode.invoke(state);
+      Object.assign(state, loopResult); // Merge into existing object
 
       // Loop: signal return to listening
       const loopNode = new LoopNode();
-      state = { ...state, ...(await loopNode.invoke(state)) } as AgentState;
+      const finalResult = await loopNode.invoke(state);
+      Object.assign(state, finalResult); // Merge into existing object
 
       return state;
     };
@@ -233,11 +257,14 @@ export class AgentService {
     // Construiește un executor secvențial care păstrează întregul state fără canale LangGraph
     this.graphApp = {
       invoke: async (initialState: AgentState) => {
-        let state = { ...initialState } as AgentState;
+        let state = initialState; // Don't create new object, reuse existing
         state = await startFlow(state);
+        console.log(`[AgentService] After startFlow - startRoute: ${state.startRoute}, source: ${state.source}`);
         if (state.startRoute === 'internal') {
+          console.log(`[AgentService] Executing INTERNAL flow`);
           state = await internalFlow(state);
         } else {
+          console.log(`[AgentService] Executing EXTERNAL flow`);
           state = await externalFlow(state);
         }
         state = await endNode(state);
@@ -766,5 +793,57 @@ export class AgentService {
 
     // Pentru moment, returnăm un mesaj simplu
     return `Confirmare: Acțiunea a fost realizată cu succes!`;
+  }
+
+  // CRITICAL: Memory monitoring to prevent out of memory errors
+  private startMemoryMonitoring(): void {
+    console.log('🔍 MEMORY MONITORING STARTED - This should appear in logs if new code is running');
+    
+    this.memoryMonitor = setInterval(() => {
+      const memUsage = process.memoryUsage();
+      const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+      const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+      
+      // Log memory usage more frequently to track the issue
+      console.log(`📊 Memory: ${heapUsedMB}MB / ${heapTotalMB}MB (${Math.round(heapUsedMB/heapTotalMB*100)}%) - RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
+      
+      // Force garbage collection if memory usage is high
+      if (heapUsedMB > 300) { // Lowered threshold from 400 to 300
+        console.warn(`High memory usage detected: ${heapUsedMB}MB. Forcing garbage collection...`);
+        if (global.gc) {
+          global.gc();
+          const afterGC = process.memoryUsage();
+          const afterMB = Math.round(afterGC.heapUsed / 1024 / 1024);
+          console.log(`After GC: ${afterMB}MB (freed ${heapUsedMB - afterMB}MB)`);
+        }
+      }
+      
+      // Emergency memory cleanup if usage is critical
+      if (heapUsedMB > 500) {
+        console.error(`CRITICAL: Memory usage at ${heapUsedMB}MB. Emergency cleanup...`);
+        // Clear any cached data
+        if (global.gc) {
+          global.gc();
+          global.gc(); // Force multiple GC cycles
+        }
+        // Log memory after emergency cleanup
+        const emergencyGC = process.memoryUsage();
+        const emergencyMB = Math.round(emergencyGC.heapUsed / 1024 / 1024);
+        console.log(`Emergency cleanup complete: ${emergencyMB}MB`);
+      }
+      
+      // EMERGENCY: Force exit if memory usage is catastrophic
+      if (heapUsedMB > 800) {
+        console.error(`CATASTROPHIC: Memory usage at ${heapUsedMB}MB. Forcing exit to prevent system crash.`);
+        process.exit(1); // Force restart
+      }
+    }, 30000); // Check every 30 seconds
+  }
+
+  // Cleanup method
+  onModuleDestroy(): void {
+    if (this.memoryMonitor) {
+      clearInterval(this.memoryMonitor);
+    }
   }
 } 

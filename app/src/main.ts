@@ -9,8 +9,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Enable CORS
-  app.enableCors();
+
+  app.enableCors({
+    origin: ['https://dental.simplu.io', 'http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Resource-Type'],
+    credentials: true,
+  });
 
   // Global validation pipe
   app.useGlobalPipes(

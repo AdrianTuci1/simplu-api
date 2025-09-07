@@ -7,6 +7,7 @@ import { SessionModule } from '../session/session.module';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { ExternalApisModule } from '../external-apis/external-apis.module';
+import { ExternalApisService } from '../external-apis/external-apis.service';
 
 @Module({
   imports: [
@@ -15,10 +16,25 @@ import { ExternalApisModule } from '../external-apis/external-apis.module';
     SessionModule,
     forwardRef(() => WebSocketModule),
     ResourcesModule,
-    ExternalApisModule,
+    // Optionally include ExternalApisModule; otherwise provide a lightweight mock
+    ...(process.env.DISABLE_EXTERNAL_APIS === 'true' ? [] : [ExternalApisModule]),
   ],
   controllers: [AgentController],
-  providers: [AgentService],
+  providers: [
+    AgentService,
+    // When external APIs are disabled, inject a minimal mock to satisfy dependencies
+    ...(process.env.DISABLE_EXTERNAL_APIS === 'true'
+      ? [{
+          provide: ExternalApisService,
+          useValue: {
+            sendMetaMessage: async () => ({ success: false }),
+            sendSMS: async () => ({ success: false }),
+            sendEmail: async () => ({ success: false }),
+            sendEmailFromGmail: async () => ({ success: false }),
+          },
+        }]
+      : []),
+  ],
   exports: [AgentService],
 })
 export class AgentModule {} 

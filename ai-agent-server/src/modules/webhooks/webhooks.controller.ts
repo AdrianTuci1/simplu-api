@@ -9,7 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
-  BadRequestException
+  BadRequestException,
 } from '@nestjs/common';
 import { WebhooksService, MetaWebhookDto, TwilioWebhookDto } from './webhooks.service';
 
@@ -79,6 +79,17 @@ export class WebhooksController {
     }
 
     throw new BadRequestException('Invalid verification request');
+  }
+
+  // Gmail Pub/Sub push notifications
+  @Post('gmail/:businessId')
+  @HttpCode(HttpStatus.OK)
+  async handleGmailWebhook(
+    @Param('businessId') businessId: string,
+    @Body() body: any
+  ) {
+    const result = await this.webhooksService.processGmailWebhook(businessId, body);
+    return { status: 'ok', processed: result?.processed || 0 };
   }
 
   private verifyMetaWebhook(verifyToken: string, challenge: string): string {

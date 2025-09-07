@@ -104,7 +104,7 @@ export class ResourceQueryService {
 
       // Set default pagination
       const pageNum = page || 1;
-      const limitNum = Math.min(limit || 50, 1000); // Max 1000 records
+      const limitNum = Math.min(limit || 50, 100); // CRITICAL FIX: Reduced max from 1000 to 100 records
       const offset = (pageNum - 1) * limitNum;
 
       let resources: ResourceRecord[];
@@ -1035,6 +1035,9 @@ export class ResourceQueryService {
       if (resourceId) {
         query = query.andWhere('resource.resourceId = :resourceId', { resourceId });
       }
+
+      // CRITICAL FIX: Add limit to prevent memory issues
+      query = query.limit(50); // Limit to 50 records maximum
 
       const resources = await query.getMany();
 

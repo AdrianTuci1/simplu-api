@@ -33,9 +33,15 @@ export class SqlGenerateNode {
       `;
       const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       const sql = String(response.content || '').trim();
-      return { generatedSql: sql, targetResourceType: targetType, actions: [...(state.actions || []), { type: 'sql_generate', status: 'success', details: { sql, resourceType: targetType } }] } as any;
+      // CRITICAL FIX: Don't create new array, push to existing one
+      if (!state.actions) state.actions = [];
+      state.actions.push({ type: 'sql_generate', status: 'success', details: { sql, resourceType: targetType } });
+      return { generatedSql: sql, targetResourceType: targetType };
     } catch (error) {
-      return { actions: [...(state.actions || []), { type: 'sql_generate', status: 'failed', details: { error: String(error?.message || error) } }] } as any;
+      // CRITICAL FIX: Don't create new array, push to existing one
+      if (!state.actions) state.actions = [];
+      state.actions.push({ type: 'sql_generate', status: 'failed', details: { error: String(error?.message || error) } });
+      return {};
     }
   }
 }

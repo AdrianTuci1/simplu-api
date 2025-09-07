@@ -62,6 +62,7 @@ export class SessionService {
 
   async getActiveSessionsForBusiness(businessId: string): Promise<Session[]> {
     try {
+      // CRITICAL FIX: Add limit to prevent memory issues with Query operation
       const result = await this.dynamoClient.send(new QueryCommand({
         TableName: tableNames.sessions,
         KeyConditionExpression: 'businessId = :businessId',
@@ -69,7 +70,8 @@ export class SessionService {
         ExpressionAttributeValues: marshall({
           ':businessId': businessId,
           ':status': 'active'
-        })
+        }),
+        Limit: 40 // CRITICAL: Limit query results to prevent memory issues
       }));
 
       return result.Items ? result.Items.map(item => unmarshall(item) as Session) : [];

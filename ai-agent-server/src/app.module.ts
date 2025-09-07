@@ -58,9 +58,13 @@ import configuration from './config/configuration';
     RagModule,
     AgentModule,
     ResourcesModule,
-    ExternalApisModule,
-    CredentialsModule,
-    WebhooksModule,
+    // Optionally include external-apis and webhooks modules based on env flags
+    ...(process.env.DISABLE_EXTERNAL_APIS === 'true'
+      ? (console.warn('ExternalApisModule disabled via DISABLE_EXTERNAL_APIS=true'), [])
+      : [ExternalApisModule, CredentialsModule]),
+    ...(process.env.DISABLE_WEBHOOKS === 'true'
+      ? (console.warn('WebhooksModule disabled via DISABLE_WEBHOOKS=true'), [])
+      : [WebhooksModule]),
     CronModule,
     MessagesModule,
   ],
@@ -69,6 +73,10 @@ import configuration from './config/configuration';
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
+    if (process.env.DISABLE_WEBHOOKS === 'true') {
+      console.warn('WebhookSecurityMiddleware not applied due to DISABLE_WEBHOOKS=true');
+      return;
+    }
     consumer
       .apply(WebhookSecurityMiddleware)
       .forRoutes(

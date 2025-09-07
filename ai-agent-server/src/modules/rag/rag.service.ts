@@ -106,12 +106,14 @@ export class RagService {
 
   async listSystemInstructionsByBusinessType(businessType: string): Promise<RagSystemInstruction[]> {
     try {
+      // CRITICAL FIX: Add limit to prevent memory issues with Query operation
       const result = await this.dynamoClient.send(new QueryCommand({
         TableName: tableNames.ragSystemInstructions,
         KeyConditionExpression: 'businessType = :businessType',
         ExpressionAttributeValues: {
           ':businessType': businessType,
         },
+        Limit: 50 // CRITICAL: Limit query results to prevent memory issues
       }));
       return (result.Items || []) as RagSystemInstruction[];
     } catch (error) {
@@ -152,6 +154,10 @@ export class RagService {
   async putDynamicBusinessMemory(businessId: string, businessType: string, action: string, memory: Record<string, any>): Promise<void> {
     try {
       const memoryKey = `${businessId}#${businessType}#${action}`;
+      
+      // CRITICAL FIX: Sanitize memory object to prevent memory leaks
+      const sanitizedMemory = this.sanitizeMemoryObject(memory);
+      
       await this.dynamoClient.send(new PutCommand({
         TableName: tableNames.ragDynamicBusiness,
         Item: { 
@@ -159,7 +165,7 @@ export class RagService {
           businessId,
           businessType,
           action,
-          ...memory, 
+          ...sanitizedMemory, 
           updatedAt: new Date().toISOString() 
         }
       }));
@@ -210,6 +216,10 @@ export class RagService {
   async putDynamicUserMemory(businessId: string, userId: string, platform: string, memory: Record<string, any>): Promise<void> {
     try {
       const memoryKey = `${businessId}#${userId}#${platform}`;
+      
+      // CRITICAL FIX: Sanitize memory object to prevent memory leaks
+      const sanitizedMemory = this.sanitizeMemoryObject(memory);
+      
       await this.dynamoClient.send(new PutCommand({
         TableName: tableNames.ragDynamicUser,
         Item: { 
@@ -217,7 +227,7 @@ export class RagService {
           businessId,
           userId,
           platform,
-          ...memory, 
+          ...sanitizedMemory, 
           updatedAt: new Date().toISOString() 
         }
       }));
@@ -229,13 +239,15 @@ export class RagService {
   // Get user memory across all platforms for a business
   async getDynamicUserMemoryAllPlatforms(businessId: string, userId: string): Promise<Record<string, any>[]> {
     try {
+      // CRITICAL FIX: Add limit to prevent memory issues with SCAN operation
       const result = await this.dynamoClient.send(new ScanCommand({
         TableName: tableNames.ragDynamicUser,
         FilterExpression: 'businessId = :businessId AND userId = :userId',
         ExpressionAttributeValues: {
           ':businessId': businessId,
           ':userId': userId
-        }
+        },
+        Limit: 10 // CRITICAL: Limit scan results to prevent memory issues
       }));
       return (result.Items || []) as Record<string, any>[];
     } catch (error) {
@@ -260,5 +272,58 @@ export class RagService {
       }
       return null;
     }
+  }
+
+  // CRITICAL: Sanitize memory objects to prevent memory leaks
+  private sanitizeMemoryObject(memory: Record<string, any>): Record<string, any> {
+    const sanitized: Record<string, any> = {};
+    
+    for (const [key, value] of Object.entries(memory)) {
+      if (value === null || value === undefined) {
+        continue; // Skip null/undefined values
+      }
+      
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        sanitized[key] = value;
+      } else if (Array.isArray(value)) {
+        // Limit array size and sanitize each element
+        sanitized[key] = value.slice(0, 10).map(item => {
+          if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+            return item;
+          } else if (typeof item === 'object' && item !== null) {
+            // For objects, only keep simple properties
+            const simpleObj: Record<string, any> = {};
+            for (const [objKey, objValue] of Object.entries(item)) {
+              if (typeof objValue === 'string' || typeof objValue === 'number' || typeof objValue === 'boolean') {
+                simpleObj[objKey] = objValue;
+              }
+            }
+            return simpleObj;
+          }
+          return String(item); // Convert complex objects to strings
+        });
+      } else if (typeof value === 'object') {
+        // For objects, only keep simple properties and limit depth
+        const simpleObj: Record<string, any> = {};
+        for (const [objKey, objValue] of Object.entries(value)) {
+          if (typeof objValue === 'string' || typeof objValue === 'number' || typeof objValue === 'boolean') {
+            simpleObj[objKey] = objValue;
+          } else if (Array.isArray(objValue)) {
+            // Limit array size
+            simpleObj[objKey] = objValue.slice(0, 5).map(item => 
+              typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean' 
+                ? item 
+                : String(item)
+            );
+          }
+        }
+        sanitized[key] = simpleObj;
+      } else {
+        // Convert everything else to string
+        sanitized[key] = String(value);
+      }
+    }
+    
+    return sanitized;
   }
 } 

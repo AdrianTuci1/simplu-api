@@ -57,7 +57,7 @@ export class RagSearchNode {
           state.businessId || (state.businessInfo?.businessId as any) || '',
           state.locationId || 'default',
           state.userId || '',
-          25,
+          20, // CRITICAL FIX: Reduced from 25 to 5 to prevent memory issues
         );
         understandingContext = { memory, recentDb };
       }

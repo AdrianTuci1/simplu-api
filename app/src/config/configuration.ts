@@ -37,38 +37,9 @@ export default () => ({
   },
 
   aws: {
-    region: process.env.AWS_REGION || 'us-east-1',
+    region: process.env.COGNITO_REGION,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 
-  // Lambda Authorizer Configuration
-  lambdaAuthorizer: {
-    enabled: process.env.LAMBDA_AUTHORIZER_ENABLED !== 'false', // Default: true
-    bypassForDevelopment: process.env.LAMBDA_AUTHORIZER_BYPASS === 'true', // Default: false
-    mockUser:
-      process.env.LAMBDA_AUTHORIZER_MOCK_USER === 'true'
-        ? {
-            userId:
-              process.env.LAMBDA_AUTHORIZER_MOCK_USER_ID || 'mock-user-123',
-            userName:
-              process.env.LAMBDA_AUTHORIZER_MOCK_USER_NAME ||
-              'mock.user@example.com',
-            businessId:
-              process.env.LAMBDA_AUTHORIZER_MOCK_BUSINESS_ID ||
-              'mock-business-456',
-            roles: JSON.parse(
-              process.env.LAMBDA_AUTHORIZER_MOCK_ROLES ||
-                JSON.stringify([
-                  {
-                    locationId: 'mock-location-789',
-                    locationName: 'Mock Location',
-                    role: 'admin',
-                    permissions: ['read', 'write', 'delete'],
-                  },
-                ]),
-            ),
-          }
-        : null,
-  },
 });

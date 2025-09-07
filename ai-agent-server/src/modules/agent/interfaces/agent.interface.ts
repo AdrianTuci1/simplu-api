@@ -27,6 +27,9 @@ export interface AgentState {
   systemInstructions?: any[];
   // External understanding context (memory + db signals)
   understandingContext?: Record<string, any>;
+  // SQL generation results
+  generatedSql?: string;
+  targetResourceType?: string;
 
   // Logică
   startRoute?: 'internal' | 'external' | 'respond';

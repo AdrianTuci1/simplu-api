@@ -220,6 +220,9 @@ export class ResourcesService {
     limit: number = 25,
   ): Promise<any[]> {
     try {
+      // CRITICAL FIX: Limit the search to prevent memory issues
+      const maxLimit = Math.min(limit, 10); // Cap at 10 records max
+      
       // Try to find by resource id across business locations
       const byId = await this.resourceQueryService.searchResourcesByBusinessPattern(
         businessId,
@@ -227,17 +230,18 @@ export class ResourcesService {
         userId,
       );
       if (byId?.length) {
-        return byId.slice(0, limit);
+        return byId.slice(0, maxLimit);
       }
 
       // Fallback: query a few common resource types and scan for user related fields
-      const candidateTypes = ['appointment', 'reservation', 'messages', 'patient', 'customer'];
+      const candidateTypes = ['appointment', 'reservation', 'patient', 'customer']; // Reduced from 5 to 4 types
       const aggregated: any[] = [];
       for (const rt of candidateTypes) {
+        // CRITICAL FIX: Reduce limit per query to prevent memory issues
         const res = await this.resourceQueryService.queryResources(businessId, locationId, {
           resourceType: rt,
           page: 1,
-          limit: 50,
+          limit: 10, // Reduced from 50 to 10
         } as any);
         for (const r of res.data || []) {
           const data = (r as any)?.data || {};
@@ -246,10 +250,11 @@ export class ResourcesService {
             aggregated.push(r);
           }
         }
-        if (aggregated.length >= limit) break;
+        if (aggregated.length >= maxLimit) break;
       }
-      return aggregated.slice(0, limit);
+      return aggregated.slice(0, maxLimit);
     } catch (error) {
+      console.error('Error in getRecentUserRelatedResources:', error);
       return [];
     }
   }

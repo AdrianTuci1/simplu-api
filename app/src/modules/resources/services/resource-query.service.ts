@@ -625,8 +625,7 @@ export class ResourceQueryService {
 
       const resource = await this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessId = :businessId', { businessId })
-        .andWhere('resource.locationId = :locationId', { locationId })
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId: `${businessId}-${locationId}` })
         .andWhere('resource.resourceType = :resourceType', { resourceType })
         .andWhere('resource.resourceId = :resourceId', { resourceId })
         .getOne();
@@ -678,8 +677,7 @@ export class ResourceQueryService {
 
       const queryBuilder = this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessId = :businessId', { businessId })
-        .andWhere('resource.locationId = :locationId', { locationId });
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId: `${businessId}-${locationId}` });
 
       if (resourceType) {
         queryBuilder.andWhere('resource.resourceType = :resourceType', {
@@ -736,8 +734,7 @@ export class ResourceQueryService {
 
       const queryBuilder = this.resourceRepository
         .createQueryBuilder('resource')
-        .where('resource.businessId = :businessId', { businessId })
-        .andWhere('resource.locationId = :locationId', { locationId })
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId: `${businessId}-${locationId}` })
         .andWhere('resource.resourceType = :resourceType', { resourceType });
 
       if (startDate) {

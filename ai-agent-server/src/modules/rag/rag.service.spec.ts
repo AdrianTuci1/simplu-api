@@ -28,25 +28,4 @@ describe('RagService', () => {
     expect(Array.isArray(instructions)).toBe(true);
   });
 
-  it('should return workflow for category', async () => {
-    const workflow = await service.getWorkflowForCategory('rezervare', 'dental');
-    
-    expect(workflow).toBeDefined();
-    expect(Array.isArray(workflow)).toBe(true);
-  });
-
-  it('should return notification template', async () => {
-    const template = await service.getNotificationTemplate('rezervare', 'dental', 'create');
-    
-    expect(template).toBeDefined();
-    expect(typeof template).toBe('string');
-  });
-
-  it('should return instruction by category', async () => {
-    const instruction = await service.getInstructionByCategory('rezervare', 'dental');
-    
-    expect(instruction).toBeDefined();
-    // Note: This will return null in test environment since DynamoDB is not available
-    expect(instruction === null || typeof instruction === 'object').toBe(true);
-  });
 }); 

@@ -3,7 +3,7 @@ import { AgentService } from '../agent/agent.service';
 import { SessionService } from '../session/session.service';
 import { BusinessInfoService } from '../business-info/business-info.service';
 import { ExternalApisService } from '../external-apis/external-apis.service';
-import { WebhookData, Intent } from '../agent/interfaces/agent.interface';
+import { WebhookData } from '../agent/interfaces/agent.interface';
 import * as crypto from 'crypto';
 
 export interface MetaWebhookDto {
@@ -51,6 +51,9 @@ export interface TwilioWebhookDto {
 
 @Injectable()
 export class WebhooksService {
+  private processingCount = 0;
+  private readonly maxConcurrentProcessing = 5; // Limit concurrent webhook processing
+
   constructor(
     private readonly agentService: AgentService,
     private readonly sessionService: SessionService,
@@ -63,49 +66,180 @@ export class WebhooksService {
     payload: MetaWebhookDto,
     signature: string
   ): Promise<any> {
-    // 1. Validare webhook signature
-    const isValid = await this.validateMetaWebhookSignature(businessId, payload, signature);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid webhook signature');
+    console.log('🔍 META WEBHOOK PROCESSING STARTED - This should appear in logs if new code is running');
+    
+    // CRITICAL: Circuit breaker to prevent memory overload
+    if (this.processingCount >= this.maxConcurrentProcessing) {
+      console.warn(`Too many concurrent webhook processing (${this.processingCount}). Rejecting webhook.`);
+      return { status: 'rejected', reason: 'too_many_concurrent_requests' };
     }
+
+    // CRITICAL: Check payload size to prevent memory issues
+    const payloadSize = JSON.stringify(payload).length;
+    if (payloadSize > 100000) { // 100KB limit
+      console.warn(`Webhook payload too large: ${payloadSize} bytes. Rejecting.`);
+      return { status: 'rejected', reason: 'payload_too_large' };
+    }
+
+    // CRITICAL: Check current memory usage before processing
+    const memUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    if (heapUsedMB > 300) { // Lowered threshold from 400 to 300
+      console.warn(`Memory usage too high (${heapUsedMB}MB). Rejecting webhook to prevent OOM.`);
+      return { status: 'rejected', reason: 'memory_too_high' };
+    }
+    
+    // EMERGENCY: Force exit if memory is catastrophic
+    if (heapUsedMB > 700) {
+      console.error(`CATASTROPHIC: Memory usage at ${heapUsedMB}MB. Forcing exit.`);
+      process.exit(1);
+    }
+
+    this.processingCount++;
+    try {
+      // 1. Validare webhook signature
+      const isValid = await this.validateMetaWebhookSignature(businessId, payload, signature);
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
 
     // 2. Procesare fiecare entry din webhook
     const results = [];
+    let messageCount = 0;
+    const maxMessagesPerWebhook = 10; // CRITICAL: Limit messages per webhook
+    
     for (const entry of payload.entry) {
       for (const change of entry.changes) {
         if (change.field === 'messages' && change.value.messages) {
           for (const message of change.value.messages) {
+            if (messageCount >= maxMessagesPerWebhook) {
+              console.warn(`Webhook contains too many messages (${messageCount}+). Processing only first ${maxMessagesPerWebhook}.`);
+              break;
+            }
             const result = await this.processMetaMessage(businessId, message, change.value);
             results.push(result);
+            messageCount++;
           }
         }
       }
+      if (messageCount >= maxMessagesPerWebhook) break;
     }
 
-    return {
-      status: 'ok',
-      processed: results.length,
-      results
-    };
+      return {
+        status: 'ok',
+        processed: results.length,
+        results
+      };
+    } finally {
+      this.processingCount--;
+    }
   }
 
   async processTwilioWebhook(
     businessId: string,
     payload: TwilioWebhookDto
   ): Promise<any> {
-    // 1. Validare payload Twilio
-    if (!payload.From || !payload.Body) {
-      throw new UnauthorizedException('Invalid Twilio webhook payload');
+    // CRITICAL: Circuit breaker to prevent memory overload
+    if (this.processingCount >= this.maxConcurrentProcessing) {
+      console.warn(`Too many concurrent webhook processing (${this.processingCount}). Rejecting webhook.`);
+      return { status: 'rejected', reason: 'too_many_concurrent_requests' };
     }
 
-    // 2. Procesare mesaj Twilio
-    const result = await this.processTwilioMessage(businessId, payload);
-    
-    return {
-      status: 'ok',
-      processed: 1,
-      result
-    };
+    // CRITICAL: Check payload size to prevent memory issues
+    const payloadSize = JSON.stringify(payload).length;
+    if (payloadSize > 100000) { // 100KB limit
+      console.warn(`Webhook payload too large: ${payloadSize} bytes. Rejecting.`);
+      return { status: 'rejected', reason: 'payload_too_large' };
+    }
+
+    this.processingCount++;
+    try {
+      // 1. Validare payload Twilio
+      if (!payload.From || !payload.Body) {
+        throw new UnauthorizedException('Invalid Twilio webhook payload');
+      }
+
+      // 2. Procesare mesaj Twilio
+      const result = await this.processTwilioMessage(businessId, payload);
+      
+      return {
+        status: 'ok',
+        processed: 1,
+        result
+      };
+    } finally {
+      this.processingCount--;
+    }
+  }
+
+  async processGmailWebhook(
+    businessId: string,
+    body: any
+  ): Promise<any> {
+    // CRITICAL: Circuit breaker to prevent memory overload
+    if (this.processingCount >= this.maxConcurrentProcessing) {
+      console.warn(`Too many concurrent webhook processing (${this.processingCount}). Rejecting webhook.`);
+      return { status: 'rejected', reason: 'too_many_concurrent_requests' };
+    }
+
+    // CRITICAL: Check payload size to prevent memory issues
+    const payloadSize = JSON.stringify(body).length;
+    if (payloadSize > 100000) { // 100KB limit
+      console.warn(`Webhook payload too large: ${payloadSize} bytes. Rejecting.`);
+      return { status: 'rejected', reason: 'payload_too_large' };
+    }
+
+    this.processingCount++;
+    try {
+      // Google Pub/Sub push format: body.message.data is base64
+      const encoded = body?.message?.data;
+      let emailAddress = '';
+      let messageText = '';
+      let externalId = body?.message?.messageId || '';
+
+      if (encoded) {
+        const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+        try {
+          const data = JSON.parse(decoded);
+          emailAddress = data?.emailAddress || '';
+          messageText = `New email event (historyId=${data?.historyId || 'unknown'})`;
+        } catch {
+          // If not JSON, treat as raw text
+          messageText = decoded;
+        }
+      } else if (typeof body?.message === 'string') {
+        messageText = body.message;
+      } else {
+        messageText = 'New Gmail message received';
+      }
+
+      const userId = emailAddress || 'gmail-user';
+      const locationId = `${businessId}-gmail`;
+
+      const webhookData: WebhookData = {
+        businessId,
+        locationId,
+        userId,
+        message: messageText,
+        source: 'email',
+        externalId,
+        sessionId: this.generateSessionId(businessId, userId)
+      };
+
+      await this.saveWebhookMessage(webhookData);
+      const result = await this.agentService.processWebhookMessage(webhookData);
+
+      return {
+        status: 'ok',
+        processed: 1,
+        result
+      };
+    } catch (error) {
+      console.error('Error processing Gmail webhook:', error);
+      return { status: 'error', processed: 0 };
+    } finally {
+      this.processingCount--;
+    }
   }
 
   private async processMetaMessage(
@@ -306,6 +440,8 @@ export class WebhooksService {
   }
 
   private generateSessionId(businessId: string, userId: string): string {
-    return `${businessId}:${userId}:${Date.now()}`;
+    // Generate session ID per day to group conversations as per user preference
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    return `${businessId}:${userId}:${today}`;
   }
 } 
