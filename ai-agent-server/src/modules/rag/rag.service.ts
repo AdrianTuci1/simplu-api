@@ -89,12 +89,25 @@ export class RagService {
   // System RAG (read-only)
   async getSystemInstructionByKey(key: string): Promise<RagSystemInstruction | null> {
     try {
+      console.log(`RAG: Attempting to get system instruction with key: "${key}"`);
+      
+      // Extract businessType from the key (format: "businessType.role.category.version")
+      const keyParts = key.split('.');
+      const businessType = keyParts[0] || 'general';
+      
+      console.log(`RAG: Extracted businessType: "${businessType}" from key: "${key}"`);
+      
       const result = await this.dynamoClient.send(new GetCommand({
         TableName: tableNames.ragSystemInstructions,
-        Key: { key },
+        Key: { 
+          key: key,
+          businessType: businessType
+        },
       }));
+      console.log(`RAG: GetCommand result for key "${key}":`, result.Item ? 'Found' : 'Not found');
       return (result as any).Item || null;
     } catch (error) {
+      console.error(`RAG: Error getting system instruction by key "${key}":`, error);
       if ((error as any)?.name === 'ResourceNotFoundException') {
         console.info('RAG: system instruction not found by key (initial empty state)');
       } else {
@@ -106,14 +119,14 @@ export class RagService {
 
   async listSystemInstructionsByBusinessType(businessType: string): Promise<RagSystemInstruction[]> {
     try {
-      // CRITICAL FIX: Add limit to prevent memory issues with Query operation
-      const result = await this.dynamoClient.send(new QueryCommand({
+      // FIXED: Use Scan with FilterExpression since businessType is not a key attribute
+      const result = await this.dynamoClient.send(new ScanCommand({
         TableName: tableNames.ragSystemInstructions,
-        KeyConditionExpression: 'businessType = :businessType',
+        FilterExpression: 'businessType = :businessType',
         ExpressionAttributeValues: {
           ':businessType': businessType,
         },
-        Limit: 50 // CRITICAL: Limit query results to prevent memory issues
+        Limit: 50 // CRITICAL: Limit scan results to prevent memory issues
       }));
       return (result.Items || []) as RagSystemInstruction[];
     } catch (error) {

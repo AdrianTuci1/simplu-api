@@ -1,3 +1,11 @@
+export interface UserCapabilities {
+  canAccessAllData: boolean;
+  canViewPersonalInfo: boolean;
+  canModifyReservations: boolean;
+  canListAllResources: boolean;
+  responseStyle: 'concise' | 'friendly_guidance';
+}
+
 export interface AgentState {
   // Input
   businessId: string;
@@ -8,6 +16,7 @@ export interface AgentState {
   source: 'websocket' | 'webhook' | 'cron';
   role?: 'operator' | 'client_nou' | 'client_existent' | 'webhook';
   clientSource?: 'meta' | 'twilio' | 'email' | 'web' | 'unknown';
+  userCapabilities?: UserCapabilities;
 
   // Context
   businessInfo: BusinessInfo | null;

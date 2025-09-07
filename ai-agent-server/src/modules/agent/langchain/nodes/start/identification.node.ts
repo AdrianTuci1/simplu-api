@@ -3,23 +3,29 @@ import { RagService } from '../../../../rag/rag.service';
 
 export class IdentificationNode {
   constructor(
-
     private ragService: RagService,
   ) {}
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
-      console.log(`[IdentificationNode] Processing source: ${state.source}, businessId: ${state.businessId}, userId: ${state.userId}`);
-      
       // If request comes from operator (websocket coordinator), we already have context
       if (state.source === 'websocket') {
-        console.log(`[IdentificationNode] Routing websocket to INTERNAL flow`);
-        return { role: 'operator', needsIntrospection: true, startRoute: 'internal' } as any;
+        return { 
+          role: 'operator', 
+          needsIntrospection: true, 
+          startRoute: 'internal',
+          userCapabilities: {
+            canAccessAllData: true,
+            canViewPersonalInfo: true,
+            canModifyReservations: true,
+            canListAllResources: true,
+            responseStyle: 'concise'
+          }
+        } as any;
       }
 
       // If request comes from webhook (external user), set role as webhook and attach any known dynamic memory
       if (state.source === 'webhook') {
-        console.log(`[IdentificationNode] Routing webhook to EXTERNAL flow`);
         const businessId = state.businessId || 'unknown';
         const userId = state.userId || 'unknown';
         const platform = 'webhook'; // Default for webhook source
@@ -36,16 +42,44 @@ export class IdentificationNode {
           role: 'webhook', 
           dynamicUserMemory: { current: userMem || {}, allPlatforms: [] }, 
           startRoute: 'external', 
-          clientSource 
+          clientSource,
+          userCapabilities: {
+            canAccessAllData: false,
+            canViewPersonalInfo: false,
+            canModifyReservations: false,
+            canListAllResources: true, // Can list general info like doctors, services
+            responseStyle: 'friendly_guidance'
+          }
         } as any;
       }
+      
       // Default for remaining sources (e.g., cron)
-      console.log(`[IdentificationNode] Unknown source '${state.source}', defaulting to EXTERNAL flow`);
-      return { role: 'client_nou', needsIntrospection: false, startRoute: 'external' } as any;
+      return { 
+        role: 'client_nou', 
+        needsIntrospection: false, 
+        startRoute: 'external',
+        userCapabilities: {
+          canAccessAllData: false,
+          canViewPersonalInfo: false,
+          canModifyReservations: false,
+          canListAllResources: true,
+          responseStyle: 'friendly_guidance'
+        }
+      } as any;
     } catch (error) {
       console.warn('IdentificationNode: error inferring role, defaulting to client_existent', error);
-      console.log(`[IdentificationNode] Error case, defaulting to EXTERNAL flow`);
-      return { role: 'client_existent', needsIntrospection: false, startRoute: 'external' } as any;
+      return { 
+        role: 'client_existent', 
+        needsIntrospection: false, 
+        startRoute: 'external',
+        userCapabilities: {
+          canAccessAllData: false,
+          canViewPersonalInfo: false,
+          canModifyReservations: false,
+          canListAllResources: true,
+          responseStyle: 'friendly_guidance'
+        }
+      } as any;
     }
   }
 }

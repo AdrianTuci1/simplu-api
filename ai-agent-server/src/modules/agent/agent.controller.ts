@@ -17,6 +17,11 @@ export class AgentController {
     return await this.agentService.processWebhookMessage(webhookData);
   }
 
+  @Post('process-webhook-pipeline')
+  async processWebhookThroughPipeline(@Body() webhookData: WebhookData) {
+    return await this.agentService.processWebhookThroughPipeline(webhookData);
+  }
+
   @Get('health')
   async health() {
     return {

@@ -259,12 +259,9 @@ export class AgentService {
       invoke: async (initialState: AgentState) => {
         let state = initialState; // Don't create new object, reuse existing
         state = await startFlow(state);
-        console.log(`[AgentService] After startFlow - startRoute: ${state.startRoute}, source: ${state.source}`);
         if (state.startRoute === 'internal') {
-          console.log(`[AgentService] Executing INTERNAL flow`);
           state = await internalFlow(state);
         } else {
-          console.log(`[AgentService] Executing EXTERNAL flow`);
           state = await externalFlow(state);
         }
         state = await endNode(state);
@@ -284,6 +281,76 @@ export class AgentService {
     } else {
       // 3. Dacă nu poate fi rezolvat autonom, trimite la coordonator
       return await this.escalateToCoordinator(webhookData, intent);
+    }
+  }
+
+  // Procesare webhook prin pipeline-ul principal (pentru testare sau cazuri speciale)
+  async processWebhookThroughPipeline(webhookData: WebhookData): Promise<AgentResponse> {
+    // Normalize identifiers to avoid undefined in downstream nodes
+    const inferredFromSession = (webhookData.sessionId || '').split(':');
+    const safeBusinessId = webhookData.businessId || inferredFromSession[0] || '';
+    const safeUserId = webhookData.userId || inferredFromSession[1] || '';
+    const safeLocationId = webhookData.locationId || 'default';
+
+    const state: AgentState = {
+      businessId: safeBusinessId,
+      locationId: safeLocationId,
+      userId: safeUserId,
+      message: (webhookData.message || '').trim(),
+      sessionId: webhookData.sessionId || this.generateSessionId(webhookData),
+      source: 'webhook', // Set source as webhook for client processing
+      role: undefined,
+      businessInfo: null,
+      ragResults: [],
+      resourceOperations: [],
+      externalApiResults: [],
+      dynamicBusinessMemory: null,
+      dynamicUserMemory: null,
+      needsResourceSearch: false,
+      needsExternalApi: false,
+      needsHumanApproval: false,
+      needsIntrospection: false,
+      needsRagUpdate: false,
+      response: '',
+      actions: []
+    };
+
+    // Eagerly load business info into state before graph execution
+    try {
+      if (state.businessId) {
+        state.businessInfo = await this.businessInfoService.getBusinessInfo(state.businessId);
+      }
+    } catch (e) {
+      console.warn('processWebhookThroughPipeline: failed to pre-load businessInfo', (e as any)?.message || e);
+    }
+
+    // Procesare cu pipeline determinist (păstrează întregul state)
+    try {
+      const finalState = await this.graphApp.invoke(state);
+      Object.assign(state, finalState);
+      
+      return {
+        responseId: this.generateResponseId(),
+        message: state.response,
+        actions: state.actions,
+        timestamp: new Date().toISOString(),
+        sessionId: state.sessionId
+      };
+    } catch (error) {
+      console.error('Error in LangGraph processing for webhook:', error);
+      
+      // Fallback la procesarea simplă
+      const businessInfo = await this.businessInfoService.getBusinessInfo(state.businessId);
+      const intent = await this.analyzeIntent(state.message, businessInfo?.businessType || 'general');
+      const response = await this.generateResponse(state, intent);
+      
+      return {
+        responseId: this.generateResponseId(),
+        message: response,
+        actions: [],
+        timestamp: new Date().toISOString(),
+        sessionId: state.sessionId
+      };
     }
   }
 

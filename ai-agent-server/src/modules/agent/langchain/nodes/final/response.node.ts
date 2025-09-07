@@ -6,25 +6,55 @@ export class ResponseNode {
   constructor(private openaiModel: ChatOpenAI) {}
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
-    const prompt = `
-      Generează un răspuns natural și util pentru utilizator bazat pe contextul și operațiile efectuate.
-      
+    const userRole = state.role || 'client_nou';
+    const userCapabilities = state.userCapabilities;
+    const responseStyle = userCapabilities?.responseStyle || 'friendly_guidance';
+    
+    const prompt = this.createRoleSpecificPrompt(state, userRole, responseStyle);
+    const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
+    return { response: response.content as string, actions: this.extractActions(state) };
+  }
+
+  private createRoleSpecificPrompt(state: AgentState, userRole: string, responseStyle: string): string {
+    const baseContext = `
       Mesaj original: "${state.message}"
       Business: ${state.businessInfo?.businessName || 'Business necunoscut'}
       Tip business: ${state.businessInfo?.businessType || 'general'}
       Operații efectuate: ${JSON.stringify(state.resourceOperations)}
       Rezultate API externe: ${JSON.stringify(state.externalApiResults)}
-      
-      Răspunsul trebuie să fie:
-      - Natural și prietenos
-      - Specific pentru tipul de business
-      - Să includă informații relevante din operațiile efectuate
-      - Să fie în limba română
-      - Să nu depășească 200 de cuvinte
-      - Să răspundă la mesajul original al utilizatorului
+    `;
+
+    if (userRole === 'operator' && responseStyle === 'concise') {
+      return `
+        Generează un răspuns scurt și concis pentru un operator.
+        
+        ${baseContext}
+        
+        Răspunsul trebuie să fie:
+        - Scurt și la obiect (max 50 de cuvinte)
+        - Focusat pe informațiile esențiale
+        - Profesional și direct
+        - Să includă doar datele relevante
+        - Să fie în limba română
+        - Să nu includă explicații lungi sau politicoase
       `;
-    const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
-    return { response: response.content as string, actions: this.extractActions(state) };
+    } else {
+      return `
+        Generează un răspuns prietenos și util pentru un client.
+        
+        ${baseContext}
+        
+        Răspunsul trebuie să fie:
+        - Prietenos și încurajator
+        - Specific pentru tipul de business
+        - Să ghideze clientul către informațiile de care are nevoie
+        - Să includă informații relevante din operațiile efectuate
+        - Să fie în limba română
+        - Să nu depășească 150 de cuvinte
+        - Să răspundă la mesajul original al utilizatorului
+        - Să nu includă date personale ale altor clienți
+      `;
+    }
   }
 
   private extractActions(state: AgentState): any[] {
