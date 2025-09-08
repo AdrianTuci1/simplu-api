@@ -36,6 +36,22 @@ export interface AgentState {
   systemInstructions?: any[];
   // External understanding context (memory + db signals)
   understandingContext?: Record<string, any>;
+  // Session context - recent messages for conversation continuity
+  sessionMessages?: Array<{
+    content: string;
+    type: 'user' | 'agent' | 'system';
+    timestamp: string;
+  }>;
+  // Time context - derived from message timestamps
+  timeContext?: {
+    currentTimestamp: string;
+    currentDate: string;
+    currentTime: string;
+    timezone: string;
+    dayOfWeek: string;
+    isWeekend: boolean;
+    isBusinessHours: boolean;
+  };
   // SQL generation results
   generatedSql?: string;
   targetResourceType?: string;

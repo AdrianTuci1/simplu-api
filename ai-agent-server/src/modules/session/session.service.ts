@@ -60,21 +60,86 @@ export class SessionService {
     }
   }
 
+  async getActiveSessionForUser(businessId: string, userId: string): Promise<Session | null> {
+    try {
+      // First try with GSI if it exists
+      try {
+        const result = await this.dynamoClient.send(new QueryCommand({
+          TableName: tableNames.sessions,
+          IndexName: 'businessId-userId-index',
+          KeyConditionExpression: 'businessId = :businessId AND userId = :userId',
+          FilterExpression: 'status = :status',
+          ExpressionAttributeValues: marshall({
+            ':businessId': businessId,
+            ':userId': userId,
+            ':status': 'active'
+          }),
+          ScanIndexForward: false, // Most recent first
+          Limit: 1
+        }));
+
+        return result.Items && result.Items.length > 0 
+          ? unmarshall(result.Items[0]) as Session 
+          : null;
+      } catch (gsiError) {
+        // If GSI doesn't exist, fall back to scan (less efficient but works)
+        console.warn('GSI not available, falling back to scan for active session lookup');
+        
+        const scanResult = await this.dynamoClient.send(new QueryCommand({
+          TableName: tableNames.sessions,
+          FilterExpression: 'businessId = :businessId AND userId = :userId AND status = :status',
+          ExpressionAttributeValues: marshall({
+            ':businessId': businessId,
+            ':userId': userId,
+            ':status': 'active'
+          }),
+          ScanIndexForward: false,
+          Limit: 1
+        }));
+
+        return scanResult.Items && scanResult.Items.length > 0 
+          ? unmarshall(scanResult.Items[0]) as Session 
+          : null;
+      }
+    } catch (error) {
+      console.error('Error getting active session for user:', error);
+      return null;
+    }
+  }
+
   async getActiveSessionsForBusiness(businessId: string): Promise<Session[]> {
     try {
-      // CRITICAL FIX: Add limit to prevent memory issues with Query operation
-      const result = await this.dynamoClient.send(new QueryCommand({
-        TableName: tableNames.sessions,
-        KeyConditionExpression: 'businessId = :businessId',
-        FilterExpression: 'status = :status',
-        ExpressionAttributeValues: marshall({
-          ':businessId': businessId,
-          ':status': 'active'
-        }),
-        Limit: 40 // CRITICAL: Limit query results to prevent memory issues
-      }));
+      // Try with GSI first
+      try {
+        const result = await this.dynamoClient.send(new QueryCommand({
+          TableName: tableNames.sessions,
+          IndexName: 'businessId-userId-index',
+          KeyConditionExpression: 'businessId = :businessId',
+          FilterExpression: 'status = :status',
+          ExpressionAttributeValues: marshall({
+            ':businessId': businessId,
+            ':status': 'active'
+          }),
+          Limit: 40 // CRITICAL: Limit query results to prevent memory issues
+        }));
 
-      return result.Items ? result.Items.map(item => unmarshall(item) as Session) : [];
+        return result.Items ? result.Items.map(item => unmarshall(item) as Session) : [];
+      } catch (gsiError) {
+        // If GSI doesn't exist, fall back to scan
+        console.warn('GSI not available, falling back to scan for business sessions lookup');
+        
+        const scanResult = await this.dynamoClient.send(new QueryCommand({
+          TableName: tableNames.sessions,
+          FilterExpression: 'businessId = :businessId AND status = :status',
+          ExpressionAttributeValues: marshall({
+            ':businessId': businessId,
+            ':status': 'active'
+          }),
+          Limit: 40
+        }));
+
+        return scanResult.Items ? scanResult.Items.map(item => unmarshall(item) as Session) : [];
+      }
     } catch (error) {
       console.error('Error getting active sessions:', error);
       return [];

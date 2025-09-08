@@ -216,6 +216,22 @@ export class WebhooksService {
       const userId = emailAddress || 'gmail-user';
       const locationId = `${businessId}-gmail`;
 
+      // Ensure session exists or create new one
+      let sessionId = this.generateSessionId(businessId, userId);
+      const existingSession = await this.sessionService.getActiveSessionForUser(businessId, userId);
+      if (existingSession) {
+        sessionId = existingSession.sessionId;
+      } else {
+        // Create new session
+        const newSession = await this.sessionService.createSession(
+          businessId,
+          locationId,
+          userId,
+          'general'
+        );
+        sessionId = newSession.sessionId;
+      }
+
       const webhookData: WebhookData = {
         businessId,
         locationId,
@@ -223,7 +239,7 @@ export class WebhooksService {
         message: messageText,
         source: 'email',
         externalId,
-        sessionId: this.generateSessionId(businessId, userId)
+        sessionId
       };
 
       await this.saveWebhookMessage(webhookData);
@@ -251,6 +267,22 @@ export class WebhooksService {
     const locationId = await this.discoverLocationFromMetaContext(businessId, webhookValue);
     
     // 2. Pregătire date pentru agent
+    // Ensure session exists or create new one
+    let sessionId = this.generateSessionId(businessId, message.from);
+    const existingSession = await this.sessionService.getActiveSessionForUser(businessId, message.from);
+    if (existingSession) {
+      sessionId = existingSession.sessionId;
+    } else {
+      // Create new session
+      const newSession = await this.sessionService.createSession(
+        businessId,
+        locationId,
+        message.from,
+        'general'
+      );
+      sessionId = newSession.sessionId;
+    }
+
     const webhookData: WebhookData = {
       businessId,
       locationId,
@@ -258,7 +290,7 @@ export class WebhooksService {
       message: message.text?.body || '',
       source: 'meta',
       externalId: message.id,
-      sessionId: this.generateSessionId(businessId, message.from)
+      sessionId
     };
 
     // 3. Salvare mesaj în sesiune
@@ -293,6 +325,22 @@ export class WebhooksService {
     const locationId = await this.discoverLocationFromTwilioContext(businessId, payload);
     
     // 2. Pregătire date pentru agent
+    // Ensure session exists or create new one
+    let sessionId = this.generateSessionId(businessId, payload.From);
+    const existingSession = await this.sessionService.getActiveSessionForUser(businessId, payload.From);
+    if (existingSession) {
+      sessionId = existingSession.sessionId;
+    } else {
+      // Create new session
+      const newSession = await this.sessionService.createSession(
+        businessId,
+        locationId,
+        payload.From,
+        'general'
+      );
+      sessionId = newSession.sessionId;
+    }
+
     const webhookData: WebhookData = {
       businessId,
       locationId,
@@ -300,7 +348,7 @@ export class WebhooksService {
       message: payload.Body,
       source: 'twilio',
       externalId: payload.MessageSid,
-      sessionId: this.generateSessionId(businessId, payload.From)
+      sessionId
     };
 
     // 3. Salvare mesaj în sesiune

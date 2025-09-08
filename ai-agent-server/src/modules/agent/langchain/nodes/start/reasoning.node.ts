@@ -84,7 +84,18 @@ export class ReasoningNode {
           intent,
           platform,
           message: state.message,
-          businessType
+          businessType,
+          // Include session context for better user understanding
+          sessionContext: {
+            conversationLength: state.sessionMessages?.length || 0,
+            recentTopics: state.sessionMessages?.slice(-3).map(msg => msg.content).join(' | ') || '',
+            lastUserMessage: state.sessionMessages?.find(msg => msg.type === 'user')?.content || '',
+            interactionHistory: state.sessionMessages?.map(msg => ({
+              type: msg.type,
+              content: msg.content.substring(0, 100), // Truncate for memory efficiency
+              timestamp: msg.timestamp
+            })) || []
+          }
         };
         
         await Promise.all([

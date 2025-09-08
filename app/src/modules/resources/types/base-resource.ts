@@ -30,9 +30,9 @@ export const VALID_RESOURCE_TYPES = [
   'medic',
   'treatment',
   'product',
-  'roles', // User roles and permissions
-  'reports', // Analytics and reporting
-  'sales', // Sales data
+  'role', // User roles and permissions
+  'report', // Analytics and reporting
+  'sale', // Sales data
 
   // Statistics resource types
   'statistics', // General business statistics

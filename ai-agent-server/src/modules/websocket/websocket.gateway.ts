@@ -88,13 +88,35 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     try {
       console.log(`Received message from ${data.userId} in business ${data.businessId}: ${data.message}`);
 
+      // Ensure session exists or create new one
+      let sessionId = data.sessionId;
+      if (!sessionId) {
+        // Try to find existing active session for this user
+        const existingSession = await this.sessionService.getActiveSessionForUser(
+          data.businessId, 
+          data.userId
+        );
+        if (existingSession) {
+          sessionId = existingSession.sessionId;
+        } else {
+          // Create new session
+          const newSession = await this.sessionService.createSession(
+            data.businessId,
+            data.locationId || 'default',
+            data.userId,
+            'general' // Will be updated with actual business type later
+          );
+          sessionId = newSession.sessionId;
+        }
+      }
+
       // Salvare mesaj în baza de date
       const messageId = this.generateMessageId();
       const timestamp = new Date().toISOString();
 
       await this.sessionService.saveMessage({
         messageId,
-        sessionId: data.sessionId || this.generateSessionId(data),
+        sessionId,
         businessId: data.businessId,
         userId: data.userId,
         content: data.message,
@@ -105,8 +127,11 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         }
       });
 
-      // Procesare mesaj prin agent
-      const response = await this.agentService.processMessage(data);
+      // Procesare mesaj prin agent cu sessionId corect
+      const response = await this.agentService.processMessage({
+        ...data,
+        sessionId
+      });
 
       // Salvare răspuns în baza de date
       await this.sessionService.saveMessage({

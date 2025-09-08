@@ -60,7 +60,7 @@ export class KinesisService {
     }
 
     this.kinesisClient = new KinesisClient(clientConfig);
-    this.streamName = kinesisConfig?.streamName || 'resources-operations';
+    this.streamName = kinesisConfig?.streamName || 'resources-stream';
   }
 
   async sendResourceOperation(operation: ResourceOperation): Promise<void> {

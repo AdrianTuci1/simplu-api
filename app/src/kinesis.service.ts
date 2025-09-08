@@ -21,6 +21,7 @@ interface AwsConfig {
 
 interface KinesisConfig {
   streamName?: string;
+  region?: string;
 }
 
 @Injectable()
@@ -34,7 +35,7 @@ export class KinesisService {
     const kinesisConfig = this.configService.get<KinesisConfig>('kinesis');
 
     // Log configuration for debugging
-    this.logger.log(`AWS Region: ${awsConfig?.region || 'us-east-1'}`);
+    this.logger.log(`AWS Region: ${kinesisConfig?.region || 'us-east-1'}`);
     this.logger.log(
       `AWS Access Key ID: ${awsConfig?.accessKeyId ? 'Set' : 'Not set'}`,
     );
@@ -43,7 +44,7 @@ export class KinesisService {
     );
 
     const clientConfig: any = {
-      region: awsConfig?.region || 'us-east-1',
+      region: kinesisConfig?.region || 'us-east-1',
     };
 
     // Only add credentials if both are provided

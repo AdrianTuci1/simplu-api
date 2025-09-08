@@ -28,8 +28,8 @@ export class RagUpdateNode {
         actions: state.actions
       }));
       
-      // Update user memory with current interaction
-      updates.push(this.ragService.putDynamicUserMemory(businessId, userId, platform, {
+      // Update user memory with current interaction and session context
+      const userMemoryUpdate = {
         role: state.role || 'client_existent',
         lastInteractionAt: new Date().toISOString(),
         context: { businessId, locationId: state.locationId },
@@ -37,8 +37,21 @@ export class RagUpdateNode {
         response: state.response,
         businessType: state.businessInfo?.businessType,
         platform,
-        discoveredResourceTypes: state.discoveredResourceTypes || []
-      }));
+        discoveredResourceTypes: state.discoveredResourceTypes || [],
+        // Include session context for better user understanding
+        sessionContext: {
+          conversationLength: state.sessionMessages?.length || 0,
+          recentTopics: state.sessionMessages?.slice(-3).map(msg => msg.content).join(' | ') || '',
+          lastUserMessage: state.sessionMessages?.find(msg => msg.type === 'user')?.content || '',
+          interactionHistory: state.sessionMessages?.map(msg => ({
+            type: msg.type,
+            content: msg.content.substring(0, 100), // Truncate for memory efficiency
+            timestamp: msg.timestamp
+          })) || []
+        }
+      };
+      
+      updates.push(this.ragService.putDynamicUserMemory(businessId, userId, platform, userMemoryUpdate));
       
       await Promise.all(updates);
       return {};

@@ -93,13 +93,27 @@ export class AgentService {
       actions: []
     };
 
-    // Eagerly load business info into state before graph execution
+    // Eagerly load business info and session messages into state before graph execution
     try {
       if (state.businessId) {
         state.businessInfo = await this.businessInfoService.getBusinessInfo(state.businessId);
       }
+      
+      // Load recent session messages for context (last 4 messages to avoid memory issues)
+      if (state.sessionId) {
+        const sessionMessages = await this.sessionService.getSessionMessages(state.sessionId, 4);
+        state.sessionMessages = sessionMessages.map(msg => ({
+          content: msg.content,
+          type: msg.type,
+          timestamp: msg.timestamp
+        }));
+        console.log(`AgentService: Loaded ${state.sessionMessages.length} recent messages for context`);
+      }
+      
+      // Generate time context from current timestamp
+      state.timeContext = this.generateTimeContext();
     } catch (e) {
-      console.warn('processMessage: failed to pre-load businessInfo', (e as any)?.message || e);
+      console.warn('processMessage: failed to pre-load businessInfo or session messages', (e as any)?.message || e);
     }
 
     // Procesare cu pipeline determinist (păstrează întregul state)
@@ -815,6 +829,21 @@ export class AgentService {
     
     // Fallback la implementarea existentă
     return `${data.businessId}:${data.userId}:${Date.now()}`;
+  }
+
+  private generateTimeContext(): any {
+    const now = new Date();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    return {
+      currentTimestamp: now.toISOString(),
+      currentDate: now.toLocaleDateString('ro-RO'),
+      currentTime: now.toLocaleTimeString('ro-RO'),
+      timezone,
+      dayOfWeek: now.toLocaleDateString('ro-RO', { weekday: 'long' }),
+      isWeekend: now.getDay() === 0 || now.getDay() === 6,
+      isBusinessHours: now.getHours() >= 9 && now.getHours() < 18 && now.getDay() >= 1 && now.getDay() <= 5
+    };
   }
 
   private mapHttpMethodToOperationType(method: string): 'create' | 'read' | 'update' | 'delete' {

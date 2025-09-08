@@ -32,8 +32,9 @@ export default () => ({
   },
 
   kinesis: {
-    streamName: process.env.KINESIS_STREAM_NAME || 'resources-operations',
+    streamName: process.env.KINESIS_STREAM_NAME || 'resources-stream',
     shardCount: parseInt(process.env.KINESIS_SHARD_COUNT || '1', 10),
+    region: process.env.AWS_REGION || 'eu-north-1',
   },
 
   aws: {

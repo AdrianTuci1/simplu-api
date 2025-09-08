@@ -16,16 +16,31 @@ export class RagSearchNode {
       const safeMessage = state.message || '';
       console.log(`RagSearchNode: Processing message: "${safeMessage}"`);
       console.log(`RagSearchNode: Business type: ${state.businessInfo?.businessType || 'unknown'}`);
+      // Build conversation context from recent session messages
+      const conversationContext = state.sessionMessages && state.sessionMessages.length > 0 
+        ? state.sessionMessages.map(msg => `${msg.type}: ${msg.content}`).join('\n')
+        : 'Prima interacțiune';
+
+      // Build time context for better understanding
+      const timeContext = state.timeContext 
+        ? `Timpul curent: ${state.timeContext.currentTime}, Data: ${state.timeContext.currentDate}, Ziua: ${state.timeContext.dayOfWeek}, Ore de program: ${state.timeContext.isBusinessHours ? 'Da' : 'Nu'}`
+        : 'Timpul nu este disponibil';
+
       const prompt = `
       Analizează mesajul utilizatorului și generează un obiect JSON cu câmpuri simple pentru căutare în RAG.
       
       Mesaj utilizator: "${safeMessage}"
       Tip business: ${state.businessInfo?.businessType || 'general'}
-      Context: ${JSON.stringify(state.businessInfo?.settings || {})}
+      
+      Context temporal:
+      ${timeContext}
+      
+      Context conversație recentă:
+      ${conversationContext}
       
       Returnează DOAR un JSON cu structura:
       { "keywords": string[], "category": string }
-      - keywords: lista scurtă de 3-8 cuvinte/expresii relevante
+      - keywords: lista scurtă de 3-8 cuvinte/expresii relevante (include și contextul din conversația anterioară și timpul curent)
       - category: una dintre: rezervare, servicii, clienti, membrii, stock-uri, analiza_date, sms, email, whatsapp
       `;
       console.log(`RagSearchNode: Sending prompt to OpenAI: "${prompt}"`);
@@ -59,7 +74,19 @@ export class RagSearchNode {
           state.userId || '',
           20, // CRITICAL FIX: Reduced from 25 to 5 to prevent memory issues
         );
-        understandingContext = { memory, recentDb };
+        
+        // Include session conversation context
+        const sessionContext = {
+          recentMessages: state.sessionMessages || [],
+          conversationLength: state.sessionMessages?.length || 0,
+          lastUserMessage: state.sessionMessages?.find(msg => msg.type === 'user')?.content || '',
+          lastAgentMessage: state.sessionMessages?.find(msg => msg.type === 'agent')?.content || ''
+        };
+        
+        // Include time context
+        const timeContext = state.timeContext || {};
+        
+        understandingContext = { memory, recentDb, sessionContext, timeContext };
       }
       return {
         ragResults,
