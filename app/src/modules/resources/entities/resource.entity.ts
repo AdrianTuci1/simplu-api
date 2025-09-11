@@ -20,6 +20,7 @@ import {
 @Index('idx_data_patient_name', { synchronize: false })
 @Index('idx_data_trainer_name', { synchronize: false })
 @Index('idx_data_customer_name', { synchronize: false })
+@Index('idx_data_public', { synchronize: false })
 export class ResourceEntity {
   @PrimaryGeneratedColumn({ type: 'bigint', name: 'id' })
   id: number;

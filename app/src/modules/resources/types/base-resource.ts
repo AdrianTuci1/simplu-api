@@ -33,6 +33,7 @@ export const VALID_RESOURCE_TYPES = [
   'role', // User roles and permissions
   'report', // Analytics and reporting
   'sale', // Sales data
+  'dental-chart', // Dental chart
 
   // Statistics resource types
   'statistics', // General business statistics

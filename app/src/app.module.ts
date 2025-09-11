@@ -8,6 +8,7 @@ import { ResourcesModule } from './modules/resources/resources.module';
 import { BusinessInfoModule } from './modules/business-info/business-info.module';
 import { HealthModule } from './modules/health/health.module';
 import { KinesisService } from './kinesis.service';
+import { PatientBookingModule } from './modules/patient-booking/patient-booking.module';
 
 class CustomNamingStrategy extends DefaultNamingStrategy {
   tableName(targetName: string, userSpecifiedName: string | undefined): string {
@@ -52,6 +53,7 @@ class CustomNamingStrategy extends DefaultNamingStrategy {
     ResourcesModule,
     BusinessInfoModule,
     HealthModule,
+    PatientBookingModule,
   ],
   providers: [KinesisService],
   exports: [KinesisService],
