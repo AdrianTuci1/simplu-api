@@ -781,6 +781,30 @@ export class ResourceQueryService {
   }
 
   // Helper methods
+  
+  /**
+   * Build JSON path query for PostgreSQL
+   * Supports both flat fields (patientId) and nested fields (patient.id)
+   * 
+   * Examples:
+   * - "patientId" -> "data->>'patientId'"
+   * - "patient.id" -> "data->'patient'->>'id'"
+   * - "medic.name" -> "data->'medic'->>'name'"
+   */
+  private buildJsonPathQuery(dataField: string): string {
+    const parts = dataField.split('.');
+    
+    if (parts.length === 1) {
+      // Flat field: patientId -> data->>'patientId'
+      return `data->>'${parts[0]}'`;
+    } else {
+      // Nested field: patient.id -> data->'patient'->>'id'
+      const jsonPath = parts.slice(0, -1).join("'->'");
+      const lastField = parts[parts.length - 1];
+      return `data->'${jsonPath}'->>'${lastField}'`;
+    }
+  }
+
   private applyFilters(
     data: ResourceRecord[],
     filters?: any,
@@ -1189,6 +1213,66 @@ export class ResourceQueryService {
   }
 
   /**
+   * Get resources by a specific data field value
+   * This searches for resources where data->>'fieldName' = fieldValue or data->'nestedObject'->>'field' = fieldValue
+   * Supports both flat fields (patientId) and nested fields (patient.id)
+   * Useful for finding resources by custom IDs like patientId, medicId, etc.
+   */
+  async getResourcesByDataField(
+    businessId: string,
+    locationId: string,
+    dataField: string, // ex: 'patientId', 'patient.id', 'medic.id', etc.
+    fieldValue: string,
+    resourceType?: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<BaseResource[]> {
+    try {
+      this.logger.log(
+        `Searching resources by data field ${dataField} = "${fieldValue}" for ${businessId}/${locationId}`,
+      );
+
+      let resources: ResourceRecord[];
+
+      if (this.shouldUseCitrusForRead()) {
+        resources = await this.getResourcesByDataFieldFromCitrus(
+          businessId,
+          locationId,
+          dataField,
+          fieldValue,
+          resourceType,
+          limit,
+          offset,
+        );
+      } else {
+        resources = await this.getResourcesByDataFieldFromRDS(
+          businessId,
+          locationId,
+          dataField,
+          fieldValue,
+          resourceType,
+          limit,
+          offset,
+        );
+      }
+
+      this.logger.log(
+        `Found ${resources.length} resources with ${dataField} = "${fieldValue}"`,
+      );
+
+      return resources.map(this.convertToBaseResource);
+    } catch (error) {
+      this.logger.error(
+        `Error searching resources by data field: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Failed to search resources by data field: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Search resources by business pattern using LIKE operator
    * This searches for resources where business_location_id starts with businessId
    * Useful for finding resources across all locations in a business
@@ -1221,6 +1305,109 @@ export class ResourceQueryService {
         `Error searching resources by business pattern: ${error.message}`,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Get resources by data field from Citrus
+   */
+  private async getResourcesByDataFieldFromCitrus(
+    businessId: string,
+    locationId: string,
+    dataField: string,
+    fieldValue: string,
+    resourceType?: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<ResourceRecord[]> {
+    try {
+      const shardConnection = await this.citrusService.getShardForBusiness(
+        businessId,
+        locationId,
+      );
+      const businessLocationId = `${businessId}-${locationId}`;
+
+      // Create a temporary pool connection for this query
+      const { Pool } = require('pg');
+      const pool = new Pool({
+        connectionString: shardConnection.connectionString,
+        max: 1,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
+
+      try {
+        // Build the JSON path query based on whether it's nested or flat
+        const jsonPath = this.buildJsonPathQuery(dataField);
+        let query = `SELECT * FROM resources WHERE business_location_id = $1 AND ${jsonPath} = $2`;
+        const values = [businessLocationId, fieldValue];
+        let paramCount = 2;
+
+        if (resourceType) {
+          paramCount++;
+          query += ` AND resource_type = $${paramCount}`;
+          values.push(resourceType);
+        }
+
+        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+        values.push(limit.toString(), offset.toString());
+
+        const result = await pool.query(query, values);
+        return result.rows;
+      } finally {
+        await pool.end();
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error querying resources by data field from Citrus: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Failed to get resources by data field from Citrus: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Get resources by data field from RDS
+   */
+  private async getResourcesByDataFieldFromRDS(
+    businessId: string,
+    locationId: string,
+    dataField: string,
+    fieldValue: string,
+    resourceType?: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<ResourceRecord[]> {
+    try {
+      const businessLocationId = `${businessId}-${locationId}`;
+
+      // Build the JSON path query based on whether it's nested or flat
+      const jsonPath = this.buildJsonPathQuery(dataField);
+      let query = `SELECT * FROM resources WHERE business_location_id = $1 AND ${jsonPath} = $2`;
+      const values = [businessLocationId, fieldValue];
+      let paramCount = 2;
+
+      if (resourceType) {
+        paramCount++;
+        query += ` AND resource_type = $${paramCount}`;
+        values.push(resourceType);
+      }
+
+      query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+      values.push(limit.toString(), offset.toString());
+
+      const result = await this.resourceRepository.query(query, values);
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Error querying resources by data field from RDS: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Failed to get resources by data field from RDS: ${error.message}`,
+      );
     }
   }
 

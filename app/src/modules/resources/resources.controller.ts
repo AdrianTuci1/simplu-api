@@ -817,6 +817,109 @@ export class ResourcesController {
     }
   }
 
+  @Get(':businessId-:locationId/search/data-field/:dataField')
+  @ApiOperation({ summary: 'Search resources by a specific data field value' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resources found by data field value',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
+  @ApiParam({ name: 'businessId', description: 'Business ID' })
+  @ApiParam({ name: 'locationId', description: 'Location ID' })
+  @ApiParam({
+    name: 'dataField',
+    description: 'Data field name to search. Supports flat fields (patientId) and nested fields (patient.id, medic.name)',
+  })
+  @ApiQuery({
+    name: 'fieldValue',
+    required: true,
+    description: 'Value to search for in the data field',
+  })
+  @ApiQuery({
+    name: 'resourceType',
+    required: false,
+    description: 'Filter by resource type',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Items per page (default: 50)',
+  })
+  async searchResourcesByDataField(
+    @CurrentUser() user: CognitoUser,
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('dataField') dataField: string,
+    @Query('fieldValue') fieldValue: string,
+    @Query('resourceType') resourceType?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const authenticatedUser = this.createMinimalUser(
+      user,
+      businessId,
+      locationId,
+    );
+
+    try {
+      const pageNum = page ? parseInt(page, 10) : 1;
+      const limitNum = limit ? parseInt(limit, 10) : 50;
+      const offset = (pageNum - 1) * limitNum;
+
+      const resources = await this.resourceQueryService.getResourcesByDataField(
+        businessId,
+        locationId,
+        dataField,
+        fieldValue,
+        resourceType,
+        limitNum,
+        offset,
+      );
+
+      return {
+        success: true,
+        data: resources,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: resources.length,
+          pages: Math.ceil(resources.length / limitNum),
+        },
+        meta: {
+          businessId,
+          locationId,
+          dataField,
+          fieldValue,
+          resourceType,
+          timestamp: new Date().toISOString(),
+          operation: 'data-field-search',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error searching resources by data field: ${error.message}`,
+        meta: {
+          businessId,
+          locationId,
+          dataField,
+          fieldValue,
+          resourceType,
+          timestamp: new Date().toISOString(),
+          operation: 'data-field-search',
+        },
+      };
+    }
+  }
+
   @Get('statistics/:businessId-:locationId')
   @ApiOperation({ summary: 'Get business statistics and recent activities' })
   @ApiResponse({

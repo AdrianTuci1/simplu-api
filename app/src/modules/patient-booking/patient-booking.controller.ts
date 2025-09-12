@@ -66,7 +66,7 @@ export class PatientBookingController {
     @Param('date') date: string,
     @Query('serviceId') serviceId?: string,
   ) {
-    return this.bookingService.getDaySlots(businessId, locationId, date, serviceId);
+    return this.bookingService.getDaySlots(businessId, locationId, date);
   }
 
   @Post('reserve/:businessId-:locationId')
