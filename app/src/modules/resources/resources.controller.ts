@@ -85,6 +85,28 @@ export class ResourcesController {
     };
   }
 
+  /**
+   * Separate nested field filters from regular custom filters
+   * This allows for proper handling of data.doctor.id, data.treatmentName, etc.
+   */
+  private separateNestedFilters(allFilters: any): {
+    nestedFilters: Record<string, any>;
+    customFilters: Record<string, any>;
+  } {
+    const nestedFilters: Record<string, any> = {};
+    const customFilters: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(allFilters)) {
+      if (key.startsWith('data.')) {
+        nestedFilters[key] = value;
+      } else {
+        customFilters[key] = value;
+      }
+    }
+
+    return { nestedFilters, customFilters };
+  }
+
   @Post(':businessId-:locationId')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Create resource - sends to stream for processing' })
@@ -135,58 +157,6 @@ export class ResourcesController {
     });
   }
 
-  @Post(':businessId-:locationId/query')
-  @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({
-    summary:
-      'Create resource with query parameter - sends to stream for processing',
-  })
-  @ApiResponse({
-    status: 202,
-    description: 'Request accepted and sent to stream',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing Bearer token',
-  })
-  @ApiParam({ name: 'businessId', description: 'Business ID' })
-  @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiQuery({
-    name: 'X-Resource-Type',
-    required: true,
-    description: 'Resource type',
-  })
-  async createResourceWithQuery(
-    @CurrentUser() user: CognitoUser,
-    @Param('businessId') businessId: string,
-    @Param('locationId') locationId: string,
-    @Body() resourceRequest: ResourceDataRequest,
-    @Query('X-Resource-Type') resourceType: ResourceType,
-  ): Promise<StandardResponse> {
-    // Check permission using the new medic -> roles flow
-    await this.permissionService.checkPermissionFromMedic(
-      user.userId,
-      businessId,
-      locationId,
-      resourceType,
-      'create',
-    );
-
-    const authenticatedUser = this.createMinimalUser(
-      user,
-      businessId,
-      locationId,
-    );
-
-    return this.resourcesService.processResourceOperation({
-      operation: 'create',
-      businessId,
-      locationId,
-      resourceType,
-      data: resourceRequest.data,
-      user: authenticatedUser,
-    });
-  }
 
   @Put(':businessId-:locationId/:resourceId')
   @HttpCode(HttpStatus.ACCEPTED)
@@ -468,6 +438,16 @@ export class ResourcesController {
     required: false,
     description: 'Query type: date-range, stats, or general',
   })
+  @ApiQuery({
+    name: 'customField',
+    required: false,
+    description: 'Filter by any custom field in data or resource_id. Examples: ?medicId=123&patientName=Ion&status=active',
+  })
+  @ApiQuery({
+    name: 'data.nestedField',
+    required: false,
+    description: 'Filter by nested data fields. Examples: ?data.doctor.id=33948842-b061-7036-f02f-79b9c0b4225b&data.treatmentName=consultation&data.patient.name=Ion',
+  })
   async getResources(
     @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
@@ -587,6 +567,9 @@ export class ResourcesController {
         filters.isActive = isActive === 'true';
       }
 
+      // Separate nested field filters from regular custom filters
+      const { nestedFilters, customFilters } = this.separateNestedFilters(allFilters);
+
       // Use the existing queryResources method
       const query: ResourceQuery = {
         resourceType: resourceType as ResourceType,
@@ -599,7 +582,8 @@ export class ResourcesController {
           endDate,
           name,
           isActive: isActive ? isActive === 'true' : undefined,
-          customFilters: allFilters,
+          customFilters,
+          nestedFilters,
         },
       };
 
@@ -637,288 +621,9 @@ export class ResourcesController {
     }
   }
 
-  // Name-based search endpoints
 
-  @Get(':businessId-:locationId/search/name/:nameField')
-  @ApiOperation({ summary: 'Search resources by specific name field' })
-  @ApiResponse({ status: 200, description: 'Resources found by name' })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing Bearer token',
-  })
-  @ApiParam({ name: 'businessId', description: 'Business ID' })
-  @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({
-    name: 'nameField',
-    description:
-      'Name field to search: medicName, patientName, trainerName, customerName',
-  })
-  @ApiQuery({
-    name: 'nameValue',
-    required: true,
-    description: 'Name value to search for',
-  })
-  @ApiQuery({
-    name: 'resourceType',
-    required: false,
-    description: 'Filter by resource type',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Items per page (default: 50)',
-  })
-  async searchResourcesByName(
-    @CurrentUser() user: CognitoUser,
-    @Param('businessId') businessId: string,
-    @Param('locationId') locationId: string,
-    @Param('nameField')
-    nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
-    @Query('nameValue') nameValue: string,
-    @Query('resourceType') resourceType?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    const authenticatedUser = this.createMinimalUser(
-      user,
-      businessId,
-      locationId,
-    );
-    try {
-      const pageNum = page ? parseInt(page, 10) : 1;
-      const limitNum = limit ? parseInt(limit, 10) : 50;
-      const offset = (pageNum - 1) * limitNum;
 
-      const resources = await this.resourceQueryService.getResourcesByName(
-        businessId,
-        locationId,
-        nameField,
-        nameValue,
-        resourceType,
-        limitNum,
-        offset,
-      );
 
-      return {
-        success: true,
-        data: resources,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total: resources.length,
-          pages: Math.ceil(resources.length / limitNum),
-        },
-        meta: {
-          businessId,
-          locationId,
-          nameField,
-          nameValue,
-          resourceType,
-          timestamp: new Date().toISOString(),
-          operation: 'name-search',
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: `Error searching resources by name: ${error.message}`,
-        meta: {
-          businessId,
-          locationId,
-          nameField,
-          nameValue,
-          timestamp: new Date().toISOString(),
-          operation: 'name-search',
-        },
-      };
-    }
-  }
-
-  @Post(':businessId-:locationId/search/names')
-  @ApiOperation({ summary: 'Search resources by multiple name fields' })
-  @ApiResponse({
-    status: 200,
-    description: 'Resources found by multiple names',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing Bearer token',
-  })
-  @ApiParam({ name: 'businessId', description: 'Business ID' })
-  @ApiParam({ name: 'locationId', description: 'Location ID' })
-  async searchResourcesByMultipleNames(
-    @CurrentUser() user: CognitoUser,
-    @Param('businessId') businessId: string,
-    @Param('locationId') locationId: string,
-    @Body()
-    nameFilters: {
-      medicName?: string;
-      patientName?: string;
-      trainerName?: string;
-      customerName?: string;
-      resourceType?: string;
-      page?: number;
-      limit?: number;
-    },
-  ) {
-    const authenticatedUser = this.createMinimalUser(
-      user,
-      businessId,
-      locationId,
-    );
-    try {
-      const { page = 1, limit = 50, resourceType, ...names } = nameFilters;
-      const offset = (page - 1) * limit;
-
-      const resources =
-        await this.resourceQueryService.getResourcesByMultipleNames(
-          businessId,
-          locationId,
-          names,
-          resourceType,
-          limit,
-          offset,
-        );
-
-      return {
-        success: true,
-        data: resources,
-        pagination: {
-          page,
-          limit,
-          total: resources.length,
-          pages: Math.ceil(resources.length / limit),
-        },
-        meta: {
-          businessId,
-          locationId,
-          nameFilters: names,
-          resourceType,
-          timestamp: new Date().toISOString(),
-          operation: 'multiple-names-search',
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: `Error searching resources by multiple names: ${error.message}`,
-        meta: {
-          businessId,
-          locationId,
-          timestamp: new Date().toISOString(),
-          operation: 'multiple-names-search',
-        },
-      };
-    }
-  }
-
-  @Get(':businessId-:locationId/search/data-field/:dataField')
-  @ApiOperation({ summary: 'Search resources by a specific data field value' })
-  @ApiResponse({
-    status: 200,
-    description: 'Resources found by data field value',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing Bearer token',
-  })
-  @ApiParam({ name: 'businessId', description: 'Business ID' })
-  @ApiParam({ name: 'locationId', description: 'Location ID' })
-  @ApiParam({
-    name: 'dataField',
-    description: 'Data field name to search. Supports flat fields (patientId) and nested fields (patient.id, medic.name)',
-  })
-  @ApiQuery({
-    name: 'fieldValue',
-    required: true,
-    description: 'Value to search for in the data field',
-  })
-  @ApiQuery({
-    name: 'resourceType',
-    required: false,
-    description: 'Filter by resource type',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Items per page (default: 50)',
-  })
-  async searchResourcesByDataField(
-    @CurrentUser() user: CognitoUser,
-    @Param('businessId') businessId: string,
-    @Param('locationId') locationId: string,
-    @Param('dataField') dataField: string,
-    @Query('fieldValue') fieldValue: string,
-    @Query('resourceType') resourceType?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    const authenticatedUser = this.createMinimalUser(
-      user,
-      businessId,
-      locationId,
-    );
-
-    try {
-      const pageNum = page ? parseInt(page, 10) : 1;
-      const limitNum = limit ? parseInt(limit, 10) : 50;
-      const offset = (pageNum - 1) * limitNum;
-
-      const resources = await this.resourceQueryService.getResourcesByDataField(
-        businessId,
-        locationId,
-        dataField,
-        fieldValue,
-        resourceType,
-        limitNum,
-        offset,
-      );
-
-      return {
-        success: true,
-        data: resources,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total: resources.length,
-          pages: Math.ceil(resources.length / limitNum),
-        },
-        meta: {
-          businessId,
-          locationId,
-          dataField,
-          fieldValue,
-          resourceType,
-          timestamp: new Date().toISOString(),
-          operation: 'data-field-search',
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: `Error searching resources by data field: ${error.message}`,
-        meta: {
-          businessId,
-          locationId,
-          dataField,
-          fieldValue,
-          resourceType,
-          timestamp: new Date().toISOString(),
-          operation: 'data-field-search',
-        },
-      };
-    }
-  }
 
   @Get('statistics/:businessId-:locationId')
   @ApiOperation({ summary: 'Get business statistics and recent activities' })

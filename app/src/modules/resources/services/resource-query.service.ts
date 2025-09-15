@@ -36,6 +36,7 @@ export interface ResourceQuery {
     name?: string;
     isActive?: boolean;
     customFilters?: Record<string, any>;
+    nestedFilters?: Record<string, any>; // For nested field paths like data.doctor.id
   };
   sortBy?: string;
   sortOrder?: 'ASC' | 'DESC';
@@ -159,8 +160,8 @@ export class ResourceQueryService {
       const hasMore = resources.length > limitNum;
       const data = hasMore ? resources.slice(0, limitNum) : resources;
 
-      // Apply additional filters if provided
-      const filteredData = this.applyFilters(data, filters, true);
+      // Custom filters are now applied directly in the queryBuilder, so no post-processing needed
+      const filteredData = data;
 
       // Convert to BaseResource format
       const baseResources = filteredData.map(this.convertToBaseResource);
@@ -404,11 +405,61 @@ export class ResourceQueryService {
         locationId,
       );
 
-      // TODO: Implement actual database query using shard connection
-      // This would use the shard.connectionString to connect to the specific database
-      // and execute SQL queries with proper filtering
+      // Create a temporary pool connection for this query
+      const { Pool } = require('pg');
+      const pool = new Pool({
+        connectionString: shard.connectionString,
+        max: 1,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
 
-      return [];
+      try {
+        let query = 'SELECT * FROM resources WHERE business_id = $1 AND location_id = $2';
+        const values = [businessId, locationId];
+        let paramCount = 2;
+
+        // Add resource type filter
+        if (resourceType) {
+          paramCount++;
+          query += ` AND resource_type = $${paramCount}`;
+          values.push(resourceType);
+        }
+
+        // Add date filters
+        if (filters?.startDate) {
+          paramCount++;
+          query += ` AND start_date >= $${paramCount}`;
+          values.push(filters.startDate);
+        }
+
+        if (filters?.endDate) {
+          paramCount++;
+          query += ` AND end_date <= $${paramCount}`;
+          values.push(filters.endDate);
+        }
+
+        // Apply custom filters using SQL
+        if (filters?.customFilters) {
+          query = this.buildCitrusCustomFilters(query, filters.customFilters, values, paramCount);
+        }
+
+        // Apply nested filters (data.doctor.id, data.treatmentName, etc.)
+        if (filters?.nestedFilters) {
+          query = this.buildCitrusCustomFilters(query, filters.nestedFilters, values, values.length);
+        }
+
+        // Add ordering and pagination
+        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+        values.push(limit.toString(), offset.toString());
+
+        this.logger.log(`Executing Citrus query: ${query} with values: ${JSON.stringify(values)}`);
+
+        const result = await pool.query(query, values);
+        return result.rows;
+      } finally {
+        await pool.end();
+      }
     } catch (error) {
       throw new BadRequestException(
         `Failed to query resources from Citrus: ${error.message}`,
@@ -554,7 +605,7 @@ export class ResourceQueryService {
       );
 
       const businessLocationId = `${businessId}-${locationId}`;
-      const queryBuilder = this.resourceRepository
+      let queryBuilder = this.resourceRepository
         .createQueryBuilder('resource')
         .where('resource.businessLocationId = :businessLocationId', {
           businessLocationId,
@@ -577,6 +628,16 @@ export class ResourceQueryService {
         queryBuilder.andWhere('resource.endDate <= :endDate', {
           endDate: filters.endDate,
         });
+      }
+
+      // Apply custom filters using the organized queryBuilder
+      if (filters?.customFilters) {
+        queryBuilder = this.buildCustomFilters(queryBuilder, filters.customFilters);
+      }
+
+      // Apply nested filters (data.doctor.id, data.treatmentName, etc.)
+      if (filters?.nestedFilters) {
+        queryBuilder = this.buildCustomFilters(queryBuilder, filters.nestedFilters);
       }
 
       const resources = await queryBuilder
@@ -782,103 +843,8 @@ export class ResourceQueryService {
 
   // Helper methods
   
-  /**
-   * Build JSON path query for PostgreSQL
-   * Supports both flat fields (patientId) and nested fields (patient.id)
-   * 
-   * Examples:
-   * - "patientId" -> "data->>'patientId'"
-   * - "patient.id" -> "data->'patient'->>'id'"
-   * - "medic.name" -> "data->'medic'->>'name'"
-   */
-  private buildJsonPathQuery(dataField: string): string {
-    const parts = dataField.split('.');
-    
-    if (parts.length === 1) {
-      // Flat field: patientId -> data->>'patientId'
-      return `data->>'${parts[0]}'`;
-    } else {
-      // Nested field: patient.id -> data->'patient'->>'id'
-      const jsonPath = parts.slice(0, -1).join("'->'");
-      const lastField = parts[parts.length - 1];
-      return `data->'${jsonPath}'->>'${lastField}'`;
-    }
-  }
 
-  private applyFilters(
-    data: ResourceRecord[],
-    filters?: any,
-    skipDateFilters: boolean = false,
-  ): ResourceRecord[] {
-    if (!filters) {
-      return data;
-    }
 
-    return data.filter((record) => {
-      // Apply date filters only if not already handled by database query
-      if (
-        !skipDateFilters &&
-        (filters.dateFrom ||
-          filters.dateTo ||
-          filters.startDate ||
-          filters.endDate)
-      ) {
-        const recordStartDate = new Date(record.start_date);
-        const recordEndDate = new Date(record.end_date);
-
-        const startDate = filters.startDate || filters.dateFrom;
-        const endDate = filters.endDate || filters.dateTo;
-
-        if (startDate && recordEndDate < new Date(startDate)) {
-          return false;
-        }
-
-        if (endDate && recordStartDate > new Date(endDate)) {
-          return false;
-        }
-      }
-
-      // Apply custom data filters
-      if (filters.customFilters) {
-        return this.applyCustomFilters(record, filters.customFilters);
-      }
-
-      return true;
-    });
-  }
-
-  private applyCustomFilters(
-    record: ResourceRecord,
-    customFilters: any,
-  ): boolean {
-    try {
-      // Since we no longer have a data field, we can only filter by the available fields
-      // Filter by resource type
-      if (
-        customFilters.resourceType &&
-        record.resource_type !== customFilters.resourceType
-      ) {
-        return false;
-      }
-
-      // Filter by date ranges
-      if (
-        customFilters.startDate &&
-        record.start_date < customFilters.startDate
-      ) {
-        return false;
-      }
-
-      if (customFilters.endDate && record.end_date > customFilters.endDate) {
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      this.logger.warn('Error applying custom filters:', error);
-      return true; // Include record if filter fails
-    }
-  }
 
   private convertToBaseResource(record: ResourceRecord): BaseResource {
     // Extract businessId and locationId from business_location_id
@@ -904,540 +870,391 @@ export class ResourceQueryService {
     };
   }
 
-  // Name-based search methods
-  async getResourcesByName(
-    businessId: string,
-    locationId: string,
-    nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
-    nameValue: string,
-    resourceType?: string,
-    limit: number = 100,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      this.logger.log(
-        `Searching resources by ${nameField} = "${nameValue}" for ${businessId}/${locationId}`,
-      );
 
-      if (this.shouldUseCitrusForRead()) {
-        return this.getResourcesByNameFromCitrus(
-          businessId,
-          locationId,
-          nameField,
-          nameValue,
-          resourceType,
-          limit,
-          offset,
-        );
-      } else {
-        return this.getResourcesByNameFromRDS(
-          businessId,
-          locationId,
-          nameField,
-          nameValue,
-          resourceType,
-          limit,
-          offset,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error searching resources by name: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to search resources by name: ${error.message}`,
-      );
-    }
-  }
 
-  async getResourcesByMultipleNames(
-    businessId: string,
-    locationId: string,
-    nameFilters: {
-      medicName?: string;
-      patientName?: string;
-      trainerName?: string;
-      customerName?: string;
-    },
-    resourceType?: string,
-    limit: number = 100,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      this.logger.log(
-        `Searching resources by multiple names for ${businessId}/${locationId}`,
-        nameFilters,
-      );
 
-      if (this.shouldUseCitrusForRead()) {
-        return this.getResourcesByMultipleNamesFromCitrus(
-          businessId,
-          locationId,
-          nameFilters,
-          resourceType,
-          limit,
-          offset,
-        );
-      } else {
-        return this.getResourcesByMultipleNamesFromRDS(
-          businessId,
-          locationId,
-          nameFilters,
-          resourceType,
-          limit,
-          offset,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error searching resources by multiple names: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to search resources by multiple names: ${error.message}`,
-      );
-    }
-  }
 
-  private async getResourcesByNameFromCitrus(
-    businessId: string,
-    locationId: string,
-    nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
-    nameValue: string,
-    resourceType?: string,
-    limit: number = 100,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      const shardConnection = await this.citrusService.getShardForBusiness(
-        businessId,
-        locationId,
-      );
-      const businessLocationId = `${businessId}-${locationId}`;
 
-      // Create a temporary pool connection for this query
-      const { Pool } = require('pg');
-      const pool = new Pool({
-        connectionString: shardConnection.connectionString,
-        max: 1,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
-      });
 
-      try {
-        let query = `SELECT * FROM resources WHERE business_location_id = $1 AND data->>'${nameField}' ILIKE $2`;
-        const values = [businessLocationId, `%${nameValue}%`];
-        let paramCount = 2;
-
-        if (resourceType) {
-          paramCount++;
-          query += ` AND resource_type = $${paramCount}`;
-          values.push(resourceType);
-        }
-
-        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-        values.push(limit.toString(), offset.toString());
-
-        const result = await pool.query(query, values);
-        return result.rows;
-      } finally {
-        await pool.end();
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error querying resources by name from Citrus: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to get resources by name from Citrus: ${error.message}`,
-      );
-    }
-  }
-
-  private async getResourcesByNameFromRDS(
-    businessId: string,
-    locationId: string,
-    nameField: 'medicName' | 'patientName' | 'trainerName' | 'customerName',
-    nameValue: string,
-    resourceType?: string,
-    limit: number = 100,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      const businessLocationId = `${businessId}-${locationId}`;
-
-      let query = `SELECT * FROM resources WHERE business_location_id = $1 AND data->>'${nameField}' ILIKE $2`;
-      const values = [businessLocationId, `%${nameValue}%`];
-      let paramCount = 2;
-
-      if (resourceType) {
-        paramCount++;
-        query += ` AND resource_type = $${paramCount}`;
-        values.push(resourceType);
-      }
-
-      query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-      values.push(limit.toString(), offset.toString());
-
-      const result = await this.resourceRepository.query(query, values);
-      return result;
-    } catch (error) {
-      this.logger.error(
-        `Error querying resources by name from RDS: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to get resources by name from RDS: ${error.message}`,
-      );
-    }
-  }
-
-  private async getResourcesByMultipleNamesFromCitrus(
-    businessId: string,
-    locationId: string,
-    nameFilters: {
-      medicName?: string;
-      patientName?: string;
-      trainerName?: string;
-      customerName?: string;
-    },
-    resourceType?: string,
-    limit: number = 100,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      const shardConnection = await this.citrusService.getShardForBusiness(
-        businessId,
-        locationId,
-      );
-      const businessLocationId = `${businessId}-${locationId}`;
-
-      // Create a temporary pool connection for this query
-      const { Pool } = require('pg');
-      const pool = new Pool({
-        connectionString: shardConnection.connectionString,
-        max: 1,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
-      });
-
-      try {
-        let query = 'SELECT * FROM resources WHERE business_location_id = $1';
-        const values = [businessLocationId];
-        let paramCount = 1;
-
-        // Adaugă filtrele pentru nume
-        Object.entries(nameFilters).forEach(([field, value]) => {
-          if (value) {
-            paramCount++;
-            query += ` AND data->>'${field}' ILIKE $${paramCount}`;
-            values.push(`%${value}%`);
-          }
-        });
-
-        if (resourceType) {
-          paramCount++;
-          query += ` AND resource_type = $${paramCount}`;
-          values.push(resourceType);
-        }
-
-        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-        values.push(limit.toString(), offset.toString());
-
-        const result = await pool.query(query, values);
-        return result.rows;
-      } finally {
-        await pool.end();
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error querying resources by multiple names from Citrus: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to get resources by multiple names from Citrus: ${error.message}`,
-      );
-    }
-  }
-
-  private async getResourcesByMultipleNamesFromRDS(
-    businessId: string,
-    locationId: string,
-    nameFilters: {
-      medicName?: string;
-      patientName?: string;
-      trainerName?: string;
-      customerName?: string;
-    },
-    resourceType?: string,
-    limit: number = 100,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      const businessLocationId = `${businessId}-${locationId}`;
-
-      let query = 'SELECT * FROM resources WHERE business_location_id = $1';
-      const values = [businessLocationId];
-      let paramCount = 1;
-
-      // Adaugă filtrele pentru nume
-      Object.entries(nameFilters).forEach(([field, value]) => {
-        if (value) {
-          paramCount++;
-          query += ` AND data->>'${field}' ILIKE $${paramCount}`;
-          values.push(`%${value}%`);
-        }
-      });
-
-      if (resourceType) {
-        paramCount++;
-        query += ` AND resource_type = $${paramCount}`;
-        values.push(resourceType);
-      }
-
-      query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-      values.push(limit.toString(), offset.toString());
-
-      const result = await this.resourceRepository.query(query, values);
-      return result;
-    } catch (error) {
-      this.logger.error(
-        `Error querying resources by multiple names from RDS: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to get resources by multiple names from RDS: ${error.message}`,
-      );
-    }
-  }
 
   /**
-   * Get resources by a specific data field value
-   * This searches for resources where data->>'fieldName' = fieldValue or data->'nestedObject'->>'field' = fieldValue
-   * Supports both flat fields (patientId) and nested fields (patient.id)
-   * Useful for finding resources by custom IDs like patientId, medicId, etc.
+   * Build custom filters for TypeORM QueryBuilder (RDS)
+   * This method handles all types of field searches including nested data fields
    */
-  async getResourcesByDataField(
-    businessId: string,
-    locationId: string,
-    dataField: string, // ex: 'patientId', 'patient.id', 'medic.id', etc.
-    fieldValue: string,
-    resourceType?: string,
-    limit: number = 50,
-    offset: number = 0,
-  ): Promise<BaseResource[]> {
-    try {
-      this.logger.log(
-        `Searching resources by data field ${dataField} = "${fieldValue}" for ${businessId}/${locationId}`,
-      );
-
-      let resources: ResourceRecord[];
-
-      if (this.shouldUseCitrusForRead()) {
-        resources = await this.getResourcesByDataFieldFromCitrus(
-          businessId,
-          locationId,
-          dataField,
-          fieldValue,
-          resourceType,
-          limit,
-          offset,
-        );
-      } else {
-        resources = await this.getResourcesByDataFieldFromRDS(
-          businessId,
-          locationId,
-          dataField,
-          fieldValue,
-          resourceType,
-          limit,
-          offset,
-        );
+  private buildCustomFilters(
+    queryBuilder: any,
+    customFilters: any,
+  ): any {
+    // Skip standard filters that are already handled
+    const standardFilters = ['resourceType', 'startDate', 'endDate', 'page', 'limit', 'sortBy', 'sortOrder'];
+    
+    for (const [filterKey, filterValue] of Object.entries(customFilters)) {
+      // Skip standard filters
+      if (standardFilters.includes(filterKey)) {
+        continue;
       }
 
-      this.logger.log(
-        `Found ${resources.length} resources with ${dataField} = "${fieldValue}"`,
-      );
+      // Handle different types of filters
+      if (this.isNestedDataField(filterKey)) {
+        this.addNestedDataFieldFilter(queryBuilder, filterKey, filterValue);
+      } else if (this.isResourceIdField(filterKey)) {
+        this.addResourceIdFilter(queryBuilder, filterValue);
+      } else if (this.isLegacyIdField(filterKey)) {
+        this.addLegacyIdFilter(queryBuilder, filterKey, filterValue);
+      } else if (this.isLegacyNameField(filterKey)) {
+        this.addLegacyNameFilter(queryBuilder, filterKey, filterValue);
+      } else {
+        this.addGenericDataFieldFilter(queryBuilder, filterKey, filterValue);
+      }
+    }
 
-      return resources.map(this.convertToBaseResource);
-    } catch (error) {
-      this.logger.error(
-        `Error searching resources by data field: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to search resources by data field: ${error.message}`,
-      );
+    return queryBuilder;
+  }
+
+  /**
+   * Check if the field is a nested data field (e.g., data.doctor.id)
+   */
+  private isNestedDataField(filterKey: string): boolean {
+    return filterKey.startsWith('data.');
+  }
+
+  /**
+   * Check if the field is a resource ID field
+   */
+  private isResourceIdField(filterKey: string): boolean {
+    return filterKey === 'resource_id' || filterKey === 'resourceId';
+  }
+
+  /**
+   * Check if the field is a legacy ID field (ends with 'Id')
+   */
+  private isLegacyIdField(filterKey: string): boolean {
+    return filterKey.endsWith('Id') && !this.isResourceIdField(filterKey);
+  }
+
+  /**
+   * Check if the field is a legacy name field (ends with 'Name')
+   */
+  private isLegacyNameField(filterKey: string): boolean {
+    return filterKey.endsWith('Name');
+  }
+
+  /**
+   * Add filter for nested data fields (e.g., data.doctor.id, data.treatmentName)
+   */
+  private addNestedDataFieldFilter(queryBuilder: any, filterKey: string, filterValue: any): void {
+    const nestedPath = filterKey.substring(5); // Remove 'data.' prefix
+    const pathParts = nestedPath.split('.');
+    
+    if (pathParts.length === 1) {
+      // Direct data field (e.g., data.treatmentName)
+      this.addNestedFieldFilter(queryBuilder, pathParts[0], filterValue, 'data');
+    } else if (pathParts.length === 2) {
+      // Nested data field (e.g., data.doctor.id)
+      this.addNestedFieldFilter(queryBuilder, pathParts[1], filterValue, 'data', pathParts[0]);
+    } else if (pathParts.length === 3) {
+      // Deeply nested data field (e.g., data.doctor.address.street)
+      this.addNestedFieldFilter(queryBuilder, pathParts[2], filterValue, 'data', pathParts[0], pathParts[1]);
     }
   }
 
   /**
+   * Add filter for resource ID field
+   */
+  private addResourceIdFilter(queryBuilder: any, filterValue: any): void {
+    queryBuilder.andWhere('resource.resourceId = :resourceId', {
+      resourceId: filterValue
+    });
+  }
+
+  /**
+   * Add filter for legacy ID fields (e.g., medicId, patientId)
+   */
+  private addLegacyIdFilter(queryBuilder: any, filterKey: string, filterValue: any): void {
+    const baseField = filterKey.replace('Id', '');
+    
+    // Try resource_id first, then nested data field
+    queryBuilder.andWhere(
+      '(resource.resourceId = :resourceId OR resource.data->:baseField->>:idField = :resourceId)',
+      {
+        resourceId: filterValue,
+        baseField: baseField,
+        idField: 'id'
+      }
+    );
+  }
+
+  /**
+   * Add filter for legacy name fields (e.g., patientName, doctorName)
+   */
+  private addLegacyNameFilter(queryBuilder: any, filterKey: string, filterValue: any): void {
+    const baseField = filterKey.replace('Name', '');
+    
+    // Try flat name field first, then nested name field
+    queryBuilder.andWhere(
+      '(resource.data->>:nameField ILIKE :nameValue OR resource.data->:baseField->>:nestedNameField ILIKE :nameValue)',
+      {
+        nameField: filterKey,
+        nameValue: `%${filterValue}%`,
+        baseField: baseField,
+        nestedNameField: 'name'
+      }
+    );
+  }
+
+  /**
+   * Add filter for generic data fields (exact match)
+   */
+  private addGenericDataFieldFilter(queryBuilder: any, filterKey: string, filterValue: any): void {
+    queryBuilder.andWhere(`resource.data->>:${filterKey} = :${filterKey}Value`, {
+      [filterKey]: filterKey,
+      [`${filterKey}Value`]: filterValue
+    });
+  }
+
+  /**
+   * Add a nested field filter to the query builder
+   * Supports both exact match and partial match (LIKE) based on field type
+   */
+  private addNestedFieldFilter(
+    queryBuilder: any,
+    fieldName: string,
+    fieldValue: any,
+    rootPath: string,
+    ...nestedPaths: string[]
+  ): void {
+    const paramName = `${fieldName}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Build the JSON path for the nested field
+    let jsonPath = `resource.${rootPath}`;
+    for (const path of nestedPaths) {
+      jsonPath += `->'${path}'`;
+    }
+    jsonPath += `->>'${fieldName}'`;
+
+    // Determine if this should be a partial match (LIKE) or exact match
+    const isPartialMatch = this.shouldUsePartialMatch(fieldName, fieldValue);
+    
+    if (isPartialMatch) {
+      queryBuilder.andWhere(`${jsonPath} ILIKE :${paramName}`, {
+        [paramName]: `%${fieldValue}%`
+      });
+    } else {
+      queryBuilder.andWhere(`${jsonPath} = :${paramName}`, {
+        [paramName]: fieldValue
+      });
+    }
+  }
+
+  /**
+   * Determine if a field should use partial matching (LIKE) or exact matching
+   */
+  private shouldUsePartialMatch(fieldName: string, fieldValue: any): boolean {
+    // Use partial match for name fields
+    if (fieldName.toLowerCase().includes('name') || 
+        fieldName.toLowerCase().includes('title') ||
+        fieldName.toLowerCase().includes('description')) {
+      return true;
+    }
+
+    // Use partial match for string values that contain spaces or are longer than 10 characters
+    if (typeof fieldValue === 'string' && (fieldValue.includes(' ') || fieldValue.length > 10)) {
+      return true;
+    }
+
+    // Use exact match for IDs, numbers, and short strings
+    return false;
+  }
+
+  /**
+   * Build custom filters for Citrus SQL queries
+   * This method constructs SQL queries for custom filtering with nested field support
+   */
+  private buildCitrusCustomFilters(
+    query: string,
+    customFilters: any,
+    values: any[],
+    paramCount: number,
+  ): string {
+    let currentParamCount = paramCount;
+    const standardFilters = ['resourceType', 'startDate', 'endDate', 'page', 'limit', 'sortBy', 'sortOrder'];
+    
+    // Iterate through custom filters and add them to the SQL query
+    for (const [filterKey, filterValue] of Object.entries(customFilters)) {
+      // Skip standard filters
+      if (standardFilters.includes(filterKey)) {
+        continue;
+      }
+
+      // Handle different types of filters
+      if (this.isNestedDataField(filterKey)) {
+        const result = this.addCitrusNestedDataFieldFilter(filterKey, filterValue, currentParamCount);
+        query += result.query;
+        values.push(...result.values);
+        currentParamCount += result.paramCount;
+      } else if (this.isResourceIdField(filterKey)) {
+        currentParamCount++;
+        query += ` AND resource_id = $${currentParamCount}`;
+        values.push(filterValue);
+      } else if (this.isLegacyIdField(filterKey)) {
+        const result = this.addCitrusLegacyIdFilter(filterKey, filterValue, currentParamCount);
+        query += result.query;
+        values.push(...result.values);
+        currentParamCount += result.paramCount;
+      } else if (this.isLegacyNameField(filterKey)) {
+        const result = this.addCitrusLegacyNameFilter(filterKey, filterValue, currentParamCount);
+        query += result.query;
+        values.push(...result.values);
+        currentParamCount += result.paramCount;
+      } else {
+        currentParamCount++;
+        query += ` AND data->>'${filterKey}' = $${currentParamCount}`;
+        values.push(filterValue);
+      }
+    }
+
+    return query;
+  }
+
+  /**
+   * Add Citrus filter for nested data fields
+   */
+  private addCitrusNestedDataFieldFilter(filterKey: string, filterValue: any, paramCount: number): {
+    query: string;
+    values: any[];
+    paramCount: number;
+  } {
+    const nestedPath = filterKey.substring(5); // Remove 'data.' prefix
+    const pathParts = nestedPath.split('.');
+    const currentParamCount = paramCount + 1;
+    
+    if (pathParts.length === 1) {
+      // Direct data field (e.g., data.treatmentName)
+      const isPartialMatch = this.shouldUsePartialMatch(pathParts[0], filterValue);
+      if (isPartialMatch) {
+        return {
+          query: ` AND data->>'${pathParts[0]}' ILIKE $${currentParamCount}`,
+          values: [`%${filterValue}%`],
+          paramCount: 1
+        };
+      } else {
+        return {
+          query: ` AND data->>'${pathParts[0]}' = $${currentParamCount}`,
+          values: [filterValue],
+          paramCount: 1
+        };
+      }
+    } else if (pathParts.length === 2) {
+      // Nested data field (e.g., data.doctor.id)
+      const isPartialMatch = this.shouldUsePartialMatch(pathParts[1], filterValue);
+      if (isPartialMatch) {
+        return {
+          query: ` AND data->'${pathParts[0]}'->>'${pathParts[1]}' ILIKE $${currentParamCount}`,
+          values: [`%${filterValue}%`],
+          paramCount: 1
+        };
+      } else {
+        return {
+          query: ` AND data->'${pathParts[0]}'->>'${pathParts[1]}' = $${currentParamCount}`,
+          values: [filterValue],
+          paramCount: 1
+        };
+      }
+    } else if (pathParts.length === 3) {
+      // Deeply nested data field (e.g., data.doctor.address.street)
+      const isPartialMatch = this.shouldUsePartialMatch(pathParts[2], filterValue);
+      if (isPartialMatch) {
+        return {
+          query: ` AND data->'${pathParts[0]}'->'${pathParts[1]}'->>'${pathParts[2]}' ILIKE $${currentParamCount}`,
+          values: [`%${filterValue}%`],
+          paramCount: 1
+        };
+      } else {
+        return {
+          query: ` AND data->'${pathParts[0]}'->'${pathParts[1]}'->>'${pathParts[2]}' = $${currentParamCount}`,
+          values: [filterValue],
+          paramCount: 1
+        };
+      }
+    }
+
+    return { query: '', values: [], paramCount: 0 };
+  }
+
+  /**
+   * Add Citrus filter for legacy ID fields
+   */
+  private addCitrusLegacyIdFilter(filterKey: string, filterValue: any, paramCount: number): {
+    query: string;
+    values: any[];
+    paramCount: number;
+  } {
+    const baseField = filterKey.replace('Id', '');
+    const currentParamCount = paramCount + 2;
+    
+    return {
+      query: ` AND (resource_id = $${currentParamCount - 1} OR data->'${baseField}'->>'id' = $${currentParamCount})`,
+      values: [filterValue, filterValue],
+      paramCount: 2
+    };
+  }
+
+  /**
+   * Add Citrus filter for legacy name fields
+   */
+  private addCitrusLegacyNameFilter(filterKey: string, filterValue: any, paramCount: number): {
+    query: string;
+    values: any[];
+    paramCount: number;
+  } {
+    const baseField = filterKey.replace('Name', '');
+    const currentParamCount = paramCount + 2;
+    
+    return {
+      query: ` AND (data->>'${filterKey}' ILIKE $${currentParamCount - 1} OR data->'${baseField}'->>'name' ILIKE $${currentParamCount})`,
+      values: [`%${filterValue}%`, `%${filterValue}%`],
+      paramCount: 2
+    };
+  }
+
+
+    /**
    * Search resources by business pattern using LIKE operator
    * This searches for resources where business_location_id starts with businessId
    * Useful for finding resources across all locations in a business
    */
-  async searchResourcesByBusinessPattern(
-    businessId: string,
-    resourceType: string,
-    resourceId?: string,
-  ): Promise<ResourceRecord[]> {
-    try {
-      this.logger.debug(
-        `Searching for ${resourceType} resources in business ${businessId} with pattern matching`,
-      );
-
-      if (this.shouldUseCitrusForRead()) {
-        return await this.searchResourcesByBusinessPatternFromCitrus(
-          businessId,
-          resourceType,
-          resourceId,
-        );
-      } else {
-        return await this.searchResourcesByBusinessPatternFromRDS(
-          businessId,
-          resourceType,
-          resourceId,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error searching resources by business pattern: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Get resources by data field from Citrus
-   */
-  private async getResourcesByDataFieldFromCitrus(
-    businessId: string,
-    locationId: string,
-    dataField: string,
-    fieldValue: string,
-    resourceType?: string,
-    limit: number = 50,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      const shardConnection = await this.citrusService.getShardForBusiness(
-        businessId,
-        locationId,
-      );
-      const businessLocationId = `${businessId}-${locationId}`;
-
-      // Create a temporary pool connection for this query
-      const { Pool } = require('pg');
-      const pool = new Pool({
-        connectionString: shardConnection.connectionString,
-        max: 1,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
-      });
-
+    async searchResourcesByBusinessPattern(
+      businessId: string,
+      resourceType: string,
+      resourceId?: string,
+    ): Promise<ResourceRecord[]> {
       try {
-        // Build the JSON path query based on whether it's nested or flat
-        const jsonPath = this.buildJsonPathQuery(dataField);
-        let query = `SELECT * FROM resources WHERE business_location_id = $1 AND ${jsonPath} = $2`;
-        const values = [businessLocationId, fieldValue];
-        let paramCount = 2;
-
-        if (resourceType) {
-          paramCount++;
-          query += ` AND resource_type = $${paramCount}`;
-          values.push(resourceType);
+        this.logger.debug(
+          `Searching for ${resourceType} resources in business ${businessId} with pattern matching`,
+        );
+  
+        if (this.shouldUseCitrusForRead()) {
+          return await this.searchResourcesByBusinessPatternFromCitrus(
+            businessId,
+            resourceType,
+            resourceId,
+          );
+        } else {
+          return await this.searchResourcesByBusinessPatternFromRDS(
+            businessId,
+            resourceType,
+            resourceId,
+          );
         }
-
-        query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-        values.push(limit.toString(), offset.toString());
-
-        const result = await pool.query(query, values);
-        return result.rows;
-      } finally {
-        await pool.end();
+      } catch (error) {
+        this.logger.error(
+          `Error searching resources by business pattern: ${error.message}`,
+        );
+        throw error;
       }
-    } catch (error) {
-      this.logger.error(
-        `Error querying resources by data field from Citrus: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to get resources by data field from Citrus: ${error.message}`,
-      );
     }
-  }
 
-  /**
-   * Get resources by data field from RDS
-   */
-  private async getResourcesByDataFieldFromRDS(
-    businessId: string,
-    locationId: string,
-    dataField: string,
-    fieldValue: string,
-    resourceType?: string,
-    limit: number = 50,
-    offset: number = 0,
-  ): Promise<ResourceRecord[]> {
-    try {
-      const businessLocationId = `${businessId}-${locationId}`;
-
-      // Build the JSON path query based on whether it's nested or flat
-      const jsonPath = this.buildJsonPathQuery(dataField);
-      let query = `SELECT * FROM resources WHERE business_location_id = $1 AND ${jsonPath} = $2`;
-      const values = [businessLocationId, fieldValue];
-      let paramCount = 2;
-
-      if (resourceType) {
-        paramCount++;
-        query += ` AND resource_type = $${paramCount}`;
-        values.push(resourceType);
-      }
-
-      query += ` ORDER BY start_date DESC, created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-      values.push(limit.toString(), offset.toString());
-
-      const result = await this.resourceRepository.query(query, values);
-      return result;
-    } catch (error) {
-      this.logger.error(
-        `Error querying resources by data field from RDS: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to get resources by data field from RDS: ${error.message}`,
-      );
-    }
-  }
-
-  /**
-   * Search resources by business pattern from Citrus
-   */
-  private async searchResourcesByBusinessPatternFromCitrus(
-    businessId: string,
-    resourceType: string,
-    resourceId?: string,
-  ): Promise<ResourceRecord[]> {
-    try {
-      // Use Citrus service to search for resources
-      // This would need to be implemented in Citrus service
-      this.logger.debug(
-        `Searching Citrus for ${resourceType} resources in business ${businessId}`,
-      );
-
-      // For now, return empty array - implement Citrus search logic here
-      this.logger.warn('Citrus search not yet implemented for business pattern search');
-      return [];
-    } catch (error) {
-      this.logger.error(
-        `Error searching Citrus for business pattern: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  /**
+      /**
    * Search resources by business pattern from RDS using LIKE operator
    */
   private async searchResourcesByBusinessPatternFromRDS(
@@ -1487,4 +1304,30 @@ export class ResourceQueryService {
       throw error;
     }
   }
+
+    /**
+   * Search resources by business pattern from Citrus
+   */
+    private async searchResourcesByBusinessPatternFromCitrus(
+      businessId: string,
+      resourceType: string,
+      resourceId?: string,
+    ): Promise<ResourceRecord[]> {
+      try {
+        // Use Citrus service to search for resources
+        // This would need to be implemented in Citrus service
+        this.logger.debug(
+          `Searching Citrus for ${resourceType} resources in business ${businessId}`,
+        );
+  
+        // For now, return empty array - implement Citrus search logic here
+        this.logger.warn('Citrus search not yet implemented for business pattern search');
+        return [];
+      } catch (error) {
+        this.logger.error(
+          `Error searching Citrus for business pattern: ${error.message}`,
+        );
+        throw error;
+      }
+    }
 }
