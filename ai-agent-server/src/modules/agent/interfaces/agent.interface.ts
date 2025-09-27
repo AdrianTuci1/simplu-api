@@ -14,7 +14,7 @@ export interface AgentState {
   message: string;
   sessionId: string;
   source: 'websocket' | 'webhook' | 'cron';
-  role?: 'operator' | 'client_nou' | 'client_existent' | 'webhook';
+  role?: 'operator' | 'client_nou' | 'client_existent' | 'webhook' | 'customer';
   clientSource?: 'meta' | 'twilio' | 'email' | 'web' | 'unknown';
   userCapabilities?: UserCapabilities;
 
@@ -64,6 +64,23 @@ export interface AgentState {
   needsIntrospection?: boolean;
   needsRagUpdate?: boolean;
   introspectionAttempted?: boolean;
+
+  // Operator-specific properties
+  needsFrontendInteraction?: boolean;
+  frontendQueries?: any[];
+  frontendQueryResults?: any[];
+  drafts?: any[];
+  needsDraftCreation?: boolean;
+
+  // Customer-specific properties
+  needsAppServerData?: boolean;
+  appServerRequests?: any[];
+  appServerData?: any;
+  needsDatabaseQuery?: boolean;
+  databaseQueries?: any[];
+  databaseQueryResults?: any[];
+  needsBookingGuidance?: boolean;
+  bookingGuidance?: any;
 
   // Output
   response: string;

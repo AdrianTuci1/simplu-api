@@ -12,6 +12,8 @@ import { MessageDto, AgentResponse } from '@/shared/interfaces/message.interface
 import { SessionService } from '../session/session.service';
 import { ElixirHttpService } from './elixir-http.service';
 import { AgentService } from '../agent/agent.service';
+import { AgentWebSocketHandler } from '../agent/operator/handlers/agent-websocket.handler';
+import { AgentQueryModifier } from '../agent/operator/handlers/agent-query-modifier';
 
 @NestWebSocketGateway({
   cors: true,
@@ -28,7 +30,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   constructor(
     private readonly sessionService: SessionService,
     private readonly elixirHttpService: ElixirHttpService,
-    private readonly agentService: AgentService
+    private readonly agentService: AgentService,
+    private readonly agentWebSocketHandler: AgentWebSocketHandler,
+    private readonly agentQueryModifier: AgentQueryModifier
   ) { }
 
   async handleConnection(client: Socket) {
@@ -278,6 +282,350 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   private generateSessionId(data: MessageDto): string {
     return `${data.businessId}:${data.userId}:${Date.now()}`;
+  }
+
+  // Agent-specific WebSocket handlers
+  @SubscribeMessage('agent_authenticate')
+  async handleAgentAuthentication(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; payload: any }
+  ): Promise<void> {
+    try {
+      console.log('Agent authentication request:', data);
+      
+      const result = await this.agentWebSocketHandler.handleAuthentication(
+        data.sessionId,
+        data.payload
+      );
+      
+      client.send(JSON.stringify({
+        event: 'agent_authenticated',
+        topic: `agent:${data.sessionId}`,
+        payload: result
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent authentication:', error);
+      client.send(JSON.stringify({
+        event: 'agent_auth_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Authentication failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  @SubscribeMessage('agent_execute_command')
+  async handleAgentExecuteCommand(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; payload: any }
+  ): Promise<void> {
+    try {
+      console.log('Agent execute command request:', data);
+      
+      const result = await this.agentWebSocketHandler.handleExecuteCommand(
+        data.sessionId,
+        data.payload
+      );
+      
+      client.send(JSON.stringify({
+        event: 'agent_command_result',
+        topic: `agent:${data.sessionId}`,
+        payload: result
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent command execution:', error);
+      client.send(JSON.stringify({
+        event: 'agent_command_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Command execution failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  @SubscribeMessage('agent_modify_query')
+  async handleAgentModifyQuery(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; payload: any }
+  ): Promise<void> {
+    try {
+      console.log('Agent modify query request:', data);
+      
+      const result = await this.agentWebSocketHandler.handleModifyQuery(
+        data.sessionId,
+        data.payload
+      );
+      
+      client.send(JSON.stringify({
+        event: 'agent_query_modified',
+        topic: `agent:${data.sessionId}`,
+        payload: result
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent query modification:', error);
+      client.send(JSON.stringify({
+        event: 'agent_query_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Query modification failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  @SubscribeMessage('agent_approve_changes')
+  async handleAgentApproveChanges(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; payload: any }
+  ): Promise<void> {
+    try {
+      console.log('Agent approve changes request:', data);
+      
+      const result = await this.agentWebSocketHandler.handleApproveChanges(
+        data.sessionId,
+        data.payload
+      );
+      
+      client.send(JSON.stringify({
+        event: 'agent_changes_approved',
+        topic: `agent:${data.sessionId}`,
+        payload: result
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent changes approval:', error);
+      client.send(JSON.stringify({
+        event: 'agent_approval_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Changes approval failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  @SubscribeMessage('agent_reject_changes')
+  async handleAgentRejectChanges(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; payload: any }
+  ): Promise<void> {
+    try {
+      console.log('Agent reject changes request:', data);
+      
+      const result = await this.agentWebSocketHandler.handleRejectChanges(
+        data.sessionId,
+        data.payload
+      );
+      
+      client.send(JSON.stringify({
+        event: 'agent_changes_rejected',
+        topic: `agent:${data.sessionId}`,
+        payload: result
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent changes rejection:', error);
+      client.send(JSON.stringify({
+        event: 'agent_rejection_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Changes rejection failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  // Query modification handlers
+  @SubscribeMessage('agent_query_modify')
+  async handleAgentQueryModify(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; repositoryType: string; modifications: any }
+  ): Promise<void> {
+    try {
+      console.log('Agent query modify request:', data);
+      
+      const result = await this.agentQueryModifier.modifyQuery(
+        data.sessionId,
+        data.repositoryType,
+        data.modifications
+      );
+      
+      client.send(JSON.stringify({
+        event: 'agent_query_modified',
+        topic: `agent:${data.sessionId}`,
+        payload: result
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent query modification:', error);
+      client.send(JSON.stringify({
+        event: 'agent_query_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Query modification failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  @SubscribeMessage('agent_query_revert')
+  async handleAgentQueryRevert(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; modificationId: string }
+  ): Promise<void> {
+    try {
+      console.log('Agent query revert request:', data);
+      
+      const result = await this.agentQueryModifier.revertQueryModification(
+        data.sessionId,
+        data.modificationId
+      );
+      
+      client.send(JSON.stringify({
+        event: 'agent_query_reverted',
+        topic: `agent:${data.sessionId}`,
+        payload: result
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent query revert:', error);
+      client.send(JSON.stringify({
+        event: 'agent_revert_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Query revert failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  @SubscribeMessage('agent_query_history')
+  async handleAgentQueryHistory(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string }
+  ): Promise<void> {
+    try {
+      console.log('Agent query history request:', data);
+      
+      const history = this.agentQueryModifier.getModificationHistory(data.sessionId);
+      
+      client.send(JSON.stringify({
+        event: 'agent_query_history',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: true,
+          history
+        }
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent query history:', error);
+      client.send(JSON.stringify({
+        event: 'agent_history_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Query history retrieval failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  // Frontend resource request handlers
+  @SubscribeMessage('agent_request_frontend_resources')
+  async handleAgentRequestFrontendResources(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; requestType: string; parameters: any; businessId: string }
+  ): Promise<void> {
+    try {
+      console.log('Agent requesting frontend resources:', data);
+      
+      const result = await this.agentWebSocketHandler.requestFrontendResources(data.sessionId, {
+        sessionId: data.sessionId,
+        requestType: data.requestType,
+        parameters: data.parameters,
+        businessId: data.businessId
+      });
+      
+      client.send(JSON.stringify({
+        event: 'agent_frontend_resources_response',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: result.success,
+          resources: result.resources,
+          message: result.message
+        }
+      }));
+      
+    } catch (error) {
+      console.error('Error handling agent frontend resource request:', error);
+      client.send(JSON.stringify({
+        event: 'agent_frontend_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Frontend resource request failed',
+          error: error.message
+        }
+      }));
+    }
+  }
+
+  @SubscribeMessage('frontend_provide_resources')
+  async handleFrontendProvideResources(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; resources: any; businessId: string }
+  ): Promise<void> {
+    try {
+      console.log('Frontend providing resources:', data);
+      
+      const result = await this.agentWebSocketHandler.handleFrontendResourceResponse(data.sessionId, {
+        sessionId: data.sessionId,
+        resources: data.resources,
+        businessId: data.businessId
+      });
+      
+      client.send(JSON.stringify({
+        event: 'frontend_resources_provided',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: result.success,
+          message: result.message
+        }
+      }));
+      
+    } catch (error) {
+      console.error('Error handling frontend resource provision:', error);
+      client.send(JSON.stringify({
+        event: 'frontend_provision_error',
+        topic: `agent:${data.sessionId}`,
+        payload: {
+          success: false,
+          message: 'Frontend resource provision failed',
+          error: error.message
+        }
+      }));
+    }
   }
 
   private generateMessageId(): string {

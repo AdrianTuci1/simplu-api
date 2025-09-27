@@ -1,5 +1,5 @@
-import { AgentState } from '../../../interfaces/agent.interface';
-import { RagService } from '../../../../rag/rag.service';
+import { AgentState } from '../interfaces/agent.interface';
+import { RagService } from '../../rag/rag.service';
 
 export class DynamicMemoryNode {
   constructor(private ragService: RagService) {}
@@ -33,5 +33,3 @@ export class DynamicMemoryNode {
     }
   }
 }
-
-

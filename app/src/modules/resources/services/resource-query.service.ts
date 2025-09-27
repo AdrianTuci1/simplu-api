@@ -1053,7 +1053,8 @@ export class ResourceQueryService {
     // Use partial match for name fields
     if (fieldName.toLowerCase().includes('name') || 
         fieldName.toLowerCase().includes('title') ||
-        fieldName.toLowerCase().includes('description')) {
+        fieldName.toLowerCase().includes('description') ||
+        fieldName.toLowerCase().includes('type')) {
       return true;
     }
 

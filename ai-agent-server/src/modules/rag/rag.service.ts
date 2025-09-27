@@ -26,6 +26,7 @@ export interface RagSystemInstruction {
   key: string;               // e.g., "dental.operator.request_handling.v1"
   businessType: string;      // 'dental' | 'gym' | 'hotel' | 'general'
   category: string;          // high-level category
+  role: 'operator' | 'customer' | 'general'; // Agent role
   instructionsJson: any;     // arbitrary JSON with rules/playbooks
   version?: string;
   isActive: boolean;
@@ -80,6 +81,72 @@ export class RagService {
         examples: [],
         keywords: [],
         confidence: 0.8
+      }
+    }));
+  }
+
+  // Get instructions for operator agent
+  async getOperatorInstructions(
+    businessType: string,
+    context: any
+  ): Promise<RagInstruction[]> {
+    const systemInstructions = await this.listActiveSystemInstructions(businessType);
+    
+    // Filter for operator-specific instructions
+    const operatorInstructions = systemInstructions.filter(instruction => 
+      instruction.role === 'operator' || instruction.role === 'general'
+    );
+    
+    return operatorInstructions.map(sys => ({
+      instructionId: sys.key,
+      businessType: sys.businessType,
+      category: sys.category,
+      instruction: this.formatOperatorInstruction(sys.instructionsJson),
+      workflow: this.extractOperatorWorkflow(sys.instructionsJson),
+      requiredPermissions: this.extractOperatorPermissions(sys.instructionsJson),
+      apiEndpoints: this.extractOperatorEndpoints(sys.instructionsJson),
+      successCriteria: this.extractOperatorSuccessCriteria(sys.instructionsJson),
+      notificationTemplate: this.extractOperatorNotificationTemplate(sys.instructionsJson),
+      isActive: sys.isActive,
+      createdAt: sys.createdAt,
+      updatedAt: sys.updatedAt,
+      metadata: {
+        examples: this.extractOperatorExamples(sys.instructionsJson),
+        keywords: this.extractOperatorKeywords(sys.instructionsJson),
+        confidence: 0.9
+      }
+    }));
+  }
+
+  // Get instructions for customer agent
+  async getCustomerInstructions(
+    businessType: string,
+    context: any
+  ): Promise<RagInstruction[]> {
+    const systemInstructions = await this.listActiveSystemInstructions(businessType);
+    
+    // Filter for customer-specific instructions
+    const customerInstructions = systemInstructions.filter(instruction => 
+      instruction.role === 'customer' || instruction.role === 'general'
+    );
+    
+    return customerInstructions.map(sys => ({
+      instructionId: sys.key,
+      businessType: sys.businessType,
+      category: sys.category,
+      instruction: this.formatCustomerInstruction(sys.instructionsJson),
+      workflow: this.extractCustomerWorkflow(sys.instructionsJson),
+      requiredPermissions: this.extractCustomerPermissions(sys.instructionsJson),
+      apiEndpoints: this.extractCustomerEndpoints(sys.instructionsJson),
+      successCriteria: this.extractCustomerSuccessCriteria(sys.instructionsJson),
+      notificationTemplate: this.extractCustomerNotificationTemplate(sys.instructionsJson),
+      isActive: sys.isActive,
+      createdAt: sys.createdAt,
+      updatedAt: sys.updatedAt,
+      metadata: {
+        examples: this.extractCustomerExamples(sys.instructionsJson),
+        keywords: this.extractCustomerKeywords(sys.instructionsJson),
+        confidence: 0.85
       }
     }));
   }
@@ -338,5 +405,243 @@ export class RagService {
     }
     
     return sanitized;
+  }
+
+  // Operator-specific extraction methods
+  private formatOperatorInstruction(instructionsJson: any): string {
+    if (typeof instructionsJson === 'string') {
+      return instructionsJson;
+    }
+    
+    if (instructionsJson.routing) {
+      return `Rutează cererile către frontend sau baza de date în funcție de cuvintele cheie: ${JSON.stringify(instructionsJson.routing)}`;
+    }
+    
+    if (instructionsJson.identify_existing) {
+      return `Identifică înregistrările existente folosind câmpurile: ${JSON.stringify(instructionsJson.identify_existing)}`;
+    }
+    
+    return JSON.stringify(instructionsJson);
+  }
+
+  private extractOperatorWorkflow(instructionsJson: any): WorkflowStep[] {
+    const workflow: WorkflowStep[] = [];
+    
+    if (instructionsJson.routing?.reservation_keywords) {
+      workflow.push({
+        step: 1,
+        action: 'identify_reservation_request',
+        description: 'Identifică cererile de rezervare',
+        validation: 'has_reservation_keywords'
+      });
+    }
+    
+    if (instructionsJson.routing?.external_api_keywords) {
+      workflow.push({
+        step: 2,
+        action: 'route_to_external_api',
+        description: 'Rutează către API-uri externe',
+        apiCall: {
+          method: 'POST',
+          endpoint: '/external-api',
+          dataTemplate: '{"message": "{message}", "type": "external_api"}'
+        }
+      });
+    }
+    
+    return workflow;
+  }
+
+  private extractOperatorPermissions(instructionsJson: any): string[] {
+    const permissions = ['agent_access', 'data_query'];
+    
+    if (instructionsJson.routing?.external_api_keywords) {
+      permissions.push('external_api_access');
+    }
+    
+    if (instructionsJson.identify_existing?.resourceTypes) {
+      permissions.push('resource_access');
+    }
+    
+    return permissions;
+  }
+
+  private extractOperatorEndpoints(instructionsJson: any): string[] {
+    const endpoints = [];
+    
+    if (instructionsJson.routing?.external_api_keywords) {
+      endpoints.push('/external-api/sms', '/external-api/email', '/external-api/whatsapp');
+    }
+    
+    if (instructionsJson.identify_existing?.resourceTypes) {
+      endpoints.push('/resources/query', '/resources/update');
+    }
+    
+    return endpoints;
+  }
+
+  private extractOperatorSuccessCriteria(instructionsJson: any): string[] {
+    const criteria = [];
+    
+    if (instructionsJson.defaults?.needsHumanApprovalFor) {
+      criteria.push('human_approval_handled');
+    }
+    
+    if (instructionsJson.fallback?.on_no_rag) {
+      criteria.push('fallback_handled');
+    }
+    
+    return criteria;
+  }
+
+  private extractOperatorNotificationTemplate(instructionsJson: any): string {
+    return 'Operator a procesat cererea cu succes. Rezultat: {result}';
+  }
+
+  private extractOperatorExamples(instructionsJson: any): string[] {
+    const examples = [];
+    
+    if (instructionsJson.routing?.reservation_keywords) {
+      examples.push('Cuvinte cheie pentru rezervări: ' + instructionsJson.routing.reservation_keywords.join(', '));
+    }
+    
+    if (instructionsJson.routing?.resource_update_keywords) {
+      examples.push('Cuvinte cheie pentru actualizări: ' + instructionsJson.routing.resource_update_keywords.join(', '));
+    }
+    
+    return examples;
+  }
+
+  private extractOperatorKeywords(instructionsJson: any): string[] {
+    const keywords = [];
+    
+    if (instructionsJson.routing?.reservation_keywords) {
+      keywords.push(...instructionsJson.routing.reservation_keywords);
+    }
+    
+    if (instructionsJson.routing?.resource_update_keywords) {
+      keywords.push(...instructionsJson.routing.resource_update_keywords);
+    }
+    
+    if (instructionsJson.routing?.external_api_keywords) {
+      keywords.push(...instructionsJson.routing.external_api_keywords);
+    }
+    
+    return keywords;
+  }
+
+  // Customer-specific extraction methods
+  private formatCustomerInstruction(instructionsJson: any): string {
+    if (typeof instructionsJson === 'string') {
+      return instructionsJson;
+    }
+    
+    if (instructionsJson.identify_existing) {
+      return `Identifică clienții existenți folosind câmpurile: ${JSON.stringify(instructionsJson.identify_existing)}`;
+    }
+    
+    if (instructionsJson.on_not_found) {
+      return `Pentru clienți noi, colectează câmpurile: ${JSON.stringify(instructionsJson.on_not_found)}`;
+    }
+    
+    return JSON.stringify(instructionsJson);
+  }
+
+  private extractCustomerWorkflow(instructionsJson: any): WorkflowStep[] {
+    const workflow: WorkflowStep[] = [];
+    
+    if (instructionsJson.identify_existing?.probe_fields) {
+      workflow.push({
+        step: 1,
+        action: 'identify_existing_customer',
+        description: 'Identifică clienții existenți',
+        validation: 'has_customer_fields'
+      });
+    }
+    
+    if (instructionsJson.on_not_found?.collect_fields) {
+      workflow.push({
+        step: 2,
+        action: 'collect_customer_data',
+        description: 'Colectează datele clientului nou',
+        validation: 'has_required_fields'
+      });
+    }
+    
+    return workflow;
+  }
+
+  private extractCustomerPermissions(instructionsJson: any): string[] {
+    const permissions = ['customer_access', 'booking_access'];
+    
+    if (instructionsJson.identify_existing?.resourceTypes) {
+      permissions.push('customer_lookup');
+    }
+    
+    if (instructionsJson.on_not_found?.collect_fields) {
+      permissions.push('customer_creation');
+    }
+    
+    return permissions;
+  }
+
+  private extractCustomerEndpoints(instructionsJson: any): string[] {
+    const endpoints = [];
+    
+    if (instructionsJson.identify_existing?.resourceTypes) {
+      endpoints.push('/customers/search', '/customers/lookup');
+    }
+    
+    if (instructionsJson.on_not_found?.collect_fields) {
+      endpoints.push('/customers/create', '/bookings/create');
+    }
+    
+    return endpoints;
+  }
+
+  private extractCustomerSuccessCriteria(instructionsJson: any): string[] {
+    const criteria = [];
+    
+    if (instructionsJson.identify_existing?.probe_fields) {
+      criteria.push('customer_identified');
+    }
+    
+    if (instructionsJson.on_not_found?.collect_fields) {
+      criteria.push('customer_data_collected');
+    }
+    
+    return criteria;
+  }
+
+  private extractCustomerNotificationTemplate(instructionsJson: any): string {
+    return 'Client a fost procesat cu succes. Următorul pas: {next_step}';
+  }
+
+  private extractCustomerExamples(instructionsJson: any): string[] {
+    const examples = [];
+    
+    if (instructionsJson.identify_existing?.probe_fields) {
+      examples.push('Câmpuri pentru identificare: ' + instructionsJson.identify_existing.probe_fields.join(', '));
+    }
+    
+    if (instructionsJson.on_not_found?.collect_fields) {
+      examples.push('Câmpuri pentru clienți noi: ' + instructionsJson.on_not_found.collect_fields.join(', '));
+    }
+    
+    return examples;
+  }
+
+  private extractCustomerKeywords(instructionsJson: any): string[] {
+    const keywords = [];
+    
+    if (instructionsJson.identify_existing?.probe_fields) {
+      keywords.push(...instructionsJson.identify_existing.probe_fields);
+    }
+    
+    if (instructionsJson.on_not_found?.collect_fields) {
+      keywords.push(...instructionsJson.on_not_found.collect_fields);
+    }
+    
+    return keywords;
   }
 } 
