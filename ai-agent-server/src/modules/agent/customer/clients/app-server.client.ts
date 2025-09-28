@@ -47,7 +47,7 @@ export class AppServerClient {
   private readonly appServerUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.appServerUrl = this.configService.get<string>('APP_SERVER_URL') || 'http://localhost:3001';
+    this.appServerUrl = this.configService.get<string>('APP_SERVER_URL') || 'http://localhost:30000';
     
     this.httpClient = axios.create({
       baseURL: this.appServerUrl,

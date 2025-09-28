@@ -192,14 +192,33 @@ defmodule NotificationHubWeb.MessageChannel do
   def handle_info(%Phoenix.Socket.Broadcast{event: "new_message", payload: ai_response}, socket) do
     Logger.info("Received AI response from AI Agent Server: #{inspect(ai_response)}")
 
-    # Trimite răspunsul AI către clientul WebSocket
-    push(socket, "new_message", %{
-      responseId: ai_response["responseId"] || ai_response["messageId"],
-      message: ai_response["message"] || ai_response["content"],
-      timestamp: ai_response["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601(),
-      sessionId: ai_response["sessionId"],
-      actions: ai_response["actions"] || []
-    })
+    # Check if this is frontend data
+    response_type = ai_response["type"]
+
+    case response_type do
+      "frontend_data" ->
+        Logger.info("Received frontend data: #{inspect(ai_response)}")
+        # Trimite datele frontend către clientul WebSocket
+        push(socket, "frontend_data_available", %{
+          messageId: ai_response["messageId"],
+          message: ai_response["message"],
+          timestamp: ai_response["timestamp"],
+          sessionId: ai_response["sessionId"],
+          businessId: ai_response["businessId"],
+          userId: ai_response["userId"],
+          type: "frontend_data",
+          frontendData: ai_response["frontendData"]
+        })
+      _ ->
+        # Trimite răspunsul AI către clientul WebSocket
+        push(socket, "new_message", %{
+          responseId: ai_response["responseId"] || ai_response["messageId"],
+          message: ai_response["message"] || ai_response["content"],
+          timestamp: ai_response["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601(),
+          sessionId: ai_response["sessionId"],
+          actions: ai_response["actions"] || []
+        })
+    end
 
     {:noreply, socket}
   end
@@ -216,6 +235,110 @@ defmodule NotificationHubWeb.MessageChannel do
       timestamp: ai_response["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601(),
       sessionId: ai_response["sessionId"],
       actions: ai_response["actions"] || []
+    })
+
+    {:noreply, socket}
+  end
+
+  # Handler pentru datele frontend primite de la AI Agent Server
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "frontend_data_available", payload: frontend_data}, socket) do
+    Logger.info("Received frontend data broadcast: #{inspect(frontend_data)}")
+
+    # Trimite datele frontend către clientul WebSocket
+    push(socket, "frontend_data_available", %{
+      messageId: frontend_data["messageId"],
+      message: frontend_data["message"],
+      timestamp: frontend_data["timestamp"],
+      sessionId: frontend_data["sessionId"],
+      businessId: frontend_data["businessId"],
+      userId: frontend_data["userId"],
+      type: "frontend_data",
+      frontendData: frontend_data["frontendData"]
+    })
+
+    {:noreply, socket}
+  end
+
+  # Handler pentru draft-uri create
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "draft_created", payload: draft_data}, socket) do
+    Logger.info("Received draft creation broadcast: #{inspect(draft_data)}")
+
+    # Trimite datele draft către clientul WebSocket
+    push(socket, "draft_created", %{
+      messageId: draft_data["messageId"],
+      message: draft_data["message"],
+      timestamp: draft_data["timestamp"],
+      sessionId: draft_data["sessionId"],
+      businessId: draft_data["businessId"],
+      locationId: draft_data["locationId"],
+      userId: draft_data["userId"],
+      type: "draft_created",
+      draftData: draft_data["draftData"]
+    })
+
+    {:noreply, socket}
+  end
+
+  # Handler pentru draft-uri actualizate
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "draft_updated", payload: draft_data}, socket) do
+    Logger.info("Received draft update broadcast: #{inspect(draft_data)}")
+
+    # Trimite datele draft către clientul WebSocket
+    push(socket, "draft_updated", %{
+      messageId: draft_data["messageId"],
+      message: draft_data["message"],
+      timestamp: draft_data["timestamp"],
+      sessionId: draft_data["sessionId"],
+      businessId: draft_data["businessId"],
+      locationId: draft_data["locationId"],
+      userId: draft_data["userId"],
+      type: "draft_updated",
+      draftData: draft_data["draftData"]
+    })
+
+    {:noreply, socket}
+  end
+
+  # Handler pentru draft-uri șterse
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "draft_deleted", payload: draft_data}, socket) do
+    Logger.info("Received draft deletion broadcast: #{inspect(draft_data)}")
+
+    # Trimite datele draft către clientul WebSocket
+    push(socket, "draft_deleted", %{
+      messageId: draft_data["messageId"],
+      message: draft_data["message"],
+      timestamp: draft_data["timestamp"],
+      sessionId: draft_data["sessionId"],
+      businessId: draft_data["businessId"],
+      locationId: draft_data["locationId"],
+      userId: draft_data["userId"],
+      type: "draft_deleted",
+      draftData: draft_data["draftData"]
+    })
+
+    {:noreply, socket}
+  end
+
+  # Handler pentru listarea draft-urilor
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "drafts_listed", payload: draft_data}, socket) do
+    Logger.info("Received draft listing broadcast: #{inspect(draft_data)}")
+
+    # Trimite datele draft către clientul WebSocket
+    push(socket, "drafts_listed", %{
+      messageId: draft_data["messageId"],
+      message: draft_data["message"],
+      timestamp: draft_data["timestamp"],
+      sessionId: draft_data["sessionId"],
+      businessId: draft_data["businessId"],
+      locationId: draft_data["locationId"],
+      userId: draft_data["userId"],
+      type: "drafts_listed",
+      draftData: draft_data["draftData"]
     })
 
     {:noreply, socket}

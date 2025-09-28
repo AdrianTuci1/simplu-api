@@ -23,6 +23,9 @@ defmodule NotificationHubWeb.Router do
     # Endpoint for receiving AI responses from ai-agent-server
     post "/ai-responses", AiResponsesController, :create
 
+    # Endpoint for receiving frontend data requests from ai-agent-server
+    post "/frontend-data-request", FrontendDataController, :request_data
+
     # Endpoint for receiving resource notifications from resources-server
     post "/notifications", NotificationsController, :create
 

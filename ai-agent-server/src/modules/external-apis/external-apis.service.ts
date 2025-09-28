@@ -49,7 +49,17 @@ export class ExternalApisService {
     message: string,
     businessId: string
   ): Promise<any> {
-    const metaClient = await this.getMetaClient(businessId);
+    let metaClient;
+    try {
+      metaClient = await this.getMetaClient(businessId);
+    } catch (credentialsError) {
+      console.warn(`⚠️ Meta credentials not found for business ${businessId}:`, credentialsError.message);
+      return {
+        success: false,
+        error: 'Meta credentials not configured',
+        data: null
+      };
+    }
     
     try {
       const response = await metaClient.post('/messages', {
@@ -64,12 +74,27 @@ export class ExternalApisService {
         messageId: response.data.messages[0].id,
         data: response.data
       };
-    } catch (error) {
-      console.error('Meta API error:', error);
+    } catch (error: any) {
+      console.error('Meta API error:', error.message);
       return {
         success: false,
-        error: error.response?.data?.error?.message || error.message
+        error: error.response?.data?.error?.message || error.message,
+        data: null
       };
+    } finally {
+      // Clean up client resources
+      if (metaClient) {
+        try {
+          if (metaClient.defaults.httpAgent) {
+            metaClient.defaults.httpAgent.destroy();
+          }
+          if (metaClient.defaults.httpsAgent) {
+            metaClient.defaults.httpsAgent.destroy();
+          }
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      }
     }
   }
 
@@ -122,8 +147,9 @@ export class ExternalApisService {
     businessId: string
   ): Promise<any> {
     // Prefer AWS SNS for SMS sending (our shared credentials)
+    let snsClient;
     try {
-      const snsClient = new SNSClient({});
+      snsClient = new SNSClient({});
       const response = await snsClient.send(
         new PublishCommand({
           PhoneNumber: to,
@@ -133,7 +159,6 @@ export class ExternalApisService {
           },
         })
       );
-      try { snsClient.destroy(); } catch {}
 
       return {
         success: true,
@@ -141,7 +166,7 @@ export class ExternalApisService {
         data: response,
       };
     } catch (snsError: any) {
-      console.error('AWS SNS SMS error, attempting Twilio fallback:', snsError?.message || snsError);
+      console.warn('AWS SNS SMS error, attempting Twilio fallback:', snsError?.message || snsError);
       // Fallback to Twilio only if credentials exist for business
       try {
         const twilioClient = await this.getTwilioClient(businessId);
@@ -159,13 +184,23 @@ export class ExternalApisService {
           };
         }
       } catch (twilioError: any) {
-        console.error('Twilio fallback failed:', twilioError?.message || twilioError);
+        console.warn('Twilio fallback failed:', twilioError?.message || twilioError);
       }
 
       return {
         success: false,
-        error: snsError?.message || 'Failed to send SMS via AWS SNS and Twilio fallback',
+        error: 'SMS credentials not configured or API unavailable',
+        data: null
       };
+    } finally {
+      // Clean up SNS client resources
+      if (snsClient) {
+        try {
+          snsClient.destroy();
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      }
     }
   }
 
@@ -402,7 +437,7 @@ export class ExternalApisService {
     }
     const { default: axios } = await import('axios');
     // Use default Node agents (no keep-alive pooling) for ephemeral requests
-    return axios.create({
+    const client = axios.create({
       baseURL: 'https://graph.facebook.com/v18.0',
       headers: {
         'Authorization': `Bearer ${credentials.accessToken}`,
@@ -411,6 +446,22 @@ export class ExternalApisService {
       timeout: 30000,
       maxRedirects: 3
     });
+    
+    // Ensure client is properly disposed after use to prevent memory leaks
+    const originalRequest = client.request;
+    client.request = function(config) {
+      return originalRequest.call(this, config).finally(() => {
+        // Clean up any resources
+        if (client.defaults.httpAgent) {
+          client.defaults.httpAgent.destroy();
+        }
+        if (client.defaults.httpsAgent) {
+          client.defaults.httpsAgent.destroy();
+        }
+      });
+    };
+    
+    return client;
   }
 
   private async getTwilioClient(businessId: string): Promise<any> {

@@ -5,11 +5,8 @@ import { BusinessInfoModule } from '../../business-info/business-info.module';
 import { RagModule } from '../../rag/rag.module';
 import { SessionModule } from '../../session/session.module';
 import { WebSocketModule } from '../../websocket/websocket.module';
-import { ResourcesModule } from '../../resources/resources.module';
 import { ExternalApisModule } from '../../external-apis/external-apis.module';
 import { ExternalApisService } from '../../external-apis/external-apis.service';
-import { AgentWebSocketHandler } from './handlers/agent-websocket.handler';
-import { AgentQueryModifier } from './handlers/agent-query-modifier';
 
 @Module({
   imports: [
@@ -18,14 +15,11 @@ import { AgentQueryModifier } from './handlers/agent-query-modifier';
     RagModule,
     SessionModule,
     forwardRef(() => WebSocketModule),
-    ResourcesModule,
     // Optionally include ExternalApisModule; otherwise provide a lightweight mock
     ...(process.env.DISABLE_EXTERNAL_APIS === 'true' ? [] : [ExternalApisModule]),
   ],
   providers: [
     OperatorAgentService,
-    AgentWebSocketHandler,
-    AgentQueryModifier,
     // When external APIs are disabled, inject a minimal mock to satisfy dependencies
     ...(process.env.DISABLE_EXTERNAL_APIS === 'true'
       ? [{
@@ -39,6 +33,6 @@ import { AgentQueryModifier } from './handlers/agent-query-modifier';
         }]
       : []),
   ],
-  exports: [OperatorAgentService, AgentWebSocketHandler, AgentQueryModifier],
+  exports: [OperatorAgentService],
 })
 export class OperatorAgentModule {}

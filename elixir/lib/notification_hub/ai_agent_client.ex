@@ -78,4 +78,110 @@ defmodule NotificationHub.AiAgentClient do
         {:error, %{success: false, error: error}}
     end
   end
+
+  @doc """
+  Handle frontend data from AI Agent Server
+  """
+  def handle_frontend_data(tenant_id, frontend_data) do
+    try do
+      Logger.info("=== HANDLING FRONTEND DATA ===")
+      Logger.info("Tenant ID: #{tenant_id}")
+      Logger.info("Frontend data: #{inspect(frontend_data)}")
+
+      # Extract frontend data details
+      request_type = frontend_data["requestType"]
+      resources = frontend_data["resources"]
+      parameters = frontend_data["parameters"] || %{}
+      timestamp = frontend_data["timestamp"]
+
+      Logger.info("Request type: #{request_type}")
+      Logger.info("Resources: #{inspect(resources)}")
+      Logger.info("Parameters: #{inspect(parameters)}")
+
+      # Broadcast frontend data to WebSocket clients
+      channel_topic = "messages:#{tenant_id}"
+
+      broadcast_payload = %{
+        messageId: generate_message_id(),
+        message: "Frontend data retrieved: #{request_type}",
+        timestamp: timestamp || DateTime.utc_now() |> DateTime.to_iso8601(),
+        sessionId: frontend_data["sessionId"],
+        businessId: tenant_id,
+        userId: frontend_data["userId"] || "system",
+        type: "frontend_data",
+        frontendData: %{
+          requestType: request_type,
+          parameters: parameters,
+          resources: resources,
+          timestamp: timestamp
+        }
+      }
+
+      Logger.info("Broadcasting frontend data: #{inspect(broadcast_payload)}")
+
+      # Broadcast to WebSocket channel
+      NotificationHubWeb.Endpoint.broadcast(channel_topic, "frontend_data_available", broadcast_payload)
+
+      Logger.info("Successfully broadcasted frontend data to channel: #{channel_topic}")
+      {:ok, broadcast_payload}
+
+    rescue
+      error ->
+        Logger.error("Error handling frontend data: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Handle draft operations from AI Agent Server
+  """
+  def handle_draft_operation(tenant_id, draft_data) do
+    try do
+      Logger.info("=== HANDLING DRAFT OPERATION ===")
+      Logger.info("Tenant ID: #{tenant_id}")
+      Logger.info("Draft data: #{inspect(draft_data)}")
+
+      # Extract draft operation details
+      operation_type = draft_data["type"]
+      draft_info = draft_data["draftData"]
+
+      Logger.info("Operation type: #{operation_type}")
+      Logger.info("Draft info: #{inspect(draft_info)}")
+
+      # Broadcast draft operation to WebSocket clients
+      channel_topic = "messages:#{tenant_id}"
+
+      broadcast_payload = %{
+        messageId: generate_message_id(),
+        message: "Draft operation: #{operation_type}",
+        timestamp: draft_info["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601(),
+        sessionId: draft_data["sessionId"],
+        businessId: tenant_id,
+        locationId: draft_info["locationId"] || "default",
+        userId: draft_data["userId"] || "system",
+        type: operation_type,
+        draftData: draft_info
+      }
+
+      Logger.info("Broadcasting draft operation: #{inspect(broadcast_payload)}")
+
+      # Broadcast to WebSocket channel
+      NotificationHubWeb.Endpoint.broadcast(channel_topic, operation_type, broadcast_payload)
+
+      Logger.info("Successfully broadcasted draft operation to channel: #{channel_topic}")
+      {:ok, broadcast_payload}
+
+    rescue
+      error ->
+        Logger.error("Error handling draft operation: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  # Helper function to generate message ID
+  defp generate_message_id do
+    timestamp = DateTime.utc_now() |> DateTime.to_unix()
+    random = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
+    "msg_#{timestamp}_#{random}"
+  end
 end

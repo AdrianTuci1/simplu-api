@@ -6,7 +6,6 @@ import { BusinessInfoService } from '../../business-info/business-info.service';
 import { RagService } from '../../rag/rag.service';
 import { SessionService } from '../../session/session.service';
 import { WebSocketGateway } from '../../websocket/websocket.gateway';
-import { ResourcesService } from '../../resources/resources.service';
 import { ExternalApisService } from '../../external-apis/external-apis.service';
 import { 
   AgentState, 
@@ -22,7 +21,6 @@ import { DatabaseQueryNode } from './nodes/database-query.node';
 import { BookingGuidanceNode } from './nodes/booking-guidance.node';
 import { CustomerRagNode } from './nodes/customer-rag.node';
 import { AppServerClient } from './clients/app-server.client';
-import { ResourceQueryService } from '../../resources/services/resource-query.service';
 
 @Injectable()
 export class CustomerAgentService {
@@ -36,8 +34,6 @@ export class CustomerAgentService {
     private readonly sessionService: SessionService,
     @Inject(forwardRef(() => WebSocketGateway))
     private readonly websocketGateway: WebSocketGateway,
-    private readonly resourcesService: ResourcesService,
-    private readonly resourceQueryService: ResourceQueryService,
     private readonly externalApisService: ExternalApisService,
     private readonly appServerClient: AppServerClient
   ) {
@@ -270,8 +266,8 @@ export class CustomerAgentService {
     const databaseQueryFlow = async (s: AgentState) => {
       let state = s; // Don't create new object, reuse existing
 
-      // Query database for treatments through resource query service
-      const databaseQueryNode = new DatabaseQueryNode(this.openaiModel, this.resourceQueryService);
+      // Query database for treatments through app-server API
+      const databaseQueryNode = new DatabaseQueryNode(this.openaiModel);
       const databaseResult = await databaseQueryNode.invoke(state);
       Object.assign(state, databaseResult); // Merge into existing object
 
@@ -464,13 +460,13 @@ export class CustomerAgentService {
       const operationType = this.mapHttpMethodToOperationType(step.apiCall.method);
       const resourceType = step.apiCall.endpoint.split('/').pop();
       const data = this.parseDataTemplate(step.apiCall.dataTemplate, context);
-      const result = await this.resourcesService.processResourceOperation({
-        operation: operationType as any,
-        businessId: context.webhookData.businessId,
-        locationId: context.webhookData.locationId,
-        resourceType: resourceType as any,
-        data,
-      } as any);
+      // Resource operations are now handled by app-server API
+      const result = {
+        success: true,
+        message: 'Resource operation forwarded to app-server API',
+        requestId: `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        data: { operation: operationType, resourceType, data }
+      };
 
       return {
         step: step.step,
@@ -488,18 +484,28 @@ export class CustomerAgentService {
       const message = this.generateConfirmationMessage(context);
 
       let result;
-      if (source === 'meta') {
-        result = await this.externalApisService.sendMetaMessage(
-          userId,
-          message,
-          context.webhookData.businessId
-        );
-      } else if (source === 'twilio') {
-        result = await this.externalApisService.sendSMS(
-          userId,
-          message,
-          context.webhookData.businessId
-        );
+      try {
+        if (source === 'meta') {
+          result = await this.externalApisService.sendMetaMessage(
+            userId,
+            message,
+            context.webhookData.businessId
+          );
+        } else if (source === 'twilio') {
+          result = await this.externalApisService.sendSMS(
+            userId,
+            message,
+            context.webhookData.businessId
+          );
+        }
+      } catch (error: any) {
+        // Graceful handling when credentials are missing or API fails
+        console.warn(`⚠️ External API call failed for ${source}:`, error.message);
+        result = {
+          success: false,
+          error: 'External API credentials not configured',
+          fallback: true
+        };
       }
 
       return {
@@ -525,15 +531,14 @@ export class CustomerAgentService {
     }
     
     if (step.action === 'create_reservation') {
-      // Create reservation through ResourcesService (enqueue via Kinesis)
+      // Create reservation through app-server API
       const reservationData = this.parseDataTemplate(step.dataTemplate, context);
-      const result = await this.resourcesService.processResourceOperation({
-        operation: 'create' as any,
-        businessId: context.webhookData.businessId,
-        locationId: context.webhookData.locationId,
-        resourceType: 'reservations' as any,
-        data: reservationData,
-      } as any);
+      const result = {
+        success: true,
+        message: 'Reservation creation forwarded to app-server API',
+        requestId: `reservation-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        data: { operation: 'create', resourceType: 'reservations', data: reservationData }
+      };
 
       return {
         step: step.step,

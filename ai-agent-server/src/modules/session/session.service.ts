@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, ScanCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { Session, Message } from '@/shared/interfaces/session.interface';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
@@ -14,6 +14,8 @@ export class SessionService {
     userId: string,
     businessType: string
   ): Promise<Session> {
+    console.log(`🔧 SessionService: Creating session for businessId=${businessId}, userId=${userId}`);
+    
     // Încearcă să folosească crypto.randomUUID dacă este disponibil
     let sessionId: string;
     if (typeof global !== 'undefined' && global.crypto?.randomUUID) {
@@ -38,10 +40,17 @@ export class SessionService {
       }
     };
 
-    await this.dynamoClient.send(new PutItemCommand({
-      TableName: tableNames.sessions,
-      Item: marshall(session)
-    }));
+    try {
+      console.log(`🔧 SessionService: Saving session to DynamoDB table: ${tableNames.sessions}`);
+      await this.dynamoClient.send(new PutItemCommand({
+        TableName: tableNames.sessions,
+        Item: marshall(session)
+      }));
+      console.log(`✅ SessionService: Session created successfully: ${sessionId}`);
+    } catch (error) {
+      console.error(`❌ SessionService: Failed to create session:`, error);
+      throw error;
+    }
 
     return session;
   }
@@ -85,15 +94,17 @@ export class SessionService {
         // If GSI doesn't exist, fall back to scan (less efficient but works)
         console.warn('GSI not available, falling back to scan for active session lookup');
         
-        const scanResult = await this.dynamoClient.send(new QueryCommand({
+        const scanResult = await this.dynamoClient.send(new ScanCommand({
           TableName: tableNames.sessions,
-          FilterExpression: 'businessId = :businessId AND userId = :userId AND status = :status',
+          FilterExpression: 'businessId = :businessId AND userId = :userId AND #status = :status',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
           ExpressionAttributeValues: marshall({
             ':businessId': businessId,
             ':userId': userId,
             ':status': 'active'
           }),
-          ScanIndexForward: false,
           Limit: 1
         }));
 
@@ -178,32 +189,79 @@ export class SessionService {
   }
 
   async saveMessage(message: Message): Promise<void> {
-    await this.dynamoClient.send(new PutItemCommand({
-      TableName: tableNames.messages,
-      Item: marshall(message)
-    }));
+    try {
+      console.log(`🔧 SessionService: Saving message to DynamoDB table: ${tableNames.messages}`);
+      console.log(`🔧 SessionService: Message details - sessionId: ${message.sessionId}, userId: ${message.userId}`);
+      
+      await this.dynamoClient.send(new PutItemCommand({
+        TableName: tableNames.messages,
+        Item: marshall(message)
+      }));
 
-    // Actualizare timestamp ultimului mesaj în sesiune
-    await this.updateSession(message.sessionId, {
-      lastMessageAt: message.timestamp
-    });
+      // Actualizare timestamp ultimului mesaj în sesiune
+      await this.updateSession(message.sessionId, {
+        lastMessageAt: message.timestamp
+      });
+      
+      console.log(`✅ SessionService: Message saved successfully`);
+    } catch (error) {
+      console.error(`❌ SessionService: Failed to save message:`, error);
+      throw error;
+    }
   }
 
   async getSessionMessages(sessionId: string, limit: number = 50): Promise<Message[]> {
     try {
-      const result = await this.dynamoClient.send(new QueryCommand({
+      console.log(`🔧 SessionService: Getting messages for sessionId: ${sessionId}`);
+      
+      // Use ScanCommand to avoid schema issues completely
+      const result = await this.dynamoClient.send(new ScanCommand({
         TableName: tableNames.messages,
-        KeyConditionExpression: 'sessionId = :sessionId',
+        FilterExpression: 'sessionId = :sessionId',
         ExpressionAttributeValues: marshall({
           ':sessionId': sessionId
         }),
-        ScanIndexForward: false, // Cele mai recente primele
         Limit: limit
       }));
 
-      return result.Items ? result.Items.map(item => unmarshall(item) as Message) : [];
+      const messages = result.Items ? result.Items.map(item => unmarshall(item) as Message) : [];
+      console.log(`✅ SessionService: Found ${messages.length} messages`);
+      return messages;
     } catch (error) {
       console.error('Error getting session messages:', error);
+      console.log('🔧 SessionService: Returning empty array as fallback');
+      return [];
+    }
+  }
+
+  async getSessionHistoryForUser(businessId: string, userId: string, limit: number = 20): Promise<Session[]> {
+    try {
+      console.log(`🔧 SessionService: Getting session history for businessId=${businessId}, userId=${userId}`);
+      
+      // Use ScanCommand to get all sessions for this user in this business
+      // Since we only have partition key (sessionId), we need to scan the entire table
+      const result = await this.dynamoClient.send(new ScanCommand({
+        TableName: tableNames.sessions,
+        FilterExpression: 'businessId = :businessId AND userId = :userId',
+        ExpressionAttributeValues: marshall({
+          ':businessId': businessId,
+          ':userId': userId
+        }),
+        Limit: limit * 2 // Get more items to account for filtering
+      }));
+
+      const sessions = result.Items ? result.Items.map(item => unmarshall(item) as Session) : [];
+      
+      // Sort by createdAt descending (most recent first)
+      sessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      // Return only the requested limit
+      const limitedSessions = sessions.slice(0, limit);
+      
+      console.log(`✅ SessionService: Found ${limitedSessions.length} sessions in history`);
+      return limitedSessions;
+    } catch (error) {
+      console.error('Error getting session history:', error);
       return [];
     }
   }

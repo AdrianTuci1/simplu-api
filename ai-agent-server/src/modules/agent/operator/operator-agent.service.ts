@@ -6,12 +6,10 @@ import { BusinessInfoService } from '../../business-info/business-info.service';
 import { RagService } from '../../rag/rag.service';
 import { SessionService } from '../../session/session.service';
 import { WebSocketGateway } from '../../websocket/websocket.gateway';
-import { ResourcesService } from '../../resources/resources.service';
 import { ExternalApisService } from '../../external-apis/external-apis.service';
 import { 
   AgentState, 
-  Intent, 
-
+  Intent
 } from '../interfaces/agent.interface';
 import { MessageDto, AgentResponse } from '@/shared/interfaces/message.interface';
 import { DynamicMemoryNode } from '../shared/dynamic-memory.node';
@@ -21,7 +19,6 @@ import { OperatorResponseNode } from './nodes/operator-response.node';
 import { OperatorRagNode } from './nodes/operator-rag.node';
 import { AgentWebSocketHandler } from './handlers/agent-websocket.handler';
 import { AgentQueryModifier } from './handlers/agent-query-modifier';
-import { ResourceQueryService } from '../../resources/services/resource-query.service';
 
 @Injectable()
 export class OperatorAgentService {
@@ -33,11 +30,6 @@ export class OperatorAgentService {
     private readonly businessInfoService: BusinessInfoService,
     private readonly ragService: RagService,
     private readonly sessionService: SessionService,
-    @Inject(forwardRef(() => WebSocketGateway))
-    private readonly websocketGateway: WebSocketGateway,
-    private readonly resourcesService: ResourcesService,
-    private readonly resourceQueryService: ResourceQueryService,
-    private readonly externalApisService: ExternalApisService,
     private readonly agentWebSocketHandler: AgentWebSocketHandler,
     private readonly agentQueryModifier: AgentQueryModifier
   ) {
@@ -173,9 +165,9 @@ export class OperatorAgentService {
       const frontendResult = await frontendQueryNode.invoke(state);
       Object.assign(state, frontendResult); // Merge into existing object
 
-      // If we need frontend interaction, simulate getting data from frontend
+      // If we need frontend interaction, retrieve data from frontend via WebSocket
       if (state.needsFrontendInteraction && state.frontendQueries) {
-        state.frontendQueryResults = await this.simulateFrontendDataRetrieval(state.frontendQueries);
+        state.frontendQueryResults = await this.retrieveFrontendData(state.frontendQueries, state.businessId, state.sessionId, state.locationId);
       }
 
       return state;
@@ -376,20 +368,62 @@ export class OperatorAgentService {
     }, 30000); // Check every 30 seconds
   }
 
-  // Simulate frontend data retrieval (in real implementation, this would call the frontend)
-  private async simulateFrontendDataRetrieval(frontendQueries: any[]): Promise<any[]> {
-    console.log('Simulating frontend data retrieval for queries:', frontendQueries);
+  // Real frontend data retrieval via WebSocket
+  private async retrieveFrontendData(frontendQueries: any[], businessId: string, sessionId: string, locationId: string = 'default'): Promise<any[]> {
+    console.log('Requesting frontend data via WebSocket for queries:', frontendQueries);
     
-    // In a real implementation, this would make HTTP requests to the frontend
-    // or use WebSocket communication to get data from the application
-    return frontendQueries.map(query => ({
-      query,
-      data: {
-        results: `Simulated data for ${query.type} on ${query.repository}`,
-        count: Math.floor(Math.random() * 100),
-        timestamp: new Date().toISOString()
+    const results = [];
+    
+    for (const query of frontendQueries) {
+      try {
+        // Request data from frontend via WebSocket
+        const result = await this.agentWebSocketHandler.requestFrontendResources(sessionId, {
+          sessionId,
+          requestType: query.type,
+          parameters: query.parameters || {},
+          businessId,
+          locationId
+        });
+        
+        if (result.success && result.resources) {
+          results.push({
+            query,
+            data: {
+              results: result.resources,
+              count: Array.isArray(result.resources) ? result.resources.length : 1,
+              timestamp: new Date().toISOString(),
+              source: 'frontend_websocket'
+            }
+          });
+        } else {
+          console.warn(`Failed to retrieve frontend data for query: ${query.type}`);
+          // Fallback to simulated data if frontend request fails
+          results.push({
+            query,
+            data: {
+              results: `Fallback data for ${query.type} on ${query.repository}`,
+              count: 0,
+              timestamp: new Date().toISOString(),
+              source: 'fallback'
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`Error retrieving frontend data for query ${query.type}:`, error);
+        // Fallback to simulated data on error
+        results.push({
+          query,
+          data: {
+            results: `Error fallback data for ${query.type}`,
+            count: 0,
+            timestamp: new Date().toISOString(),
+            source: 'error_fallback'
+          }
+        });
       }
-    }));
+    }
+    
+    return results;
   }
 
   // Cleanup method

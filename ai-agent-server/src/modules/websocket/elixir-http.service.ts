@@ -24,13 +24,16 @@ export class ElixirHttpService {
     this.logger.log(`Context: ${JSON.stringify(context)}`);
     this.logger.log(`Target URL: ${this.notificationHubUrl}/api/ai-responses`);
 
+    // Process context to extract actions and queries
+    const processedContext = this.processContextForElixir(context);
+    
     const requestBody = {
       tenant_id: tenantId,
       user_id: userId,
       session_id: sessionId,
       message_id: messageId,
       content: content,
-      context: context,
+      context: processedContext,
       timestamp: new Date().toISOString(),
       type: 'agent.response'
     };
@@ -150,6 +153,67 @@ export class ElixirHttpService {
       return {
         success: false,
         error: error.message
+      };
+    }
+  }
+
+  private processContextForElixir(context: any): any {
+    try {
+      // Extract actions from context
+      const actions = context.actions || [];
+      
+      // Process each action to extract relevant data
+      const processedActions = actions.map(action => {
+        switch (action.type) {
+          case 'view_data':
+            return {
+              type: 'view_data',
+              title: action.title,
+              data: action.data || []
+            };
+          case 'work_with_drafts':
+            return {
+              type: 'work_with_drafts',
+              title: action.title,
+              data: action.data || []
+            };
+          case 'modify_queries':
+            return {
+              type: 'modify_queries',
+              title: action.title,
+              data: action.data || []
+            };
+          default:
+            return {
+              type: action.type || 'unknown',
+              title: action.title || 'Unknown Action',
+              data: action.data || []
+            };
+        }
+      });
+
+      // Return processed context
+      return {
+        actions: processedActions,
+        aiProcessing: context.aiProcessing || false,
+        source: context.source || 'websocket',
+        businessId: context.businessId,
+        locationId: context.locationId,
+        sessionId: context.sessionId,
+        userId: context.userId,
+        timestamp: context.timestamp || new Date().toISOString()
+      };
+    } catch (error) {
+      this.logger.error('Error processing context for Elixir:', error);
+      return {
+        actions: [],
+        aiProcessing: false,
+        source: 'websocket',
+        businessId: context.businessId,
+        locationId: context.locationId,
+        sessionId: context.sessionId,
+        userId: context.userId,
+        timestamp: new Date().toISOString()
       };
     }
   }

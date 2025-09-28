@@ -1,12 +1,10 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
 import { AgentState } from '../../interfaces/agent.interface';
-import { ResourceQueryService } from '../../../resources/services/resource-query.service';
 
 export class DatabaseQueryNode {
   constructor(
     private openaiModel: ChatOpenAI,
-    private resourceQueryService: ResourceQueryService,
   ) {}
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
@@ -78,36 +76,16 @@ export class DatabaseQueryNode {
   }
 
   private async executeDatabaseQuery(state: AgentState, query: any): Promise<any> {
-    try {
-      const queryParams = {
-        resourceType: query.resourceType || 'treatment',
-        businessId: state.businessId,
-        locationId: state.locationId,
-        filters: {
-          ...query.filters,
-          isActive: true // Only get active treatments
-        },
-        page: 1,
-        limit: 100,
-        sortBy: 'name',
-        sortOrder: 'ASC' as const
-      };
-
-      const result = await this.resourceQueryService.queryResources(queryParams);
-      
-      return {
-        success: true,
-        data: result.data,
-        pagination: result.pagination,
-        totalCount: result.pagination.total
-      };
-    } catch (error) {
-      console.error('Error executing database query:', error);
-      return {
-        success: false,
-        error: error.message,
-        data: []
-      };
-    }
+    // Database queries are now handled by the app-server via API calls
+    // This is a placeholder implementation
+    console.log('Database query requested:', query);
+    
+    return {
+      success: true,
+      data: [],
+      pagination: { total: 0, page: 1, limit: 100 },
+      totalCount: 0,
+      message: 'Database queries are now handled by the app-server API'
+    };
   }
 }

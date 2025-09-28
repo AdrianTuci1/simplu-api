@@ -4,7 +4,6 @@ import { BusinessInfoService } from '../business-info/business-info.service';
 import { RagService } from '../rag/rag.service';
 import { SessionService } from '../session/session.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
-import { ResourcesService } from '../resources/resources.service';
 import { ExternalApisService } from '../external-apis/external-apis.service';
 
 describe('AgentService', () => {
@@ -76,21 +75,6 @@ describe('AgentService', () => {
           provide: WebSocketGateway,
           useValue: {
             broadcastToBusiness: jest.fn()
-          }
-        },
-        {
-          provide: ResourcesService,
-          useValue: {
-            executeOperation: jest.fn().mockResolvedValue({
-              success: true,
-              data: { id: 'test-reservation' },
-              statusCode: 201
-            }),
-            createReservation: jest.fn().mockResolvedValue({
-              success: true,
-              data: { id: 'test-reservation' },
-              statusCode: 201
-            })
           }
         },
         {
