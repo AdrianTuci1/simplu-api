@@ -71,47 +71,36 @@ export class SessionService {
 
   async getActiveSessionForUser(businessId: string, userId: string): Promise<Session | null> {
     try {
-      // First try with GSI if it exists
-      try {
-        const result = await this.dynamoClient.send(new QueryCommand({
-          TableName: tableNames.sessions,
-          IndexName: 'businessId-userId-index',
-          KeyConditionExpression: 'businessId = :businessId AND userId = :userId',
-          FilterExpression: 'status = :status',
-          ExpressionAttributeValues: marshall({
-            ':businessId': businessId,
-            ':userId': userId,
-            ':status': 'active'
-          }),
-          ScanIndexForward: false, // Most recent first
-          Limit: 1
-        }));
+      // Get all sessions for this user in this business, then sort by updatedAt
+      console.log(`🔧 SessionService: Getting active session for businessId=${businessId}, userId=${userId}`);
+      
+      const result = await this.dynamoClient.send(new ScanCommand({
+        TableName: tableNames.sessions,
+        FilterExpression: 'businessId = :businessId AND userId = :userId AND #status = :status',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: marshall({
+          ':businessId': businessId,
+          ':userId': userId,
+          ':status': 'active'
+        })
+      }));
 
-        return result.Items && result.Items.length > 0 
-          ? unmarshall(result.Items[0]) as Session 
-          : null;
-      } catch (gsiError) {
-        // If GSI doesn't exist, fall back to scan (less efficient but works)
-        console.warn('GSI not available, falling back to scan for active session lookup');
-        
-        const scanResult = await this.dynamoClient.send(new ScanCommand({
-          TableName: tableNames.sessions,
-          FilterExpression: 'businessId = :businessId AND userId = :userId AND #status = :status',
-          ExpressionAttributeNames: {
-            '#status': 'status'
-          },
-          ExpressionAttributeValues: marshall({
-            ':businessId': businessId,
-            ':userId': userId,
-            ':status': 'active'
-          }),
-          Limit: 1
-        }));
-
-        return scanResult.Items && scanResult.Items.length > 0 
-          ? unmarshall(scanResult.Items[0]) as Session 
-          : null;
+      if (!result.Items || result.Items.length === 0) {
+        console.log(`🔧 SessionService: No active sessions found`);
+        return null;
       }
+
+      const sessions = result.Items.map(item => unmarshall(item) as Session);
+      
+      // Sort by updatedAt descending (most recently updated first)
+      sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      
+      const mostRecentActiveSession = sessions[0];
+      console.log(`✅ SessionService: Found most recent active session: ${mostRecentActiveSession.sessionId} (updated: ${mostRecentActiveSession.updatedAt})`);
+      
+      return mostRecentActiveSession;
     } catch (error) {
       console.error('Error getting active session for user:', error);
       return null;

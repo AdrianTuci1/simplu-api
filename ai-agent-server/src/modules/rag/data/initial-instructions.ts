@@ -1,208 +1,175 @@
+import { Injectable } from '@nestjs/common';
+import { RagService } from '../rag.service';
 import { RagInstruction } from '../rag.service';
 
-export const initialInstructions: RagInstruction[] = [
-  // Instrucțiuni pentru rezervări dentale
-  {
-    instructionId: 'dental-reservation-001',
-    businessType: 'dental',
-    category: 'rezervare',
-    instruction: 'Procesează o cerere de rezervare pentru cabinetul dental',
-    workflow: [
-      {
-        step: 1,
-        action: 'extract_reservation_details',
-        description: 'Extrage data, ora și serviciul din mesaj',
-        validation: 'has_date_and_service'
-      },
-      {
-        step: 2,
-        action: 'check_availability',
-        description: 'Verifică disponibilitatea în sistem',
-        apiCall: {
-          method: 'GET',
-          endpoint: '/resources/{businessId}/{locationId}/availability',
-          dataTemplate: '{"date": "{date}", "serviceId": "{serviceId}"}'
-        }
-      },
-      {
-        step: 3,
-        action: 'create_reservation',
-        description: 'Creează rezervarea în sistem',
-        apiCall: {
-          method: 'POST',
-          endpoint: '/resources/{businessId}/{locationId}/reservations',
-          dataTemplate: '{"customerId": "{customerId}", "serviceId": "{serviceId}", "date": "{date}", "time": "{time}"}'
-        },
-        validation: 'reservation_created'
-      },
-      {
-        step: 4,
-        action: 'send_confirmation',
-        description: 'Trimite confirmare prin canalul original',
-        validation: 'confirmation_sent'
-      }
-    ],
-    requiredPermissions: ['reservations:create', 'customers:read'],
-    apiEndpoints: ['/reservations', '/availability', '/customers'],
-    successCriteria: ['reservation_created', 'confirmation_sent'],
-    notificationTemplate: 'Am preluat o rezervare în data de {data} pentru {utilizatorul} în urma unei conversații pe {source}',
-    isActive: true,
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z',
-    metadata: {
-      examples: [
-        'Vreau să fac o programare pentru mâine',
-        'Pot să rezerv o consultație pentru săptămâna viitoare?',
-        'Am nevoie de o programare urgentă'
-      ],
-      keywords: ['rezervare', 'programare', 'consultație', 'programează', 'mâine'],
-      confidence: 0.95
-    }
-  },
+@Injectable()
+export class InitialInstructionsService {
+  constructor(private ragService: RagService) {}
 
-  // Instrucțiuni pentru servicii dentale
-  {
-    instructionId: 'dental-services-001',
-    businessType: 'dental',
-    category: 'servicii',
-    instruction: 'Informează despre serviciile disponibile în cabinetul dental',
-    workflow: [
-      {
-        step: 1,
-        action: 'get_services',
-        description: 'Obține lista serviciilor disponibile',
-        apiCall: {
-          method: 'GET',
-          endpoint: '/resources/{businessId}/{locationId}/services',
-          dataTemplate: '{}'
+  /**
+   * Loads initial instructions from the database using RAG service
+   * This replaces the hardcoded instructions with dynamic database-driven ones
+   */
+  async getInitialInstructions(businessType: string = 'general'): Promise<RagInstruction[]> {
+    try {
+      // Get system instructions from database
+      const systemInstructions = await this.ragService.listActiveSystemInstructions(businessType);
+      
+      // Convert system instructions to RagInstruction format for backward compatibility
+      return systemInstructions.map(sys => ({
+        instructionId: sys.key,
+        businessType: sys.businessType,
+        category: sys.category,
+        instruction: this.formatInstruction(sys.instructionsJson),
+        workflow: this.extractWorkflow(sys.instructionsJson),
+        requiredPermissions: this.extractPermissions(sys.instructionsJson),
+        apiEndpoints: this.extractEndpoints(sys.instructionsJson),
+        successCriteria: this.extractSuccessCriteria(sys.instructionsJson),
+        notificationTemplate: this.extractNotificationTemplate(sys.instructionsJson),
+        isActive: sys.isActive,
+        createdAt: sys.createdAt,
+        updatedAt: sys.updatedAt,
+        metadata: {
+          examples: this.extractExamples(sys.instructionsJson),
+          keywords: this.extractKeywords(sys.instructionsJson),
+          confidence: 0.9
         }
-      },
-      {
-        step: 2,
-        action: 'format_services_response',
-        description: 'Formatează răspunsul cu serviciile disponibile',
-        validation: 'services_formatted'
-      }
-    ],
-    requiredPermissions: ['services:read'],
-    apiEndpoints: ['/services'],
-    successCriteria: ['services_retrieved'],
-    notificationTemplate: 'Am furnizat informații despre serviciile disponibile pentru {utilizatorul}',
-    isActive: true,
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z',
-    metadata: {
-      examples: [
-        'Ce servicii oferiți?',
-        'Care sunt prețurile pentru consultații?',
-        'Vreau să știu despre tratamentele disponibile'
-      ],
-      keywords: ['servicii', 'prețuri', 'tratamente', 'consultații', 'ofere'],
-      confidence: 0.90
-    }
-  },
-
-  // Instrucțiuni pentru sală de fitness
-  {
-    instructionId: 'gym-membership-001',
-    businessType: 'gym',
-    category: 'membrii',
-    instruction: 'Gestionează cereri pentru abonamente la sală',
-    workflow: [
-      {
-        step: 1,
-        action: 'extract_membership_request',
-        description: 'Extrage detalii despre cererea de abonament',
-        validation: 'has_membership_details'
-      },
-      {
-        step: 2,
-        action: 'check_membership_availability',
-        description: 'Verifică disponibilitatea abonamentelor',
-        apiCall: {
-          method: 'GET',
-          endpoint: '/resources/{businessId}/{locationId}/memberships',
-          dataTemplate: '{"type": "{membershipType}"}'
-        }
-      },
-      {
-        step: 3,
-        action: 'create_membership_request',
-        description: 'Creează cererea de abonament',
-        apiCall: {
-          method: 'POST',
-          endpoint: '/resources/{businessId}/{locationId}/membership-requests',
-          dataTemplate: '{"customerId": "{customerId}", "membershipType": "{membershipType}", "startDate": "{startDate}"}'
-        }
-      }
-    ],
-    requiredPermissions: ['memberships:read', 'membership-requests:create'],
-    apiEndpoints: ['/memberships', '/membership-requests'],
-    successCriteria: ['membership_request_created'],
-    notificationTemplate: 'Am procesat o cerere de abonament pentru {utilizatorul}',
-    isActive: true,
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z',
-    metadata: {
-      examples: [
-        'Vreau să mă abonez la sală',
-        'Care sunt tipurile de abonamente?',
-        'Pot să fac un abonament pentru 3 luni?'
-      ],
-      keywords: ['abonament', 'sală', 'fitness', 'membru', 'înscriere'],
-      confidence: 0.92
-    }
-  },
-
-  // Instrucțiuni pentru hotel
-  {
-    instructionId: 'hotel-booking-001',
-    businessType: 'hotel',
-    category: 'rezervare',
-    instruction: 'Procesează rezervări pentru camere de hotel',
-    workflow: [
-      {
-        step: 1,
-        action: 'extract_booking_details',
-        description: 'Extrage detalii despre rezervare (data check-in, check-out, tip cameră)',
-        validation: 'has_booking_details'
-      },
-      {
-        step: 2,
-        action: 'check_room_availability',
-        description: 'Verifică disponibilitatea camerelor',
-        apiCall: {
-          method: 'GET',
-          endpoint: '/resources/{businessId}/{locationId}/rooms/availability',
-          dataTemplate: '{"checkIn": "{checkIn}", "checkOut": "{checkOut}", "roomType": "{roomType}"}'
-        }
-      },
-      {
-        step: 3,
-        action: 'create_booking',
-        description: 'Creează rezervarea',
-        apiCall: {
-          method: 'POST',
-          endpoint: '/resources/{businessId}/{locationId}/bookings',
-          dataTemplate: '{"customerId": "{customerId}", "roomId": "{roomId}", "checkIn": "{checkIn}", "checkOut": "{checkOut}"}'
-        }
-      }
-    ],
-    requiredPermissions: ['bookings:create', 'rooms:read'],
-    apiEndpoints: ['/rooms', '/bookings'],
-    successCriteria: ['booking_created'],
-    notificationTemplate: 'Am procesat o rezervare de cameră pentru {utilizatorul}',
-    isActive: true,
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z',
-    metadata: {
-      examples: [
-        'Vreau să rezerv o cameră pentru weekend',
-        'Aveți camere disponibile pentru 2 persoane?',
-        'Pot să fac o rezervare pentru săptămâna viitoare?'
-      ],
-      keywords: ['rezervare', 'cameră', 'hotel', 'check-in', 'check-out'],
-      confidence: 0.94
+      }));
+    } catch (error) {
+      console.warn('Failed to load initial instructions from database:', error);
+      // Fallback to minimal instructions
+      return this.getFallbackInstructions(businessType);
     }
   }
-]; 
+
+  /**
+   * Fallback instructions when database is not available
+   */
+  private getFallbackInstructions(businessType: string): RagInstruction[] {
+    return [
+      {
+        instructionId: `${businessType}.fallback.v1`,
+        businessType: businessType,
+        category: 'fallback',
+        instruction: `Instrucțiuni de bază pentru ${businessType}`,
+        workflow: [
+          {
+            step: 1,
+            action: 'identify_request',
+            description: 'Identifică tipul cererii',
+            validation: 'has_request_type'
+          },
+          {
+            step: 2,
+            action: 'process_request',
+            description: 'Procesează cererea',
+            validation: 'request_processed'
+          }
+        ],
+        requiredPermissions: ['basic_access'],
+        apiEndpoints: ['/api/basic'],
+        successCriteria: ['request_processed'],
+        notificationTemplate: 'Cererea a fost procesată',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        metadata: {
+          examples: ['Cerere de bază'],
+          keywords: ['basic', 'fallback'],
+          confidence: 0.5
+        }
+      }
+    ];
+  }
+
+  private formatInstruction(instructionsJson: any): string {
+    if (typeof instructionsJson === 'string') {
+      return instructionsJson;
+    }
+    
+    if (instructionsJson.instructions?.primary) {
+      return instructionsJson.instructions.primary;
+    }
+    
+    return JSON.stringify(instructionsJson);
+  }
+
+  private extractWorkflow(instructionsJson: any): any[] {
+    if (instructionsJson.instructions?.actions) {
+      return instructionsJson.instructions.actions.map((action: string, index: number) => ({
+        step: index + 1,
+        action: action.toLowerCase().replace(/\s+/g, '_'),
+        description: action,
+        validation: 'action_completed'
+      }));
+    }
+    
+    return [];
+  }
+
+  private extractPermissions(instructionsJson: any): string[] {
+    if (instructionsJson.capabilities) {
+      const permissions = [];
+      if (instructionsJson.capabilities.canAccessAllData) permissions.push('data:read');
+      if (instructionsJson.capabilities.canModifyReservations) permissions.push('reservations:write');
+      if (instructionsJson.capabilities.canListAllResources) permissions.push('resources:read');
+      return permissions;
+    }
+    
+    return ['basic_access'];
+  }
+
+  private extractEndpoints(instructionsJson: any): string[] {
+    const endpoints = ['/api/basic'];
+    
+    if (instructionsJson.capabilities?.canAccessAllData) {
+      endpoints.push('/api/data', '/api/resources');
+    }
+    
+    if (instructionsJson.capabilities?.canModifyReservations) {
+      endpoints.push('/api/reservations');
+    }
+    
+    return endpoints;
+  }
+
+  private extractSuccessCriteria(instructionsJson: any): string[] {
+    const criteria = ['request_processed'];
+    
+    if (instructionsJson.capabilities?.canAccessAllData) {
+      criteria.push('data_accessed');
+    }
+    
+    if (instructionsJson.capabilities?.canModifyReservations) {
+      criteria.push('reservation_handled');
+    }
+    
+    return criteria;
+  }
+
+  private extractNotificationTemplate(instructionsJson: any): string {
+    if (instructionsJson.role === 'operator') {
+      return 'Operator AI: {response}';
+    } else if (instructionsJson.role === 'client') {
+      return 'Customer AI: {response}';
+    }
+    
+    return 'AI Assistant: {response}';
+  }
+
+  private extractExamples(instructionsJson: any): string[] {
+    if (instructionsJson.instructions?.actions) {
+      return instructionsJson.instructions.actions.slice(0, 3);
+    }
+    
+    return ['Cerere de bază'];
+  }
+
+  private extractKeywords(instructionsJson: any): string[] {
+    if (instructionsJson.keywords) {
+      return instructionsJson.keywords;
+    }
+    
+    return ['basic', 'assistance'];
+  }
+} 

@@ -9,6 +9,9 @@ export class OperatorResponseNode {
 
   async invoke(state: AgentState): Promise<Partial<AgentState>> {
     try {
+      // Check if the message explicitly requests help with resource creation
+      const needsDraft = this.checkIfNeedsDraft(state.message);
+      
       const prompt = `
       Ești un operator AI care răspunde concis și profesional.
       
@@ -18,6 +21,7 @@ export class OperatorResponseNode {
       - Query-uri frontend: ${JSON.stringify(state.frontendQueries || [])}
       - Rezultate frontend: ${JSON.stringify(state.frontendQueryResults || [])}
       - Draft-uri create: ${JSON.stringify(state.drafts || [])}
+      - Necesită draft pentru crearea resursei: ${needsDraft}
       
       Generează un răspuns concis și profesional pentru operator.
       
@@ -31,10 +35,17 @@ export class OperatorResponseNode {
 
       const response = await this.openaiModel.invoke([new HumanMessage(prompt)]);
       
-      return {
+      const result: Partial<AgentState> = {
         response: response.content as string,
         actions: this.generateActions(state)
       };
+
+      // Include draft information if explicitly requested
+      if (needsDraft && state.drafts && state.drafts.length > 0) {
+        result.draft = state.drafts[0]; // Include the first draft
+      }
+
+      return result;
     } catch (error) {
       console.warn('OperatorResponseNode: error generating response', error);
       return {
@@ -42,6 +53,17 @@ export class OperatorResponseNode {
         actions: []
       };
     }
+  }
+
+  private checkIfNeedsDraft(message: string): boolean {
+    const draftKeywords = [
+      'creează', 'creare', 'adaugă', 'adăugare', 'nou', 'nouă',
+      'pacient', 'programare', 'serviciu', 'rezervare', 'client',
+      'draft', 'template', 'formular', 'formulară'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    return draftKeywords.some(keyword => lowerMessage.includes(keyword));
   }
 
   private generateActions(state: AgentState): any[] {

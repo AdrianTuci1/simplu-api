@@ -4,9 +4,10 @@ import { HumanMessage } from '@langchain/core/messages';
 import { openaiConfig } from '@/config/openai.config';
 import { BusinessInfoService } from '../../business-info/business-info.service';
 import { RagService } from '../../rag/rag.service';
+import { InitialInstructionsService } from '../../rag/data/initial-instructions';
 import { SessionService } from '../../session/session.service';
 import { WebSocketGateway } from '../../websocket/websocket.gateway';
-import { ExternalApisService } from '../../external-apis/external-apis.service';
+import { ElixirHttpService } from '../../websocket/elixir-http.service';
 import { 
   AgentState, 
   Intent
@@ -29,9 +30,11 @@ export class OperatorAgentService {
   constructor(
     private readonly businessInfoService: BusinessInfoService,
     private readonly ragService: RagService,
+    private readonly initialInstructionsService: InitialInstructionsService,
     private readonly sessionService: SessionService,
     private readonly agentWebSocketHandler: AgentWebSocketHandler,
-    private readonly agentQueryModifier: AgentQueryModifier
+    private readonly agentQueryModifier: AgentQueryModifier,
+    private readonly elixirHttpService: ElixirHttpService
   ) {
     // CRITICAL: Check memory usage at startup
     const startupMem = process.memoryUsage();
@@ -119,7 +122,8 @@ export class OperatorAgentService {
         message: state.response,
         actions: state.actions,
         timestamp: new Date().toISOString(),
-        sessionId: state.sessionId
+        sessionId: state.sessionId,
+        draft: state.draft // Include draft if available
       };
     } catch (error) {
       console.error('Error in LangGraph processing:', error);
@@ -134,7 +138,8 @@ export class OperatorAgentService {
         message: response,
         actions: [],
         timestamp: new Date().toISOString(),
-        sessionId: state.sessionId
+        sessionId: state.sessionId,
+        draft: undefined // No draft in fallback mode
       };
     }
   }
@@ -150,7 +155,7 @@ export class OperatorAgentService {
       Object.assign(state, memoryResult); // Merge into existing object
 
       // 2) Load operator-specific RAG instructions
-      const operatorRagNode = new OperatorRagNode(this.openaiModel, this.ragService);
+      const operatorRagNode = new OperatorRagNode(this.openaiModel, this.ragService, this.initialInstructionsService);
       const ragResult = await operatorRagNode.invoke(state);
       Object.assign(state, ragResult); // Merge into existing object
 
@@ -161,13 +166,17 @@ export class OperatorAgentService {
       let state = s; // Don't create new object, reuse existing
 
       // Generate frontend queries to interrogate the application
-      const frontendQueryNode = new FrontendQueryNode(this.openaiModel);
+      const frontendQueryNode = new FrontendQueryNode(this.openaiModel, this.ragService);
       const frontendResult = await frontendQueryNode.invoke(state);
       Object.assign(state, frontendResult); // Merge into existing object
 
-      // If we need frontend interaction, retrieve data from frontend via WebSocket
+      // If we need frontend interaction, send queries to frontend via WebSocket
+      // but DON'T wait for results here - they will come back separately
       if (state.needsFrontendInteraction && state.frontendQueries) {
-        state.frontendQueryResults = await this.retrieveFrontendData(state.frontendQueries, state.businessId, state.sessionId, state.locationId);
+        // Send queries to frontend and mark that we're waiting for results
+        await this.sendFrontendQueries(state.frontendQueries, state.businessId, state.sessionId, state.locationId);
+        state.waitingForFrontendResults = true;
+        state.frontendQueryResults = []; // Will be populated when results come back
       }
 
       return state;
@@ -176,10 +185,12 @@ export class OperatorAgentService {
     const draftCreationFlow = async (s: AgentState) => {
       let state = s; // Don't create new object, reuse existing
 
-      // Create drafts based on frontend data
-      const draftCreationNode = new DraftCreationNode(this.openaiModel);
-      const draftResult = await draftCreationNode.invoke(state);
-      Object.assign(state, draftResult); // Merge into existing object
+      // Only create drafts if we have frontend results or if no frontend interaction was needed
+      if (!state.waitingForFrontendResults && (state.frontendQueryResults?.length > 0 || !state.needsFrontendInteraction)) {
+        const draftCreationNode = new DraftCreationNode(this.openaiModel);
+        const draftResult = await draftCreationNode.invoke(state);
+        Object.assign(state, draftResult); // Merge into existing object
+      }
 
       return state;
     };
@@ -199,13 +210,77 @@ export class OperatorAgentService {
     this.graphApp = {
       invoke: async (initialState: AgentState) => {
         let state = initialState; // Don't create new object, reuse existing
+        
+        // 1. Start flow (includes RAG and memory)
         state = await startFlow(state);
-        state = await frontendQueryFlow(state);
-        state = await draftCreationFlow(state);
+        
+        // 2. Check if we need specific help or just general greeting
+        if (this.isGeneralGreeting(state.message)) {
+          // General greeting - no specific queries needed
+          const greetingResult = await this.handleGeneralGreeting(state);
+          Object.assign(state, greetingResult);
+        } else {
+          // Specific request - proceed with frontend queries
+          state = await frontendQueryFlow(state);
+          state = await draftCreationFlow(state);
+        }
+        
+        // 3. Generate response
         state = await responseFlow(state);
         return state;
       }
     } as any;
+  }
+
+  private isGeneralGreeting(message: string): boolean {
+    const greetingKeywords = [
+      'salut', 'bună', 'hello', 'hi', 'hei',
+      'cu ce ma poti ajuta', 'cu ce poti ajuta', 'ce poti face',
+      'ajutor', 'help', 'ce faci', 'cum esti'
+    ];
+    
+    const lowerMessage = message.toLowerCase().trim();
+    return greetingKeywords.some(keyword => lowerMessage.includes(keyword));
+  }
+
+  private async handleGeneralGreeting(state: AgentState): Promise<Partial<AgentState>> {
+    // Try to get user info from medics if available
+    let userInfo = null;
+    try {
+      // This would be a call to get user info from medics
+      // For now, we'll skip this to avoid failures
+      // userInfo = await this.getUserInfoFromMedics(state.userId);
+    } catch (error) {
+      console.log('Could not get user info from medics, continuing with general greeting');
+    }
+
+    const businessName = state.businessInfo?.businessName || 'business-ul nostru';
+    
+    // Generate personalized greeting based on context
+    let greeting;
+    if (userInfo) {
+      greeting = `Salut ${userInfo.name}! Sunt asistentul tău virtual al ${businessName}. Cu ce te pot ajuta astăzi?`;
+    } else {
+      // More personal and helpful greeting as requested
+      greeting = `Salut! Sunt asistentul tău virtual al ${businessName}. Cu ce te pot ajuta astăzi? Pot creea schițe sau obține date pentru tine - doar spune-mi ce dorești să fac.`;
+    }
+
+    return {
+      response: greeting,
+      needsFrontendInteraction: false,
+      frontendQueries: [],
+      actions: [
+        {
+          type: 'greeting',
+          status: 'success' as const,
+          details: {
+            message: 'Salutare personalizată',
+            businessName: businessName,
+            capabilities: ['creea schițe', 'obține date', 'gestionare interfață']
+          }
+        }
+      ]
+    };
   }
 
   private async analyzeIntent(message: string, businessType: string): Promise<Intent> {
@@ -368,62 +443,34 @@ export class OperatorAgentService {
     }, 30000); // Check every 30 seconds
   }
 
-  // Real frontend data retrieval via WebSocket
-  private async retrieveFrontendData(frontendQueries: any[], businessId: string, sessionId: string, locationId: string = 'default'): Promise<any[]> {
-    console.log('Requesting frontend data via WebSocket for queries:', frontendQueries);
+  // Send frontend queries via Elixir HTTP (non-blocking)
+  private async sendFrontendQueries(frontendQueries: any[], businessId: string, sessionId: string, locationId: string = 'default'): Promise<void> {
+    console.log('Sending frontend queries via Elixir HTTP:', frontendQueries);
     
-    const results = [];
-    
-    for (const query of frontendQueries) {
-      try {
-        // Request data from frontend via WebSocket
-        const result = await this.agentWebSocketHandler.requestFrontendResources(sessionId, {
-          sessionId,
-          requestType: query.type,
-          parameters: query.parameters || {},
-          businessId,
-          locationId
-        });
-        
-        if (result.success && result.resources) {
-          results.push({
-            query,
-            data: {
-              results: result.resources,
-              count: Array.isArray(result.resources) ? result.resources.length : 1,
-              timestamp: new Date().toISOString(),
-              source: 'frontend_websocket'
-            }
-          });
-        } else {
-          console.warn(`Failed to retrieve frontend data for query: ${query.type}`);
-          // Fallback to simulated data if frontend request fails
-          results.push({
-            query,
-            data: {
-              results: `Fallback data for ${query.type} on ${query.repository}`,
-              count: 0,
-              timestamp: new Date().toISOString(),
-              source: 'fallback'
-            }
-          });
-        }
-      } catch (error) {
-        console.error(`Error retrieving frontend data for query ${query.type}:`, error);
-        // Fallback to simulated data on error
-        results.push({
-          query,
-          data: {
-            results: `Error fallback data for ${query.type}`,
-            count: 0,
-            timestamp: new Date().toISOString(),
-            source: 'error_fallback'
-          }
-        });
-      }
+    try {
+      // Send all queries to Elixir via HTTP
+      await this.elixirHttpService.sendFrontendQueries(
+        businessId,
+        sessionId.split(':')[1] || 'unknown', // Extract userId from sessionId
+        sessionId,
+        frontendQueries,
+        locationId
+      );
+      
+      console.log(`Frontend queries sent to Elixir for session ${sessionId}`);
+    } catch (error) {
+      console.error(`Error sending frontend queries to Elixir:`, error);
     }
+  }
+
+  // Handle frontend query results when they come back
+  async handleFrontendQueryResults(sessionId: string, results: any[]): Promise<void> {
+    console.log(`Received frontend query results for session ${sessionId}:`, results);
     
-    return results;
+    // Store results for this session - they will be used when processing the next message
+    // or when the operator explicitly requests to process the results
+    // This could be stored in a session cache or database
+    // For now, we'll log them and they can be processed in the next message
   }
 
   // Cleanup method

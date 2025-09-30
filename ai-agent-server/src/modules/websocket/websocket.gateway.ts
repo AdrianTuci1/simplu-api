@@ -97,27 +97,16 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       console.log(`🔧 WebSocketGateway: Processing message for sessionId: ${sessionId}`);
       
       if (!sessionId) {
-        console.log(`🔧 WebSocketGateway: No sessionId provided, looking for existing session`);
-        // Try to find existing active session for this user
-        const existingSession = await this.sessionService.getActiveSessionForUser(
-          data.businessId, 
-          data.userId
+        console.log(`🔧 WebSocketGateway: No sessionId provided, creating new session`);
+        // Create new session
+        const newSession = await this.sessionService.createSession(
+          data.businessId,
+          data.locationId || 'default',
+          data.userId,
+          'general' // Will be updated with actual business type later
         );
-        if (existingSession) {
-          sessionId = existingSession.sessionId;
-          console.log(`✅ WebSocketGateway: Found existing session: ${sessionId}`);
-        } else {
-          console.log(`🔧 WebSocketGateway: No existing session found, creating new one`);
-          // Create new session
-          const newSession = await this.sessionService.createSession(
-            data.businessId,
-            data.locationId || 'default',
-            data.userId,
-            'general' // Will be updated with actual business type later
-          );
-          sessionId = newSession.sessionId;
-          console.log(`✅ WebSocketGateway: Created new session: ${sessionId}`);
-        }
+        sessionId = newSession.sessionId;
+        console.log(`✅ WebSocketGateway: Created new session: ${sessionId}`);
       } else {
         console.log(`🔧 WebSocketGateway: Using provided sessionId: ${sessionId}`);
         // Verify that the provided session exists in database
@@ -276,7 +265,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           response.sessionId,
           response.responseId,
           response.message,
-          { actions: response.actions || [] }
+          { actions: response.actions || [] },
+          response.draft // Include draft if available
         );
         
         console.log('AI response sent to Elixir via HTTP:', elixirPayload);
@@ -1006,6 +996,73 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         locationId: draftData.locationId || 'default',
         timestamp: new Date().toISOString()
       });
+    }
+  }
+
+  // Handle frontend query results from Elixir
+  @SubscribeMessage('frontend_query_results')
+  async handleFrontendQueryResults(
+    @MessageBody() data: {
+      sessionId: string;
+      businessId: string;
+      results: any[];
+      timestamp: string;
+    }
+  ) {
+    console.log('Received frontend query results from Elixir:', data);
+    
+    try {
+      // Forward results to operator agent for processing
+      // This would be handled by the operator agent service
+      this.broadcastToBusiness(data.businessId, 'frontend_query_results', {
+        sessionId: data.sessionId,
+        results: data.results,
+        timestamp: data.timestamp
+      });
+      
+      console.log('Frontend query results forwarded to business clients');
+    } catch (error) {
+      console.error('Error handling frontend query results:', error);
+    }
+  }
+
+  // Handle agent requests from Elixir
+  @SubscribeMessage('agent_request')
+  async handleAgentRequest(
+    @MessageBody() data: {
+      sessionId: string;
+      businessId: string;
+      userId: string;
+      message: string;
+      role: 'operator' | 'customer';
+      timestamp: string;
+    }
+  ) {
+    console.log('Received agent request from Elixir:', data);
+    
+    try {
+      // Process the request through the appropriate agent
+      const messageDto = {
+        businessId: data.businessId,
+        userId: data.userId,
+        message: data.message,
+        sessionId: data.sessionId,
+        timestamp: data.timestamp
+      };
+
+      // Route to appropriate agent based on role
+      if (data.role === 'operator') {
+        // Process through operator agent
+        console.log('Processing operator request through operator agent');
+        // This would be handled by the operator agent service
+      } else if (data.role === 'customer') {
+        // Process through customer agent
+        console.log('Processing customer request through customer agent');
+        // This would be handled by the customer agent service
+      }
+      
+    } catch (error) {
+      console.error('Error handling agent request:', error);
     }
   }
 } 

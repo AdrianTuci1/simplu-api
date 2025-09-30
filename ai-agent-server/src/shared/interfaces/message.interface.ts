@@ -13,6 +13,7 @@ export interface AgentResponse {
   actions: AgentAction[];
   timestamp: string;
   sessionId: string;
+  draft?: any; // Optional draft field for resource creation assistance
 }
 
 export interface AgentAction {

@@ -25,5 +25,8 @@ export interface Message {
     source: 'websocket' | 'webhook' | 'cron';
     externalId?: string;
     responseId?: string;
+    businessType?: string;
+    actions?: any[];
+    clientSource?: string;
   };
 } 

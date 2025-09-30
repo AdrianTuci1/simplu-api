@@ -14,7 +14,7 @@ console.log(`   AWS_SECRET_ACCESS_KEY: ${process.env.AWS_SECRET_ACCESS_KEY ? '�
 console.log(`   DYNAMODB_RAG_SYSTEM_TABLE: ${process.env.DYNAMODB_RAG_SYSTEM_TABLE || 'Not set'}`);
 // Configurare DynamoDB
 const dynamoDBConfig = {
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: 'eu-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -239,6 +239,37 @@ const systemInstructions = [
         guidance: 'Ghidează clientul către informațiile de care are nevoie pentru a face o rezervare, fără să expui date personale.'
       },
       keywords: ['client', 'hotel', 'limited_access', 'friendly_guidance']
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+
+  // === INSTRUCȚIUNI PENTRU RECUNOAȘTEREA CLIENȚILOR ===
+  
+  // Customer Recognition - Multi-platform
+  {
+    key: 'general.customer.recognition.v1',
+    businessType: 'general',
+    category: 'customer_recognition',
+    version: '1.0.0',
+    isActive: true,
+    instructionsJson: {
+      role: 'customer_recognition',
+      capabilities: {
+        canAccessUserMemory: true,
+        canCrossPlatformRecognition: true,
+        canStoreInteractionHistory: true,
+        canDetectPlatform: true,
+        responseStyle: 'personalized'
+      },
+      instructions: {
+        primary: 'Ești responsabil pentru recunoașterea clienților pe multiple platforme (Meta, Twilio, Email, Web). Folosești RAG memory pentru a identifica clienții existenți și a oferi experiențe personalizate.',
+        platform_detection: 'Detectează platforma de comunicare (Meta, Twilio, Email, Web) și extrage identificatorii unici.',
+        cross_platform_memory: 'Verifică memoria RAG pentru a identifica clienții existenți pe alte platforme.',
+        personalization: 'Generează saluturi personalizate bazate pe istoricul interacțiunilor și platforma curentă.',
+        memory_management: 'Actualizează memoria RAG cu noile interacțiuni și informații despre client.'
+      },
+      keywords: ['customer_recognition', 'multi_platform', 'personalization', 'rag_memory']
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()

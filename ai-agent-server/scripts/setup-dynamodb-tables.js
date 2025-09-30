@@ -1,8 +1,11 @@
 const { DynamoDBClient, CreateTableCommand, DescribeTableCommand, ListTablesCommand } = require('@aws-sdk/client-dynamodb');
+const dotenv = require('dotenv');
+const path = require('path');
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // Configurare DynamoDB
 const dynamoDBConfig = {
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: 'eu-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -154,21 +157,21 @@ const tableConfigurations = {
     TableName: tableNames.ragSystemInstructions,
     KeySchema: [
       {
-        AttributeName: 'businessType',
+        AttributeName: 'key',
         KeyType: 'HASH'
       },
       {
-        AttributeName: 'key',
+        AttributeName: 'businessType',
         KeyType: 'RANGE'
       }
     ],
     AttributeDefinitions: [
       {
-        AttributeName: 'businessType',
+        AttributeName: 'key',
         AttributeType: 'S'
       },
       {
-        AttributeName: 'key',
+        AttributeName: 'businessType',
         AttributeType: 'S'
       }
     ],
@@ -306,10 +309,11 @@ async function setupDynamoDBTables() {
 
   if (errorCount === 0) {
     console.log('\n🎉 All DynamoDB tables are ready!');
-    console.log('\n📝 Next steps:');
-    console.log('1. Run: node scripts/populate-system-instructions.js');
-    console.log('2. Run: node scripts/populate-rag.js');
-    console.log('3. Test your AI agent server!');
+  console.log('\n📝 Next steps:');
+  console.log('1. Run: node scripts/populate-system-instructions.js');
+  console.log('2. Run: node scripts/populate-rag.js');
+  console.log('3. Test your AI agent server with RAG memory!');
+  console.log('4. Test customer recognition across platforms (Meta, Twilio, Email, Web)');
   } else {
     console.log(`\n⚠️  ${errorCount} tables failed to create. Check the errors above.`);
   }

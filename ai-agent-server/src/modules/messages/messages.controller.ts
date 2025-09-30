@@ -1,5 +1,6 @@
 import { Controller, Post, Body, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ElixirHttpService } from '../websocket/elixir-http.service';
+import { MessagesService } from './messages.service';
 import { AgentService } from '../agent/agent.service';
 import { MessageDto } from '@/shared/interfaces/message.interface';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
@@ -22,6 +23,7 @@ export class MessagesController {
 
   constructor(
     private readonly elixirHttpService: ElixirHttpService,
+    private readonly messagesService: MessagesService,
     @Inject(forwardRef(() => AgentService))
     private readonly agentService: AgentService,
     private readonly webSocketGateway: WebSocketGateway
@@ -51,6 +53,10 @@ export class MessagesController {
       };
 
       const agentResponse = await this.agentService.processMessage(messageData);
+
+      // Store both user message and AI response in database
+      this.logger.log('Storing message exchange in database...');
+      await this.messagesService.storeMessageExchange(messageData, agentResponse);
 
       // Trimite răspunsul înapoi la Notification Hub
       this.logger.log('Sending AI response back to Notification Hub...');

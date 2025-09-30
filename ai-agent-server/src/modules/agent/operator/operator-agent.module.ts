@@ -5,8 +5,7 @@ import { BusinessInfoModule } from '../../business-info/business-info.module';
 import { RagModule } from '../../rag/rag.module';
 import { SessionModule } from '../../session/session.module';
 import { WebSocketModule } from '../../websocket/websocket.module';
-import { ExternalApisModule } from '../../external-apis/external-apis.module';
-import { ExternalApisService } from '../../external-apis/external-apis.service';
+import { ElixirHttpService } from '../../websocket/elixir-http.service';
 
 @Module({
   imports: [
@@ -15,23 +14,10 @@ import { ExternalApisService } from '../../external-apis/external-apis.service';
     RagModule,
     SessionModule,
     forwardRef(() => WebSocketModule),
-    // Optionally include ExternalApisModule; otherwise provide a lightweight mock
-    ...(process.env.DISABLE_EXTERNAL_APIS === 'true' ? [] : [ExternalApisModule]),
   ],
   providers: [
     OperatorAgentService,
-    // When external APIs are disabled, inject a minimal mock to satisfy dependencies
-    ...(process.env.DISABLE_EXTERNAL_APIS === 'true'
-      ? [{
-          provide: ExternalApisService,
-          useValue: {
-            sendMetaMessage: async () => ({ success: false }),
-            sendSMS: async () => ({ success: false }),
-            sendEmail: async () => ({ success: false }),
-            sendEmailFromGmail: async () => ({ success: false }),
-          },
-        }]
-      : []),
+    ElixirHttpService,
   ],
   exports: [OperatorAgentService],
 })

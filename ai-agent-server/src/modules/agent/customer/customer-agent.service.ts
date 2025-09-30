@@ -20,6 +20,7 @@ import { AppServerDataNode } from './nodes/app-server-data.node';
 import { DatabaseQueryNode } from './nodes/database-query.node';
 import { BookingGuidanceNode } from './nodes/booking-guidance.node';
 import { CustomerRagNode } from './nodes/customer-rag.node';
+import { CustomerRecognitionNode } from './nodes/customer-recognition.node';
 import { AppServerClient } from './clients/app-server.client';
 
 @Injectable()
@@ -235,7 +236,7 @@ export class CustomerAgentService {
   }
 
   private setupGraph(): void {
-    // Customer-specific flow: Start → App Server Data → Database Query → Booking Guidance → Response
+    // Customer-specific flow: Start → Customer Recognition → App Server Data → Database Query → Booking Guidance → Response
     const startFlow = async (s: AgentState) => {
       let state = s; // Don't create new object, reuse existing
 
@@ -248,6 +249,17 @@ export class CustomerAgentService {
       const customerRagNode = new CustomerRagNode(this.openaiModel, this.ragService);
       const ragResult = await customerRagNode.invoke(state);
       Object.assign(state, ragResult); // Merge into existing object
+
+      return state;
+    };
+
+    const customerRecognitionFlow = async (s: AgentState) => {
+      let state = s; // Don't create new object, reuse existing
+
+      // Recognize existing customers and detect source platform
+      const customerRecognitionNode = new CustomerRecognitionNode(this.openaiModel, this.ragService);
+      const recognitionResult = await customerRecognitionNode.invoke(state);
+      Object.assign(state, recognitionResult); // Merge into existing object
 
       return state;
     };
@@ -301,6 +313,7 @@ export class CustomerAgentService {
       invoke: async (initialState: AgentState) => {
         let state = initialState; // Don't create new object, reuse existing
         state = await startFlow(state);
+        state = await customerRecognitionFlow(state);
         state = await appServerDataFlow(state);
         state = await databaseQueryFlow(state);
         state = await bookingGuidanceFlow(state);

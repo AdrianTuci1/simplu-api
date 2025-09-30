@@ -69,7 +69,9 @@ export interface AgentState {
   needsFrontendInteraction?: boolean;
   frontendQueries?: any[];
   frontendQueryResults?: any[];
+  waitingForFrontendResults?: boolean;
   drafts?: any[];
+  draft?: any; // Single draft for response
   needsDraftCreation?: boolean;
 
   // Customer-specific properties
@@ -81,6 +83,18 @@ export interface AgentState {
   databaseQueryResults?: any[];
   needsBookingGuidance?: boolean;
   bookingGuidance?: any;
+  // Customer recognition
+  isExistingCustomer?: boolean;
+  customerInfo?: any;
+  customerSource?: string;
+  personalizedGreeting?: string;
+  needsRegistration?: boolean;
+  ragMemory?: any[];
+  crossPlatformSource?: string;
+  // Platform-specific user IDs
+  metaUserId?: string;
+  twilioUserId?: string;
+  emailUserId?: string;
 
   // Output
   response: string;

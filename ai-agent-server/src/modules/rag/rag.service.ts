@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand, ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface RagInstruction {
   instructionId: string;       // Partition Key
@@ -85,73 +87,188 @@ export class RagService {
     }));
   }
 
-  // Get instructions for operator agent
+  // Get instructions for operator agent - from database
   async getOperatorInstructions(
     businessType: string,
     context: any
   ): Promise<RagInstruction[]> {
-    const systemInstructions = await this.listActiveSystemInstructions(businessType);
-    
-    // Filter for operator-specific instructions
-    const operatorInstructions = systemInstructions.filter(instruction => 
-      instruction.role === 'operator' || instruction.role === 'general'
-    );
-    
-    return operatorInstructions.map(sys => ({
-      instructionId: sys.key,
-      businessType: sys.businessType,
-      category: sys.category,
-      instruction: this.formatOperatorInstruction(sys.instructionsJson),
-      workflow: this.extractOperatorWorkflow(sys.instructionsJson),
-      requiredPermissions: this.extractOperatorPermissions(sys.instructionsJson),
-      apiEndpoints: this.extractOperatorEndpoints(sys.instructionsJson),
-      successCriteria: this.extractOperatorSuccessCriteria(sys.instructionsJson),
-      notificationTemplate: this.extractOperatorNotificationTemplate(sys.instructionsJson),
-      isActive: sys.isActive,
-      createdAt: sys.createdAt,
-      updatedAt: sys.updatedAt,
-      metadata: {
-        examples: this.extractOperatorExamples(sys.instructionsJson),
-        keywords: this.extractOperatorKeywords(sys.instructionsJson),
-        confidence: 0.9
-      }
-    }));
+    try {
+      // Get system instructions from database
+      const systemInstructions = await this.listActiveSystemInstructions(businessType);
+      
+      // Filter for operator-specific instructions
+      const operatorInstructions = systemInstructions.filter(instruction => {
+        const instructionsJson = instruction.instructionsJson;
+        return instructionsJson?.role === 'operator';
+      });
+      
+      return operatorInstructions.map(instruction => ({
+        instructionId: instruction.key,
+        businessType: instruction.businessType,
+        category: instruction.category,
+        instruction: this.formatOperatorInstruction(instruction.instructionsJson),
+        workflow: this.extractOperatorWorkflow(instruction.instructionsJson),
+        requiredPermissions: this.extractOperatorPermissions(instruction.instructionsJson),
+        apiEndpoints: this.extractOperatorEndpoints(instruction.instructionsJson),
+        successCriteria: this.extractOperatorSuccessCriteria(instruction.instructionsJson),
+        notificationTemplate: this.extractOperatorNotificationTemplate(instruction.instructionsJson),
+        isActive: instruction.isActive,
+        createdAt: instruction.createdAt,
+        updatedAt: instruction.updatedAt,
+        metadata: {
+          examples: this.extractOperatorExamples(instruction.instructionsJson),
+          keywords: this.extractOperatorKeywords(instruction.instructionsJson),
+          confidence: 0.9
+        }
+      }));
+    } catch (error) {
+      console.warn('Failed to load operator instructions from database, using fallback:', error);
+      // Fallback to simplified instructions
+      return this.getFallbackOperatorInstructions(businessType);
+    }
   }
 
-  // Get instructions for customer agent
+
+  // Fallback operator instructions when database is not available
+  private getFallbackOperatorInstructions(businessType: string): RagInstruction[] {
+    return [
+      {
+        instructionId: `${businessType}.operator.fallback.v1`,
+        businessType: businessType,
+        category: 'operator_guidelines',
+        instruction: `Ești un operator AI pentru business ${businessType}. Ai acces complet la toate datele și resursele.`,
+        workflow: [
+          {
+            step: 1,
+            action: 'identify_request',
+            description: 'Identifică tipul cererii',
+            validation: 'has_request_type'
+          },
+          {
+            step: 2,
+            action: 'query_frontend',
+            description: 'Interoghează frontend-ul pentru date',
+            validation: 'data_retrieved'
+          },
+          {
+            step: 3,
+            action: 'create_draft',
+            description: 'Creează draft pentru răspuns',
+            validation: 'draft_created'
+          },
+          {
+            step: 4,
+            action: 'respond',
+            description: 'Generează răspunsul final',
+            validation: 'response_generated'
+          }
+        ],
+        requiredPermissions: ['frontend_query', 'draft_creation'],
+        apiEndpoints: ['/api/frontend/query', '/api/draft/create'],
+        successCriteria: ['data_retrieved', 'draft_created', 'response_generated'],
+        notificationTemplate: 'Operator AI: {response}',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        metadata: {
+          examples: ['Caută pacienți', 'Listează rezervări', 'Verifică disponibilitatea'],
+          keywords: ['operator', businessType, 'complete_access'],
+          confidence: 0.7
+        }
+      }
+    ];
+  }
+
+  // Get instructions for customer agent - from database
   async getCustomerInstructions(
     businessType: string,
     context: any
   ): Promise<RagInstruction[]> {
-    const systemInstructions = await this.listActiveSystemInstructions(businessType);
-    
-    // Filter for customer-specific instructions
-    const customerInstructions = systemInstructions.filter(instruction => 
-      instruction.role === 'customer' || instruction.role === 'general'
-    );
-    
-    return customerInstructions.map(sys => ({
-      instructionId: sys.key,
-      businessType: sys.businessType,
-      category: sys.category,
-      instruction: this.formatCustomerInstruction(sys.instructionsJson),
-      workflow: this.extractCustomerWorkflow(sys.instructionsJson),
-      requiredPermissions: this.extractCustomerPermissions(sys.instructionsJson),
-      apiEndpoints: this.extractCustomerEndpoints(sys.instructionsJson),
-      successCriteria: this.extractCustomerSuccessCriteria(sys.instructionsJson),
-      notificationTemplate: this.extractCustomerNotificationTemplate(sys.instructionsJson),
-      isActive: sys.isActive,
-      createdAt: sys.createdAt,
-      updatedAt: sys.updatedAt,
-      metadata: {
-        examples: this.extractCustomerExamples(sys.instructionsJson),
-        keywords: this.extractCustomerKeywords(sys.instructionsJson),
-        confidence: 0.85
-      }
-    }));
+    try {
+      // Get system instructions from database
+      const systemInstructions = await this.listActiveSystemInstructions(businessType);
+      
+      // Filter for customer-specific instructions
+      const customerInstructions = systemInstructions.filter(instruction => {
+        const instructionsJson = instruction.instructionsJson;
+        return instructionsJson?.role === 'client' || instructionsJson?.role === 'customer';
+      });
+      
+      return customerInstructions.map(instruction => ({
+        instructionId: instruction.key,
+        businessType: instruction.businessType,
+        category: instruction.category,
+        instruction: this.formatCustomerInstruction(instruction.instructionsJson),
+        workflow: this.extractCustomerWorkflow(instruction.instructionsJson),
+        requiredPermissions: this.extractCustomerPermissions(instruction.instructionsJson),
+        apiEndpoints: this.extractCustomerEndpoints(instruction.instructionsJson),
+        successCriteria: this.extractCustomerSuccessCriteria(instruction.instructionsJson),
+        notificationTemplate: this.extractCustomerNotificationTemplate(instruction.instructionsJson),
+        isActive: instruction.isActive,
+        createdAt: instruction.createdAt,
+        updatedAt: instruction.updatedAt,
+        metadata: {
+          examples: this.extractCustomerExamples(instruction.instructionsJson),
+          keywords: this.extractCustomerKeywords(instruction.instructionsJson),
+          confidence: 0.8
+        }
+      }));
+    } catch (error) {
+      console.warn('Failed to load customer instructions from database, using fallback:', error);
+      // Fallback to simplified instructions
+      return this.getFallbackCustomerInstructions(businessType);
+    }
   }
 
-
+  // Fallback customer instructions when database is not available
+  private getFallbackCustomerInstructions(businessType: string): RagInstruction[] {
+    return [
+      {
+        instructionId: `${businessType}.customer.fallback.v1`,
+        businessType: businessType,
+        category: 'customer_guidelines',
+        instruction: `Ești un asistent AI pentru clienții unui business ${businessType}. Poți lista serviciile disponibile și ghida clienții.`,
+        workflow: [
+          {
+            step: 1,
+            action: 'recognize_customer',
+            description: 'Identifică tipul de client',
+            validation: 'customer_identified'
+          },
+          {
+            step: 2,
+            action: 'get_services',
+            description: 'Listează serviciile disponibile',
+            validation: 'services_found'
+          },
+          {
+            step: 3,
+            action: 'guide_booking',
+            description: 'Ghidează clientul către programare',
+            validation: 'booking_guided'
+          },
+          {
+            step: 4,
+            action: 'respond',
+            description: 'Generează răspunsul final',
+            validation: 'response_generated'
+          }
+        ],
+        requiredPermissions: ['service_discovery', 'booking_guidance'],
+        apiEndpoints: ['/api/services', '/api/booking'],
+        successCriteria: ['customer_recognized', 'services_found', 'booking_guided'],
+        notificationTemplate: 'Customer AI: {response}',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        metadata: {
+          examples: ['Listează servicii', 'Verifică disponibilitatea', 'Ghidează programarea'],
+          keywords: ['customer', businessType, 'friendly_guidance'],
+          confidence: 0.7
+        }
+      }
+    ];
+  }
 
   // System RAG (read-only)
   async getSystemInstructionByKey(key: string): Promise<RagSystemInstruction | null> {

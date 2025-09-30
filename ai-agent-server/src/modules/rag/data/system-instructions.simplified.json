@@ -1,0 +1,110 @@
+[
+  {
+    "key": "dental.operator.v1",
+    "businessType": "dental",
+    "role": "operator",
+    "instructions": {
+      "capabilities": ["frontend_query", "draft_creation", "data_analysis"],
+      "keywords": ["programare", "pacient", "serviciu", "analiza"],
+      "workflow": ["identify_needs", "query_frontend", "create_draft", "respond"],
+      "availableFacades": {
+        "appointments": {
+          "actions": ["list", "get", "create", "update", "delete", "search"],
+          "searchMethods": ["searchByPatientName", "searchByDate", "searchByService"],
+          "fields": ["id", "date", "time", "patient", "service", "status"]
+        },
+        "patients": {
+          "actions": ["list", "get", "create", "update", "search"],
+          "searchMethods": ["searchByCustomField", "searchByName", "searchByPhone"],
+          "fields": ["id", "name", "phone", "email", "history"]
+        },
+        "services": {
+          "actions": ["list", "get", "create", "update"],
+          "fields": ["id", "name", "price", "duration", "description"]
+        }
+      }
+    }
+  },
+  {
+    "key": "dental.customer.v1", 
+    "businessType": "dental",
+    "role": "customer",
+    "instructions": {
+      "capabilities": ["service_discovery", "booking_guidance", "customer_support"],
+      "keywords": ["programare", "serviciu", "pret", "disponibilitate"],
+      "workflow": ["recognize_customer", "get_services", "guide_booking", "respond"]
+    }
+  },
+  {
+    "key": "gym.operator.v1",
+    "businessType": "gym", 
+    "role": "operator",
+    "instructions": {
+      "capabilities": ["frontend_query", "draft_creation", "data_analysis"],
+      "keywords": ["membru", "abonament", "antrenament", "analiza"],
+      "workflow": ["identify_needs", "query_frontend", "create_draft", "respond"],
+      "availableFacades": {
+        "memberships": {
+          "actions": ["list", "get", "create", "update", "delete", "search"],
+          "searchMethods": ["searchByMemberName", "searchByMembershipType", "searchByStatus"],
+          "fields": ["id", "memberName", "type", "startDate", "endDate", "status"]
+        },
+        "members": {
+          "actions": ["list", "get", "create", "update", "search"],
+          "searchMethods": ["searchByCustomField", "searchByName", "searchByPhone"],
+          "fields": ["id", "name", "phone", "email", "membershipType"]
+        },
+        "services": {
+          "actions": ["list", "get", "create", "update"],
+          "fields": ["id", "name", "price", "duration", "description"]
+        }
+      }
+    }
+  },
+  {
+    "key": "gym.customer.v1",
+    "businessType": "gym",
+    "role": "customer", 
+    "instructions": {
+      "capabilities": ["membership_info", "booking_guidance", "customer_support"],
+      "keywords": ["abonament", "antrenament", "pret", "disponibilitate"],
+      "workflow": ["recognize_customer", "get_services", "guide_booking", "respond"]
+    }
+  },
+  {
+    "key": "hotel.operator.v1",
+    "businessType": "hotel", 
+    "role": "operator", 
+    "instructions": {
+      "capabilities": ["frontend_query", "draft_creation", "data_analysis"],
+      "keywords": ["rezervare", "camera", "serviciu", "analiza"],
+      "workflow": ["identify_needs", "query_frontend", "create_draft", "respond"],
+      "availableFacades": {
+        "reservations": {
+          "actions": ["list", "get", "create", "update", "delete", "search"],
+          "searchMethods": ["searchByGuestName", "searchByDate", "searchByRoom"],
+          "fields": ["id", "guestName", "checkIn", "checkOut", "room", "status"]
+        },
+        "guests": {
+          "actions": ["list", "get", "create", "update", "search"],
+          "searchMethods": ["searchByCustomField", "searchByName", "searchByPhone"],
+          "fields": ["id", "name", "phone", "email", "preferences"]
+        },
+        "rooms": {
+          "actions": ["list", "get", "create", "update"],
+          "fields": ["id", "number", "type", "price", "amenities"]
+        }
+      }
+    }
+  },
+  {
+    "key": "hotel.customer.v1",
+    "businessType": "hotel",
+    "role": "customer",
+    "instructions": {
+      "capabilities": ["room_discovery", "booking_guidance", "customer_support"],
+      "keywords": ["camera", "rezervare", "pret", "disponibilitate"],
+      "workflow": ["recognize_customer", "get_services", "guide_booking", "respond"]
+    }
+  }
+]

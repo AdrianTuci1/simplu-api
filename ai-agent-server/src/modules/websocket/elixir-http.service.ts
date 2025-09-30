@@ -14,7 +14,7 @@ export class ElixirHttpService {
   }
 
   // Trimite răspunsul AI înapoi la Notification Hub
-  async sendAIResponse(tenantId: string, userId: string, sessionId: string, messageId: string, content: string, context: any = {}): Promise<void> {
+  async sendAIResponse(tenantId: string, userId: string, sessionId: string, messageId: string, content: string, context: any = {}, draft: any = null): Promise<void> {
     this.logger.log('=== Sending AI Response to Notification Hub ===');
     this.logger.log(`Tenant ID: ${tenantId}`);
     this.logger.log(`User ID: ${userId}`);
@@ -22,6 +22,7 @@ export class ElixirHttpService {
     this.logger.log(`Message ID: ${messageId}`);
     this.logger.log(`Content: "${content}"`);
     this.logger.log(`Context: ${JSON.stringify(context)}`);
+    this.logger.log(`Draft: ${draft ? JSON.stringify(draft) : 'none'}`);
     this.logger.log(`Target URL: ${this.notificationHubUrl}/api/ai-responses`);
 
     // Process context to extract actions and queries
@@ -34,6 +35,7 @@ export class ElixirHttpService {
       message_id: messageId,
       content: content,
       context: processedContext,
+      draft: draft, // Include draft if available
       timestamp: new Date().toISOString(),
       type: 'agent.response'
     };
@@ -77,6 +79,62 @@ export class ElixirHttpService {
         this.logger.error('No response received from Notification Hub');
       } else {
         this.logger.error(`Error stack: ${error.stack}`);
+      }
+      
+      // Nu aruncăm eroarea pentru că aceasta nu este critică pentru fluxul principal
+      this.logger.warn('Continuing without throwing error - non-critical for main flow');
+    }
+  }
+
+  // Trimite query-uri frontend către Elixir pentru procesare
+  async sendFrontendQueries(tenantId: string, userId: string, sessionId: string, queries: any[], locationId: string = 'default'): Promise<void> {
+    this.logger.log('=== Sending Frontend Queries to Elixir ===');
+    this.logger.log(`Tenant ID: ${tenantId}`);
+    this.logger.log(`User ID: ${userId}`);
+    this.logger.log(`Session ID: ${sessionId}`);
+    this.logger.log(`Location ID: ${locationId}`);
+    this.logger.log(`Queries: ${JSON.stringify(queries)}`);
+    this.logger.log(`Target URL: ${this.notificationHubUrl}/api/frontend-queries`);
+
+    const requestBody = {
+      tenant_id: tenantId,
+      user_id: userId,
+      session_id: sessionId,
+      location_id: locationId,
+      queries: queries,
+      timestamp: new Date().toISOString(),
+      type: 'action' // Simplified to single topic
+    };
+
+    this.logger.log(`Request body: ${JSON.stringify(requestBody)}`);
+
+    try {
+      const startTime = Date.now();
+      
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.notificationHubUrl}/api/frontend-queries`, requestBody, {
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'AI-Agent-Server/1.0'
+          },
+          timeout: 10000 // 10 seconds timeout
+        })
+      );
+      
+      const duration = Date.now() - startTime;
+      
+      this.logger.log('=== Frontend Queries Sent Successfully ===');
+      this.logger.log(`Response status: ${response.status}`);
+      this.logger.log(`Response data: ${JSON.stringify(response.data)}`);
+      this.logger.log(`Request duration: ${duration}ms`);
+      
+    } catch (error) {
+      this.logger.error('=== Error Sending Frontend Queries ===');
+      this.logger.error(`Error: ${error.message}`);
+      
+      if (error.response) {
+        this.logger.error(`HTTP Status: ${error.response.status}`);
+        this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
       }
       
       // Nu aruncăm eroarea pentru că aceasta nu este critică pentru fluxul principal
