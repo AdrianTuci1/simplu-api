@@ -14,6 +14,11 @@ export interface AgentResponse {
   timestamp: string;
   sessionId: string;
   draft?: any; // Optional draft field for resource creation assistance
+  ragContext?: { // Optional RAG context for debugging and tracking
+    type: 'general' | 'resource';
+    key: string;
+    data: any;
+  };
 }
 
 export interface AgentAction {

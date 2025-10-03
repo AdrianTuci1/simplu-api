@@ -15,12 +15,7 @@ export const tableNames = {
   sessions: process.env.DYNAMODB_SESSIONS_TABLE || 'ai-agent-sessions',
   messages: process.env.DYNAMODB_MESSAGES_TABLE || 'ai-agent-messages',
   businessInfo: process.env.DYNAMODB_BUSINESS_INFO_TABLE || 'business-info',
-
-  // RAG system instructions
-  ragSystemInstructions: process.env.DYNAMODB_RAG_SYSTEM_TABLE || 'rag-system-instructions',
-  // Dynamic RAG tables
-  ragDynamicBusiness: process.env.DYNAMODB_RAG_DYNAMIC_BUSINESS_TABLE || 'rag-dynamic-business',
-  ragDynamicUser: process.env.DYNAMODB_RAG_DYNAMIC_USER_TABLE || 'rag-dynamic-user',
-  
+  rag: process.env.DYNAMODB_RAG_TABLE || 'rag-instructions',
   externalCredentials: process.env.DYNAMODB_EXTERNAL_CREDENTIALS_TABLE || 'business-external-credentials',
+  externalApiConfig: process.env.DYNAMODB_EXTERNAL_API_CONFIG_TABLE || 'business-external-api-config',
 }; 

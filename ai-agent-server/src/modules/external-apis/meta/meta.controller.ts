@@ -6,8 +6,16 @@ export class MetaController {
   constructor(private readonly meta: MetaService) {}
 
   @Get('auth-url')
-  getAuthUrl(@Query('businessId') businessId: string, @Query('userId') userId: string) {
-    return { url: this.meta.generateAuthUrl(businessId, userId) };
+  getAuthUrl(@Query('businessId') businessId: string, @Query('locationId') locationId: string) {
+    return { url: this.meta.generateAuthUrl(businessId, locationId) };
+  }
+
+  @Get('status')
+  async getStatus(
+    @Query('businessId') businessId: string,
+    @Query('locationId') locationId: string
+  ) {
+    return this.meta.getCredentialsStatus(businessId, locationId);
   }
 
   @Get('callback')

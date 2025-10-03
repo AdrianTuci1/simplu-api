@@ -6,10 +6,10 @@ import { ExternalApisService } from '../external-apis.service';
 export class MetaService {
   constructor(private readonly externalApis: ExternalApisService) {}
 
-  generateAuthUrl(businessId: string, userId: string): string {
-    if (!businessId || !userId) throw new BadRequestException('Missing businessId or userId');
+  generateAuthUrl(businessId: string, locationId: string): string {
+    if (!businessId || !locationId) throw new BadRequestException('Missing businessId or locationId');
     const clientId = process.env.META_APP_ID as string;
-    const redirectUri = process.env.META_REDIRECT_URI || 'http://localhost:3001/external/meta/callback';
+    const redirectUri = process.env.META_REDIRECT_URI || 'http://localhost:3003/external/meta/callback';
     const scopes = [
       'pages_messaging',
       'pages_show_list',
@@ -17,7 +17,7 @@ export class MetaService {
       'instagram_basic',
       'instagram_manage_messages',
     ];
-    const state = Buffer.from(JSON.stringify({ businessId, userId })).toString('base64url');
+    const state = Buffer.from(JSON.stringify({ businessId, locationId })).toString('base64url');
     const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', redirectUri);
@@ -28,10 +28,10 @@ export class MetaService {
 
   async handleCallback(code: string, state: string): Promise<any> {
     if (!code || !state) throw new BadRequestException('Missing code/state');
-    const { businessId, userId } = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+    const { businessId, locationId } = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
     const clientId = process.env.META_APP_ID as string;
     const clientSecret = process.env.META_APP_SECRET as string;
-    const redirectUri = process.env.META_REDIRECT_URI || 'http://localhost:3001/external/meta/callback';
+    const redirectUri = process.env.META_REDIRECT_URI || 'http://localhost:3003/external/meta/callback';
 
     // Use default agents (no keep-alive) for one-off OAuth exchanges to avoid lingering sockets
     const axiosInstance = axios.create({
@@ -54,7 +54,7 @@ export class MetaService {
       longLived = ll.data?.access_token || accessToken;
     } catch {}
 
-    // Store per-user Meta token under serviceType meta#userId
+    // Store per-location Meta token under serviceType meta#locationId
     await this.externalApis.saveMetaCredentials(businessId, {
       accessToken: longLived,
       phoneNumberId: '',
@@ -63,6 +63,29 @@ export class MetaService {
     } as any);
 
     return { success: true };
+  }
+
+  async getCredentialsStatus(businessId: string, locationId: string): Promise<any> {
+    try {
+      const credentials = await this.externalApis.getMetaCredentials(businessId);
+      return {
+        connected: !!credentials,
+        hasAccessToken: !!credentials?.accessToken,
+        hasPhoneNumberId: !!credentials?.phoneNumberId,
+        hasPhoneNumber: !!credentials?.phoneNumber,
+        phoneNumber: credentials?.phoneNumber || null,
+      };
+    } catch (error) {
+      console.error('Error getting Meta credentials status:', error);
+      return {
+        connected: false,
+        hasAccessToken: false,
+        hasPhoneNumberId: false,
+        hasPhoneNumber: false,
+        phoneNumber: null,
+        error: error.message,
+      };
+    }
   }
 }
 

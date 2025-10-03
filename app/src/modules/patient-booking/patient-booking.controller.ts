@@ -66,17 +66,36 @@ export class PatientBookingController {
     @Param('date') date: string,
     @Query('serviceId') serviceId?: string,
   ) {
-    return this.bookingService.getDaySlots(businessId, locationId, date);
+    return this.bookingService.getDaySlots(businessId, locationId, date, serviceId);
   }
 
   @Post('reserve/:businessId-:locationId')
-  @UseGuards(CognitoAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a reservation (auth optional via Public if desired)' })
+  @Public()
+  @ApiOperation({ summary: 'Create a reservation using customer data' })
   @ApiParam({ name: 'businessId' })
   @ApiParam({ name: 'locationId' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD' },
+        time: { type: 'string', description: 'HH:mm' },
+        serviceId: { type: 'string' },
+        duration: { type: 'number', description: 'Duration in minutes' },
+        medicId: { type: 'string', description: 'Optional medic ID for specific medic booking (auto-assigned if not provided)' },
+        customer: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            email: { type: 'string' },
+            phone: { type: 'string' },
+          },
+        },
+      },
+      required: ['date', 'time', 'serviceId', 'customer'],
+    },
+  })
   async reserve(
-    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Body()
@@ -85,31 +104,32 @@ export class PatientBookingController {
       time: string; // HH:mm
       serviceId: string;
       duration?: number; // minutes
-      customer?: {
+      medicId?: string; // medic ID for specific medic booking
+      customer: {
         name?: string;
         email?: string;
         phone?: string;
       };
     },
   ) {
-    return this.bookingService.reserve(businessId, locationId, payload, user);
+    return this.bookingService.reserve(businessId, locationId, payload);
   }
 
   @Get('appointments/history/:businessId-:locationId')
-  @UseGuards(CognitoAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get appointment history for a business location' })
+  @Public()
+  @ApiOperation({ summary: 'Get appointment history using customer email' })
   @ApiParam({ name: 'businessId' })
   @ApiParam({ name: 'locationId' })
+  @ApiQuery({ name: 'email', required: true, description: 'Customer email to filter appointments' })
   @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'to', required: false, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'status', required: false, description: 'scheduled|completed|canceled' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   async getAppointmentHistory(
-    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
+    @Query('email') email: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
@@ -120,20 +140,19 @@ export class PatientBookingController {
       businessId,
       locationId,
       {
+        email,
         from,
         to,
         status,
         page: page ? parseInt(page, 10) : undefined,
         limit: limit ? parseInt(limit, 10) : undefined,
       },
-      user,
     );
   }
 
   @Post('appointments/modify/:businessId-:locationId/:appointmentId')
-  @UseGuards(CognitoAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Modify an appointment with status scheduled' })
+  @Public()
+  @ApiOperation({ summary: 'Modify an appointment using customer data' })
   @ApiParam({ name: 'businessId' })
   @ApiParam({ name: 'locationId' })
   @ApiParam({ name: 'appointmentId' })
@@ -145,6 +164,7 @@ export class PatientBookingController {
         time: { type: 'string', description: 'HH:mm' },
         serviceId: { type: 'string' },
         duration: { type: 'number' },
+        medicId: { type: 'string', description: 'Optional medic ID for specific medic booking (auto-assigned if not provided)' },
         customer: {
           type: 'object',
           properties: {
@@ -154,10 +174,10 @@ export class PatientBookingController {
           },
         },
       },
+      required: ['customer'],
     },
   })
   async modifyScheduledAppointment(
-    @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Param('appointmentId') appointmentId: string,
@@ -167,10 +187,11 @@ export class PatientBookingController {
       time?: string;
       serviceId?: string;
       duration?: number;
-      customer?: { name?: string; email?: string; phone?: string };
+      medicId?: string;
+      customer: { name?: string; email?: string; phone?: string };
     },
   ) {
-    return this.bookingService.modifyScheduledAppointment(businessId, locationId, appointmentId, payload, user);
+    return this.bookingService.modifyScheduledAppointment(businessId, locationId, appointmentId, payload);
   }
 
   @Get('plan/:businessId-:locationId')

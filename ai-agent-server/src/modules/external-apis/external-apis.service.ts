@@ -217,15 +217,15 @@ export class ExternalApisService {
 
   async sendEmailFromGmail(
     businessId: string,
-    userId: string,
+    locationId: string,
     to: string,
     subject: string,
     text: string
   ): Promise<{ success: boolean; messageId?: string; error?: string }>
   {
-    const creds = await this.getGmailCredentials(businessId, userId);
+    const creds = await this.getGmailCredentials(businessId, locationId);
     if (!creds) {
-      return { success: false, error: 'Missing Gmail credentials for user' };
+      return { success: false, error: 'Missing Gmail credentials for location' };
     }
     const clientId = process.env.GOOGLE_CLIENT_ID as string;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET as string;
@@ -325,18 +325,23 @@ export class ExternalApisService {
 
   async saveGmailCredentials(
     businessId: string,
-    userId: string,
+    locationId: string,
     credentials: GmailCredentials
   ): Promise<ExternalCredentials> {
+    console.log(`Saving Gmail credentials for businessId: ${businessId}, locationId: ${locationId}`);
+    console.log('Gmail credentials:', credentials);
+    
     const externalCredentials: ExternalCredentials = {
       businessId,
-      serviceType: `gmail#${userId}`,
+      serviceType: `gmail#${locationId}`,
       credentials,
       isActive: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       metadata: { permissions: ['gmail.read', 'gmail.send'] },
     };
+    
+    console.log('External credentials to save:', externalCredentials);
 
     await this.dynamoClient.send(
       new PutCommand({
@@ -404,24 +409,34 @@ export class ExternalApisService {
 
   async getGmailCredentials(
     businessId: string,
-    userId: string
+    locationId: string
   ): Promise<GmailCredentials | null> {
     try {
+      console.log(`Getting Gmail credentials for businessId: ${businessId}, locationId: ${locationId}`);
+      const key = {
+        businessId,
+        serviceType: `gmail#${locationId}`,
+      };
+      console.log('DynamoDB key:', key);
+      
       const result = await this.dynamoClient.send(
         new GetCommand({
           TableName: tableNames.externalCredentials,
-          Key: {
-            businessId,
-            serviceType: `gmail#${userId}`,
-          },
+          Key: key,
         })
       );
 
+      console.log('DynamoDB result:', result);
+
       if (!result.Item) {
+        console.log('No item found in DynamoDB');
         return null;
       }
 
       const credentials = result.Item as ExternalCredentials;
+      console.log('Found credentials:', credentials);
+      console.log('isActive:', credentials.isActive);
+      
       return credentials.isActive ? (credentials.credentials as GmailCredentials) : null;
     } catch (error) {
       console.error('Error getting Gmail credentials:', error);

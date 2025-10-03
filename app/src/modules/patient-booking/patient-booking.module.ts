@@ -7,6 +7,8 @@ import { ResourceQueryService } from '../resources/services/resource-query.servi
 import { BusinessInfoModule } from '../business-info/business-info.module';
 import { AuthModule } from '../auth/auth.module';
 import { KinesisService } from '../../kinesis.service';
+import { MessageAutomationService } from '../../services/message-automation.service';
+import { ExternalApiConfigService } from '../../services/external-api-config.service';
 
 @Module({
   imports: [
@@ -15,7 +17,13 @@ import { KinesisService } from '../../kinesis.service';
     AuthModule,
   ],
   controllers: [PatientBookingController],
-  providers: [PatientBookingService, ResourceQueryService, KinesisService],
+  providers: [
+    PatientBookingService, 
+    ResourceQueryService, 
+    KinesisService,
+    MessageAutomationService,
+    ExternalApiConfigService
+  ],
   exports: [PatientBookingService],
 })
 export class PatientBookingModule {}

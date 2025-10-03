@@ -35,6 +35,7 @@ export const VALID_RESOURCE_TYPES = [
   'sale', // Sales data
   'dental-chart', // Dental chart
   'plan', // Dental plan
+  'settings', // Settings
 
   // Statistics resource types
   'statistics', // General business statistics

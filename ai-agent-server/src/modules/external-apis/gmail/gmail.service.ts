@@ -1,23 +1,27 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Res } from '@nestjs/common';
 import { ExternalApisService } from '../external-apis.service';
 import { google } from 'googleapis';
+import { Response } from 'express';
 
 @Injectable()
 export class GmailService {
   constructor(private readonly externalApis: ExternalApisService) {}
 
-  private createOAuthClient() {
+  private createOAuthClient(redirectUri?: string) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/external/gmail/callback';
+    const defaultRedirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3003/external/gmail/callback';
+    const finalRedirectUri = redirectUri || defaultRedirectUri;
+    
     if (!clientId || !clientSecret) {
-      console.warn('GmailService: missing GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET');
+      throw new BadRequestException('Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables. Please configure these variables in your .env file.');
     }
-    return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    
+    return new google.auth.OAuth2(clientId, clientSecret, finalRedirectUri);
   }
 
-  generateAuthUrl(businessId: string, userId: string): string {
-    if (!businessId || !userId) throw new BadRequestException('Missing businessId or userId');
+  generateAuthUrl(businessId: string, locationId: string, redirectUrl?: string): string {
+    if (!businessId || !locationId) throw new BadRequestException('Missing businessId or locationId');
     const scopes = [
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/gmail.send',
@@ -25,7 +29,13 @@ export class GmailService {
       'openid',
       'email',
     ];
-    const state = Buffer.from(JSON.stringify({ businessId, userId })).toString('base64url');
+    const state = Buffer.from(JSON.stringify({ 
+      businessId, 
+      locationId, 
+      redirectUrl: redirectUrl || 'http://localhost:3000' // Default frontend URL
+    })).toString('base64url');
+    
+    // Use the backend callback URI for OAuth (this is what Google will redirect to)
     const oauth2Client = this.createOAuthClient();
     return oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -35,21 +45,76 @@ export class GmailService {
     });
   }
 
-  async handleOAuthCallback(code: string, state: string): Promise<any> {
+  async handleOAuthCallback(code: string, state: string, res?: Response): Promise<any> {
     if (!code || !state) throw new BadRequestException('Missing code/state');
-    const { businessId, userId } = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-    const oauth2Client = this.createOAuthClient();
-    const { tokens } = await oauth2Client.getToken(code);
-    if (!tokens?.access_token || !tokens?.refresh_token) {
-      throw new BadRequestException('Invalid tokens returned by Google');
+    
+    let redirectUrl = 'http://localhost:3000'; // Default frontend URL
+    
+    try {
+      const { businessId, locationId, redirectUrl: stateRedirectUrl } = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+      console.log('Gmail callback - businessId:', businessId, 'locationId:', locationId);
+      redirectUrl = stateRedirectUrl || redirectUrl;
+      
+      const oauth2Client = this.createOAuthClient();
+      const { tokens } = await oauth2Client.getToken(code);
+      
+      if (!tokens?.access_token || !tokens?.refresh_token) {
+        throw new BadRequestException('Invalid tokens returned by Google');
+      }
+      
+      await this.externalApis.saveGmailCredentials(businessId, locationId, {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiryDate: typeof tokens.expiry_date === 'number' ? tokens.expiry_date : undefined,
+        email: await this.fetchUserEmail(tokens.access_token),
+      });
+      
+      // If res is provided, redirect to frontend with success
+      if (res) {
+        return res.redirect(`${redirectUrl}?gmail_auth=success`);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Gmail OAuth callback error:', error);
+      
+      // If res is provided, redirect to frontend with error
+      if (res) {
+        const errorMessage = encodeURIComponent(error.message || 'Gmail authorization failed');
+        return res.redirect(`${redirectUrl}?gmail_auth=error&error=${errorMessage}`);
+      }
+      
+      throw error;
     }
-    await this.externalApis.saveGmailCredentials(businessId, userId, {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiryDate: typeof tokens.expiry_date === 'number' ? tokens.expiry_date : undefined,
-      email: await this.fetchUserEmail(tokens.access_token),
-    });
-    return { success: true };
+  }
+
+  async getCredentialsStatus(businessId: string, locationId: string): Promise<any> {
+    try {
+      console.log(`Getting Gmail credentials status for businessId: ${businessId}, locationId: ${locationId}`);
+      const credentials = await this.externalApis.getGmailCredentials(businessId, locationId);
+      console.log('Retrieved credentials:', credentials);
+      
+      const status = {
+        connected: !!credentials,
+        email: credentials?.email || null,
+        hasAccessToken: !!credentials?.accessToken,
+        hasRefreshToken: !!credentials?.refreshToken,
+        expiryDate: credentials?.expiryDate || null,
+      };
+      
+      console.log('Returning status:', status);
+      return status;
+    } catch (error) {
+      console.error('Error getting Gmail credentials status:', error);
+      return {
+        connected: false,
+        email: null,
+        hasAccessToken: false,
+        hasRefreshToken: false,
+        expiryDate: null,
+        error: error.message,
+      };
+    }
   }
 
   async fetchUserEmail(accessToken: string): Promise<string> {

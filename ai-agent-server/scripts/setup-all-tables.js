@@ -1,15 +1,16 @@
-const { DynamoDBClient, CreateTableCommand, DescribeTableCommand, ListTablesCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
 const dotenv = require('dotenv');
 const path = require('path');
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // Configurare DynamoDB
 const dynamoDBConfig = {
-  region: 'eu-central-1',
+  region: process.env.AWS_DYNAMODB_REGION || process.env.AWS_REGION || 'eu-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
+  ...(process.env.DYNAMODB_ENDPOINT && { endpoint: process.env.DYNAMODB_ENDPOINT }),
 };
 
 const dynamoDBClient = new DynamoDBClient(dynamoDBConfig);
@@ -292,10 +293,10 @@ async function createTable(tableName, config) {
   }
 }
 
-async function setupDynamoDBTables() {
-  console.log('🚀 Starting DynamoDB Tables Setup');
-  console.log('==================================');
-  console.log(`🌍 AWS Region: ${process.env.AWS_REGION || 'us-east-1'}`);
+async function setupAllTables() {
+  console.log('🚀 Starting Complete DynamoDB Tables Setup');
+  console.log('========================================');
+  console.log(`🌍 AWS Region: ${process.env.AWS_REGION || 'eu-central-1'}`);
   console.log(`📊 Tables to setup: ${Object.keys(tableConfigurations).length}`);
   console.log('');
 
@@ -335,20 +336,21 @@ async function setupDynamoDBTables() {
 
   if (errorCount === 0) {
     console.log('\n🎉 All DynamoDB tables are ready!');
-  console.log('\n📝 Next steps:');
-  console.log('1. Run: node scripts/populate-system-instructions.js');
-  console.log('2. Run: node scripts/populate-rag.js');
-  console.log('3. Test your AI agent server with RAG memory!');
-  console.log('4. Test customer recognition across platforms (Meta, Twilio, Email, Web)');
+    console.log('\n📝 Next steps:');
+    console.log('1. Run: node scripts/populate-system-instructions.js');
+    console.log('2. Run: node scripts/populate-rag.js');
+    console.log('3. Configure external API credentials and templates');
+    console.log('4. Test your AI agent server with RAG memory!');
+    console.log('5. Test customer recognition across platforms (Meta, Twilio, Email, Web)');
   } else {
     console.log(`\n⚠️  ${errorCount} tables failed to create. Check the errors above.`);
   }
 }
 
 // Rulare script
-setupDynamoDBTables()
+setupAllTables()
   .then(() => {
-    console.log('\n🏁 DynamoDB setup completed!');
+    console.log('\n🏁 Complete DynamoDB setup completed!');
     process.exit(0);
   })
   .catch((error) => {

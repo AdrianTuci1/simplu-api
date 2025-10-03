@@ -1,0 +1,397 @@
+{
+  "ragInstructions": [
+    {
+      "ragKey": "operator.dental.general",
+      "version": "v1",
+      "businessType": "dental",
+      "role": "operator",
+      "instructions": [
+        "Ești un asistent virtual pentru o clinică dentală",
+        "Poți accesa toate datele despre pacienți, programări și servicii",
+        "Poți crea schițe pentru programări noi",
+        "Poți modifica programările existente",
+        "Răspunsurile trebuie să fie concise și profesionale",
+        "Folosește terminologia medicală corectă",
+        "Poți gestiona datele pacienților și istoricul medical",
+        "Poți accesa informații despre tratamente și prețuri"
+      ],
+      "capabilities": [
+        "view_all_data",
+        "modify_reservations",
+        "create_drafts",
+        "access_patient_data",
+        "manage_treatments"
+      ],
+      "responseStyle": "professional_concise"
+    },
+    {
+      "ragKey": "customer.dental.general",
+      "version": "v1",
+      "businessType": "dental",
+      "role": "customer",
+      "instructions": [
+        "Ești un asistent virtual pentru clienții unei clinici dentale",
+        "Poți oferi informații despre servicii și programări",
+        "Nu poți accesa date personale ale altor pacienți",
+        "Răspunsurile trebuie să fie prietenoase și utile",
+        "Ghidează clienții către rezervări",
+        "Folosește limbaj simplu și accesibil",
+        "Poți oferi informații despre tratamente și prețuri",
+        "Poți ajuta la programarea consultațiilor"
+      ],
+      "capabilities": [
+        "view_public_info",
+        "request_appointments",
+        "view_services",
+        "get_booking_guidance"
+      ],
+      "responseStyle": "friendly_helpful"
+    },
+    {
+      "ragKey": "operator.gym.general",
+      "version": "v1",
+      "businessType": "gym",
+      "role": "operator",
+      "instructions": [
+        "Ești un asistent virtual pentru o sală de sport",
+        "Poți accesa date despre membri, abonamente și programe",
+        "Poți gestiona rezervările pentru clase și echipamente",
+        "Răspunsurile trebuie să fie motivate și energice",
+        "Folosește terminologia fitness corectă",
+        "Poți gestiona abonamentele membrilor",
+        "Poți programa clase și antrenamente"
+      ],
+      "capabilities": [
+        "view_all_data",
+        "manage_memberships",
+        "schedule_classes",
+        "manage_equipment",
+        "view_member_data"
+      ],
+      "responseStyle": "energetic_motivating"
+    },
+    {
+      "ragKey": "customer.gym.general",
+      "version": "v1",
+      "businessType": "gym",
+      "role": "customer",
+      "instructions": [
+        "Ești un asistent virtual pentru membrii unei săli de sport",
+        "Poți oferi informații despre clase, echipamente și programe",
+        "Răspunsurile trebuie să fie motivate și încurajatoare",
+        "Ghidează membrii către activități potrivite",
+        "Poți oferi informații despre abonamente",
+        "Poți ajuta la rezervarea claselor"
+      ],
+      "capabilities": [
+        "view_public_info",
+        "book_classes",
+        "view_schedule",
+        "get_fitness_guidance"
+      ],
+      "responseStyle": "motivating_encouraging"
+    },
+    {
+      "ragKey": "operator.hotel.general",
+      "version": "v1",
+      "businessType": "hotel",
+      "role": "operator",
+      "instructions": [
+        "Ești un asistent virtual pentru un hotel",
+        "Poți accesa toate datele despre camere, rezervări și oaspeți",
+        "Poți gestiona check-in/check-out",
+        "Răspunsurile trebuie să fie profesionale și ospitaliere",
+        "Folosește terminologia hotelieră corectă",
+        "Poți gestiona rezervările și camerele",
+        "Poți accesa informații despre servicii și facilități"
+      ],
+      "capabilities": [
+        "view_all_data",
+        "manage_bookings",
+        "manage_rooms",
+        "process_checkin_checkout",
+        "view_guest_data"
+      ],
+      "responseStyle": "professional_hospitable"
+    },
+    {
+      "ragKey": "customer.hotel.general",
+      "version": "v1",
+      "businessType": "hotel",
+      "role": "customer",
+      "instructions": [
+        "Ești un asistent virtual pentru oaspeții unui hotel",
+        "Poți oferi informații despre camere, servicii și facilități",
+        "Răspunsurile trebuie să fie ospitaliere și utile",
+        "Ghidează oaspeții către serviciile hotelului",
+        "Poți ajuta la rezervarea camerelor",
+        "Poți oferi informații despre facilități"
+      ],
+      "capabilities": [
+        "view_public_info",
+        "book_rooms",
+        "view_services",
+        "get_hotel_guidance"
+      ],
+      "responseStyle": "hospitable_helpful"
+    }
+  ],
+  "ragResources": [
+    {
+      "resourceKey": "dental.listResources",
+      "version": "v1",
+      "businessType": "dental",
+      "resourceType": "listResources",
+      "instructions": [
+        "Listează toate resursele disponibile pentru clinica dentală",
+        "Include servicii, doctori, echipamente și programări",
+        "Filtrează după disponibilitate și specializare",
+        "Afișează prețurile și durata serviciilor",
+        "Include informații despre specializările doctorilor"
+      ],
+      "dataFields": ["services", "doctors", "equipment", "appointments"],
+      "actions": ["view_resources", "filter_by_specialization", "view_prices"]
+    },
+    {
+      "resourceKey": "dental.appointment",
+      "version": "v1",
+      "businessType": "dental",
+      "resourceType": "appointment",
+      "instructions": [
+        "Gestionează programările pentru clinica dentală",
+        "Verifică disponibilitatea doctorilor",
+        "Creează programări noi sau modifică existente",
+        "Trimite confirmări și reamintiri",
+        "Gestionează anulările și reprogramările",
+        "Verifică conflictele de programare"
+      ],
+      "dataFields": ["availableSlots", "doctors", "services", "conflicts"],
+      "actions": ["create_appointment", "modify_appointment", "cancel_appointment", "view_schedule"]
+    },
+    {
+      "resourceKey": "dental.patient",
+      "version": "v1",
+      "businessType": "dental",
+      "resourceType": "patient",
+      "instructions": [
+        "Gestionează datele pacienților",
+        "Accesează istoricul medical",
+        "Actualizează informațiile de contact",
+        "Respectă confidențialitatea medicală",
+        "Gestionează dosarele medicale",
+        "Verifică alergiile și contraindicațiile"
+      ],
+      "dataFields": ["patientInfo", "medicalHistory", "allergies", "contactInfo"],
+      "actions": ["view_patient_info", "update_patient", "view_medical_history", "add_notes"]
+    },
+    {
+      "resourceKey": "dental.treatments",
+      "version": "v1",
+      "businessType": "dental",
+      "resourceType": "treatments",
+      "instructions": [
+        "Gestionează tratamentele disponibile",
+        "Listează prețurile și durata tratamentelor",
+        "Asociază tratamente cu doctori specializați",
+        "Actualizează informațiile despre tratamente",
+        "Gestionează planurile de tratament",
+        "Verifică compatibilitatea tratamentelor"
+      ],
+      "dataFields": ["treatments", "prices", "duration", "specializations"],
+      "actions": ["view_treatments", "update_treatment", "create_treatment_plan", "view_prices"]
+    },
+    {
+      "resourceKey": "gym.membership",
+      "version": "v1",
+      "businessType": "gym",
+      "resourceType": "membership",
+      "instructions": [
+        "Gestionează abonamentele membrilor",
+        "Verifică statusul abonamentului",
+        "Procesează plățile și reînnoirile",
+        "Gestionează pachetele de servicii",
+        "Verifică accesul la facilități",
+        "Gestionează pauzele de abonament"
+      ],
+      "dataFields": ["memberships", "memberInfo", "payments", "access"],
+      "actions": ["view_membership", "renew_membership", "upgrade_membership", "pause_membership"]
+    },
+    {
+      "resourceKey": "gym.classes",
+      "version": "v1",
+      "businessType": "gym",
+      "resourceType": "classes",
+      "instructions": [
+        "Gestionează clasele de fitness",
+        "Programează antrenamentele",
+        "Gestionează rezervările pentru clase",
+        "Asignează antrenori la clase",
+        "Verifică capacitatea claselor",
+        "Gestionează lista de așteptare"
+      ],
+      "dataFields": ["classes", "schedule", "instructors", "capacity"],
+      "actions": ["view_classes", "book_class", "cancel_booking", "view_schedule"]
+    },
+    {
+      "resourceKey": "hotel.booking",
+      "version": "v1",
+      "businessType": "hotel",
+      "resourceType": "booking",
+      "instructions": [
+        "Gestionează rezervările hotelului",
+        "Verifică disponibilitatea camerelor",
+        "Procesează check-in/check-out",
+        "Gestionează modificările rezervărilor",
+        "Verifică cerințele speciale",
+        "Gestionează upgrade-urile de cameră"
+      ],
+      "dataFields": ["bookings", "rooms", "availability", "guestInfo"],
+      "actions": ["create_booking", "modify_booking", "check_in", "check_out"]
+    },
+    {
+      "resourceKey": "hotel.rooms",
+      "version": "v1",
+      "businessType": "hotel",
+      "resourceType": "rooms",
+      "instructions": [
+        "Gestionează camerele hotelului",
+        "Verifică statusul camerelor",
+        "Programează curățenia",
+        "Gestionează întreținerea camerelor",
+        "Verifică disponibilitatea",
+        "Gestionează upgrade-urile"
+      ],
+      "dataFields": ["rooms", "status", "cleaning", "maintenance"],
+      "actions": ["view_rooms", "update_room_status", "schedule_cleaning", "view_availability"]
+    }
+  ],
+  "ragResourceData": [
+    {
+      "resourceKey": "dental.listResources",
+      "dataType": "mock",
+      "businessType": "dental",
+      "data": {
+        "services": [
+          { "name": "Consultatie", "price": 150, "duration": 30, "doctor": "Dr. Popescu" },
+          { "name": "Tratament endodontic", "price": 300, "duration": 60, "doctor": "Dr. Ionescu" },
+          { "name": "Implant", "price": 800, "duration": 120, "doctor": "Dr. Popescu" }
+        ],
+        "doctors": [
+          { "name": "Dr. Popescu", "specialization": "Endodontie", "available": true },
+          { "name": "Dr. Ionescu", "specialization": "Chirurgie", "available": true }
+        ],
+        "equipment": [
+          { "name": "Radiograf digital", "status": "disponibil", "location": "Cabinet 1" },
+          { "name": "Fotoliu dental", "status": "disponibil", "location": "Cabinet 2" }
+        ]
+      }
+    },
+    {
+      "resourceKey": "dental.appointment",
+      "dataType": "mock",
+      "businessType": "dental",
+      "data": {
+        "availableSlots": [
+          { "date": "2024-01-20", "time": "09:00", "doctor": "Dr. Popescu" },
+          { "date": "2024-01-20", "time": "10:30", "doctor": "Dr. Ionescu" },
+          { "date": "2024-01-21", "time": "14:00", "doctor": "Dr. Popescu" }
+        ],
+        "services": ["Consultatie", "Tratament endodontic", "Implant"]
+      }
+    },
+    {
+      "resourceKey": "dental.patient",
+      "dataType": "mock",
+      "businessType": "dental",
+      "data": {
+        "patientInfo": { 
+          "name": "Pacient", 
+          "phone": "0712345678", 
+          "email": "pacient@email.com",
+          "lastVisit": "2024-01-15"
+        },
+        "history": [
+          { "date": "2024-01-15", "treatment": "Consultatie", "doctor": "Dr. Popescu" },
+          { "date": "2023-12-10", "treatment": "Tratament endodontic", "doctor": "Dr. Ionescu" }
+        ]
+      }
+    },
+    {
+      "resourceKey": "dental.treatments",
+      "dataType": "mock",
+      "businessType": "dental",
+      "data": {
+        "treatments": [
+          { "name": "Consultatie", "price": 150, "duration": 30, "category": "General" },
+          { "name": "Tratament endodontic", "price": 300, "duration": 60, "category": "Endodontie" },
+          { "name": "Implant", "price": 800, "duration": 120, "category": "Chirurgie" }
+        ]
+      }
+    },
+    {
+      "resourceKey": "gym.membership",
+      "dataType": "mock",
+      "businessType": "gym",
+      "data": {
+        "memberships": [
+          { "name": "Abonament lunar", "price": 200, "duration": 30 },
+          { "name": "Abonament anual", "price": 2000, "duration": 365 }
+        ],
+        "memberInfo": {
+          "name": "Membru",
+          "membershipType": "Abonament lunar",
+          "expiryDate": "2024-02-20",
+          "status": "activ"
+        }
+      }
+    },
+    {
+      "resourceKey": "gym.classes",
+      "dataType": "mock",
+      "businessType": "gym",
+      "data": {
+        "classes": [
+          { "name": "Yoga", "time": "18:00", "instructor": "Ana", "capacity": 20 },
+          { "name": "Pilates", "time": "19:00", "instructor": "Maria", "capacity": 15 }
+        ],
+        "instructors": [
+          { "name": "Ana", "specialization": "Yoga", "available": true },
+          { "name": "Maria", "specialization": "Pilates", "available": true }
+        ]
+      }
+    },
+    {
+      "resourceKey": "hotel.booking",
+      "dataType": "mock",
+      "businessType": "hotel",
+      "data": {
+        "availableRooms": [
+          { "type": "Camera Standard", "date": "2024-01-20", "price": 200 },
+          { "type": "Camera Deluxe", "date": "2024-01-20", "price": 350 }
+        ],
+        "bookingInfo": {
+          "checkIn": "2024-01-20",
+          "checkOut": "2024-01-22",
+          "guests": 2,
+          "roomType": "Camera Standard"
+        }
+      }
+    },
+    {
+      "resourceKey": "hotel.rooms",
+      "dataType": "mock",
+      "businessType": "hotel",
+      "data": {
+        "rooms": [
+          { "type": "Camera Standard", "price": 200, "available": true, "amenities": ["WiFi", "TV"] },
+          { "type": "Camera Deluxe", "price": 350, "available": true, "amenities": ["WiFi", "TV", "Minibar"] }
+        ],
+        "services": [
+          { "name": "WiFi gratuit", "included": true },
+          { "name": "Parcare", "price": 20, "included": false },
+          { "name": "Mic dejun", "price": 50, "included": false }
+        ]
+      }
+    }
+  ]
+}

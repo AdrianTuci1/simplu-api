@@ -1,48 +1,23 @@
-export interface UserCapabilities {
-  canAccessAllData: boolean;
-  canViewPersonalInfo: boolean;
-  canModifyReservations: boolean;
-  canListAllResources: boolean;
-  responseStyle: 'concise' | 'friendly_guidance';
-}
+// UserCapabilities interface removed - not used in current implementation
 
 export interface AgentState {
-  // Input
+  // Core Input
   businessId: string;
   locationId: string;
   userId: string;
   message: string;
   sessionId: string;
   source: 'websocket' | 'webhook' | 'cron';
-  role?: 'operator' | 'client_nou' | 'client_existent' | 'webhook' | 'customer';
   clientSource?: 'meta' | 'twilio' | 'email' | 'web' | 'unknown';
-  userCapabilities?: UserCapabilities;
-
+  role: 'operator' | 'customer';
+  businessType: 'dental' | 'gym' | 'hotel';
   // Context
   businessInfo: BusinessInfo | null;
-  ragResults: RagResult[];
-  resourceOperations: ResourceOperation[];
-  externalApiResults: ExternalApiResult[];
-  // Dynamic memory snapshots
-  dynamicUserMemory?: Record<string, any> | null;
-  dynamicBusinessMemory?: Record<string, any> | null;
-  // Discovery results
-  discoveredResourceTypes?: string[];
-  discoveredSchemas?: Record<string, any>;
-  discoveredUserIdFields?: Record<string, string>;
-  userFoundInResourceType?: string;
-  userFoundField?: string;
-  // System RAG
-  systemInstructions?: any[];
-  // External understanding context (memory + db signals)
-  understandingContext?: Record<string, any>;
-  // Session context - recent messages for conversation continuity
   sessionMessages?: Array<{
     content: string;
     type: 'user' | 'agent' | 'system';
     timestamp: string;
   }>;
-  // Time context - derived from message timestamps
   timeContext?: {
     currentTimestamp: string;
     currentDate: string;
@@ -52,18 +27,6 @@ export interface AgentState {
     isWeekend: boolean;
     isBusinessHours: boolean;
   };
-  // SQL generation results
-  generatedSql?: string;
-  targetResourceType?: string;
-
-  // Logică
-  startRoute?: 'internal' | 'external' | 'respond';
-  needsResourceSearch: boolean;
-  needsExternalApi: boolean;
-  needsHumanApproval: boolean;
-  needsIntrospection?: boolean;
-  needsRagUpdate?: boolean;
-  introspectionAttempted?: boolean;
 
   // Operator-specific properties
   needsFrontendInteraction?: boolean;
@@ -76,22 +39,12 @@ export interface AgentState {
 
   // Customer-specific properties
   needsAppServerData?: boolean;
-  appServerRequests?: any[];
   appServerData?: any;
   needsDatabaseQuery?: boolean;
-  databaseQueries?: any[];
   databaseQueryResults?: any[];
   needsBookingGuidance?: boolean;
   bookingGuidance?: any;
-  // Customer recognition
-  isExistingCustomer?: boolean;
-  customerInfo?: any;
-  customerSource?: string;
-  personalizedGreeting?: string;
-  needsRegistration?: boolean;
-  ragMemory?: any[];
-  crossPlatformSource?: string;
-  // Platform-specific user IDs
+  // Platform-specific user IDs for customer recognition
   metaUserId?: string;
   twilioUserId?: string;
   emailUserId?: string;
@@ -163,23 +116,7 @@ export interface LocationInfo {
   isActive: boolean;
 }
 
-export interface RagResult {
-  instruction: string;
-  workflow: any[];
-  successCriteria: string[];
-  notificationTemplate: string;
-}
-
-export interface ResourceOperation {
-  operation: any;
-  result: any;
-}
-
-export interface ExternalApiResult {
-  type: string;
-  success: boolean;
-  data: any;
-}
+// RagResult, ResourceOperation, ExternalApiResult interfaces removed - not used in current implementation
 
 export interface AgentAction {
   type: string;

@@ -1,10 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AgentService } from './agent.service';
 import { BusinessInfoService } from '../business-info/business-info.service';
-import { RagService } from '../rag/rag.service';
-import { SessionService } from '../session/session.service';
-import { WebSocketGateway } from '../websocket/websocket.gateway';
-import { ExternalApisService } from '../external-apis/external-apis.service';
+import { SimplifiedRagService } from './rag/simplified-rag.service';
+import { ResourceRagService } from './rag/resource-rag.service';
 
 describe('AgentService', () => {
   let service: AgentService;
@@ -47,46 +45,25 @@ describe('AgentService', () => {
           }
         },
         {
-          provide: RagService,
+          provide: SimplifiedRagService,
           useValue: {
-            getInstructionsForRequest: jest.fn().mockResolvedValue([
-              {
-                instruction: 'Test instruction',
-                workflow: [
-                  {
-                    step: 1,
-                    action: 'extract_reservation_details',
-                    validation: 'has_date_and_service'
-                  }
-                ],
-                successCriteria: ['reservation_created'],
-                notificationTemplate: 'Test notification for {utilizatorul}'
-              }
-            ])
+            getRagForRoleAndBusiness: jest.fn().mockResolvedValue({
+              instructions: ['Test instruction'],
+              context: { businessType: 'dental', role: 'operator' },
+              resources: [],
+              response: 'Test response'
+            })
           }
         },
         {
-          provide: SessionService,
+          provide: ResourceRagService,
           useValue: {
-            markConversationResolved: jest.fn()
-          }
-        },
-        {
-          provide: WebSocketGateway,
-          useValue: {
-            broadcastToBusiness: jest.fn()
-          }
-        },
-        {
-          provide: ExternalApisService,
-          useValue: {
-            sendMetaMessage: jest.fn().mockResolvedValue({
-              success: true,
-              messageId: 'test-message-id'
-            }),
-            sendSMS: jest.fn().mockResolvedValue({
-              success: true,
-              messageId: 'test-sms-id'
+            getResourceRag: jest.fn().mockResolvedValue({
+              resourceKey: 'dental.appointment',
+              instructions: ['Test resource instruction'],
+              data: { availableSlots: [] },
+              actions: [],
+              response: 'Test resource response'
             })
           }
         }
@@ -116,7 +93,7 @@ describe('AgentService', () => {
     expect(response.sessionId).toBeDefined();
   });
 
-  it('should process webhook message autonomously', async () => {
+  it('should process webhook message with RAG', async () => {
     const webhookData = {
       businessId: 'test-business',
       locationId: 'test-location',
@@ -134,51 +111,16 @@ describe('AgentService', () => {
     expect(result.notification).toBeDefined();
   });
 
-  it('should analyze intent correctly', async () => {
-    const intent = await (service as any).analyzeIntent('Vreau să fac o rezervare', 'dental');
+  it('should detect resource requests correctly', async () => {
+    const detectResourceRequest = (service as any).detectResourceRequest;
     
-    expect(intent).toBeDefined();
-    expect(intent.action).toBeDefined();
-    expect(intent.confidence).toBeGreaterThan(0);
-  });
-
-  it('should handle autonomous processing', async () => {
-    const webhookData = {
-      businessId: 'test-business',
-      locationId: 'test-location',
-      userId: 'test-user',
-      message: 'Vreau să fac o rezervare pentru mâine',
-      source: 'meta' as const
-    };
-
-    const result = await (service as any).processAutonomously(webhookData);
+    const appointmentRequest = detectResourceRequest('Vreau să văd programările', 'dental');
+    expect(appointmentRequest).toBe('appointment');
     
-    expect(result).toBeDefined();
-    expect(result.success).toBeDefined();
-    expect(result.workflowResults).toBeDefined();
-  });
-
-  it('should escalate to coordinator when needed', async () => {
-    const webhookData = {
-      businessId: 'test-business',
-      locationId: 'test-location',
-      userId: 'test-user',
-      message: 'Am o problemă complexă care necesită atenție specială',
-      source: 'meta' as const
-    };
-
-    const intent = {
-      action: 'servicii',
-      category: 'customer_service',
-      confidence: 0.3,
-      canHandleAutonomously: false,
-      requiresHumanApproval: true
-    };
-
-    const result = await (service as any).escalateToCoordinator(webhookData, intent);
+    const patientRequest = detectResourceRequest('Vreau să văd datele pacientului', 'dental');
+    expect(patientRequest).toBe('patient');
     
-    expect(result).toBeDefined();
-    expect(result.success).toBe(false);
-    expect(result.notification).toContain('escaladată');
+    const noRequest = detectResourceRequest('Salut!', 'dental');
+    expect(noRequest).toBeNull();
   });
 }); 
