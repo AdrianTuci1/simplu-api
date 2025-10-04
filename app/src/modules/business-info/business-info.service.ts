@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDBService } from '../../config/dynamodb.config';
+import { BusinessSearchResultDto } from './dto/business-search.dto';
 
 export interface BusinessInfo {
   businessId: string;
@@ -14,13 +15,13 @@ export interface BusinessInfo {
 }
 
 export interface LocationInfo {
-  locationId: string;
+  id: string; // locationId in the actual response
   name: string;
   address: string;
   phone?: string;
   email?: string;
   timezone: string;
-  isActive: boolean;
+  active: boolean; // isActive in the actual response
 }
 
 export interface BusinessSettings {
@@ -77,7 +78,7 @@ export class BusinessInfoService {
     }
 
     return (
-      businessInfo.locations.find((loc) => loc.locationId === locationId) ||
+      businessInfo.locations.find((loc) => loc.id === locationId) ||
       null
     );
   }
@@ -112,22 +113,22 @@ export class BusinessInfoService {
       businessType,
       locations: [
         {
-          locationId: `${businessId}-001`,
+          id: `${businessId}-001`,
           name: 'Main Location',
           address: '123 Main St, City, Country',
           phone: '+1234567890',
           email: `contact@${businessId}.com`,
           timezone: 'UTC',
-          isActive: true,
+          active: true,
         },
         {
-          locationId: `${businessId}-002`,
+          id: `${businessId}-002`,
           name: 'Secondary Location',
           address: '456 Second St, City, Country',
           phone: '+1234567891',
           email: `secondary@${businessId}.com`,
           timezone: 'UTC',
-          isActive: true,
+          active: true,
         },
       ],
       settings: {
@@ -159,5 +160,43 @@ export class BusinessInfoService {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  async searchBusinesses(searchTerm: string): Promise<BusinessSearchResultDto[]> {
+    try {
+      const command = new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: 'contains(#companyName, :searchTerm) OR contains(#domainLabel, :searchTerm)',
+        ExpressionAttributeNames: {
+          '#companyName': 'companyName',
+          '#domainLabel': 'domainLabel',
+        },
+        ExpressionAttributeValues: {
+          ':searchTerm': searchTerm,
+        },
+      });
+
+      const result = await this.dynamoClient.send(command);
+      const businesses = result.Items || [];
+      
+      return businesses.map((business: any) => ({
+        businessId: business.businessId,
+        companyName: business.companyName,
+        locations: (business.locations || []).map((location: any) => ({
+          id: location.id,
+          name: location.name,
+          address: location.address,
+          timezone: location.timezone,
+          active: location.active,
+        })),
+        active: business.active,
+        businessType: business.businessType,
+        domainLabel: business.domainLabel || '',
+        registrationNumber: business.registrationNumber || '',
+      }));
+    } catch (error) {
+      console.error(`Error searching businesses: ${error.message}`);
+      return [];
+    }
   }
 }

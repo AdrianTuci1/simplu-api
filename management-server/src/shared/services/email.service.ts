@@ -64,7 +64,8 @@ export class EmailService {
     businessName: string, 
     businessId: string, 
     invitationUrl: string,
-    createdByEmail?: string
+    createdByEmail?: string,
+    temporaryPassword?: string
   ): Promise<void> {
     try {
       if (!this.senderEmail) {
@@ -74,19 +75,43 @@ export class EmailService {
 
       const subject = `Invitație pentru ${businessName} - Simplu`;
       const htmlBody = `
-        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
-          <h2>Bună,</h2>
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #1a73e8;">Bun venit la ${businessName}!</h2>
+          
           <p>A fost creat un cont pentru compania <strong>${businessName}</strong> în sistemul Simplu.</p>
-          <p>Pentru a activa contul și a configura plata, te rugăm să:</p>
-          <ol>
-            <li>Accesezi link-ul de mai jos pentru a crea contul</li>
-            <li>Adaugi metoda de plată</li>
-            <li>Activezi abonamentul</li>
-          </ol>
-          <p><a href="${invitationUrl}" style="color: #1a73e8; font-weight: bold;">Creează contul și activează serviciul</a></p>
+          
+          ${temporaryPassword ? `
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #333;">Detalii de autentificare:</h3>
+            <p><strong>Email:</strong> ${toEmail}</p>
+            <p><strong>Parolă temporară:</strong> <code style="background-color: #e9ecef; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${temporaryPassword}</code></p>
+          </div>
+          
+          <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 20px 0;">
+            <h4 style="margin-top: 0; color: #856404;">⚠️ Importante:</h4>
+            <ul style="margin-bottom: 0; color: #856404;">
+              <li>Te rugăm să te autentifici imediat și să schimbi parola temporară</li>
+              <li>Parola temporară este valabilă doar pentru prima autentificare</li>
+              <li>După prima autentificare, vei fi obligat să alegi o parolă nouă</li>
+            </ul>
+          </div>
+          ` : ''}
+          
+          <div style="margin: 30px 0;">
+            <a href="${invitationUrl}" 
+               style="background-color: #1a73e8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+              ${temporaryPassword ? 'Accesează contul' : 'Creează contul și activează serviciul'}
+            </a>
+          </div>
+          
           ${createdByEmail ? `<p><small>Contul a fost creat de: ${createdByEmail}</small></p>` : ''}
+          
           <p>Dacă nu ai solicitat această acțiune, poți ignora acest email.</p>
-          <p>Mulțumim,<br/>Echipa Simplu</p>
+          
+          <p style="margin-top: 30px; color: #666; font-size: 14px;">
+            Cu respect,<br>
+            Echipa Simplu
+          </p>
         </div>
       `;
 

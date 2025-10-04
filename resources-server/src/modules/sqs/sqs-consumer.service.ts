@@ -20,6 +20,16 @@ export interface CitrusShardResponse {
   maxBusinesses: number;
 }
 
+export interface AdminAccountCreationMessage {
+  businessId: string;
+  locationId: string;
+  adminEmail: string;
+  adminUserId: string;
+  businessType: string;
+  domainLabel: string;
+  timestamp: string;
+}
+
 @Injectable()
 export class SqsConsumerService {
   private readonly logger = new Logger(SqsConsumerService.name);
@@ -119,6 +129,8 @@ export class SqsConsumerService {
 
     if (messageType === 'SHARD_CREATION') {
       await this.handleShardCreationMessage(message);
+    } else if (messageType === 'ADMIN_ACCOUNT_CREATION') {
+      await this.handleAdminAccountCreationMessage(message);
     } else {
       this.logger.warn(`Unknown message type: ${messageType}`);
     }
@@ -215,6 +227,52 @@ export class SqsConsumerService {
     
     // Simulate some processing time
     await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  /**
+   * Handle admin account creation messages
+   */
+  private async handleAdminAccountCreationMessage(message: any): Promise<void> {
+    try {
+      const adminData: AdminAccountCreationMessage = JSON.parse(message.Body);
+      
+      this.logger.log(`Processing admin account creation for business ${adminData.businessId}, location ${adminData.locationId}, admin ${adminData.adminEmail}`);
+
+      // 1. Create admin role resource
+      await this.createAdminRole(adminData);
+      
+      // 2. Create medic resource with admin account's resource_id
+      await this.createMedicResource(adminData);
+
+      this.logger.log(`Successfully created admin account for business ${adminData.businessId}, location ${adminData.locationId}`);
+    } catch (error) {
+      this.logger.error('Error handling admin account creation message:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create admin role resource
+   */
+  private async createAdminRole(adminData: AdminAccountCreationMessage): Promise<void> {
+    // TODO: Implement admin role creation
+    // This should create a role resource with admin permissions
+    this.logger.log(`Creating admin role for business ${adminData.businessId}, location ${adminData.locationId}`);
+    
+    // Simulate role creation
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  /**
+   * Create medic resource with admin account's resource_id
+   */
+  private async createMedicResource(adminData: AdminAccountCreationMessage): Promise<void> {
+    // TODO: Implement medic resource creation
+    // This should create a medic resource with the admin account's resource_id
+    this.logger.log(`Creating medic resource for admin ${adminData.adminUserId} in business ${adminData.businessId}, location ${adminData.locationId}`);
+    
+    // Simulate medic resource creation
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   /**

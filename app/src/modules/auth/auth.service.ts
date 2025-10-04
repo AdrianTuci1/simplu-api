@@ -6,6 +6,7 @@ import * as jwksClient from 'jwks-rsa';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResourceEntity } from '../resources/entities/resource.entity';
+import { BusinessInfoService } from '../business-info/business-info.service';
 
 export interface CognitoUser {
   userId: string; // Cognito's 'sub' claim
@@ -38,6 +39,7 @@ export class AuthService {
   constructor(
     @InjectRepository(ResourceEntity)
     private readonly resourceRepository: Repository<ResourceEntity>,
+    private readonly businessInfoService: BusinessInfoService,
   ) {
     // Initialize JWKS client for token verification
     this.jwksClient = jwksClient({
@@ -277,6 +279,97 @@ export class AuthService {
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
         `Error getting all user roles from business ${businessId}: ${errorMessage}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Get all user roles across all businesses and locations
+   * Searches directly by resource_id without requiring businessId
+   */
+  async getAllUserRoles(cognitoUserId: string): Promise<Array<UserRole & { businessId: string }>> {
+    try {
+      this.logger.debug(
+        `Getting all roles for Cognito user ${cognitoUserId} across all businesses`,
+      );
+
+      // Search for all medic resources by resource_id
+      const medicResources = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.resourceType = :resourceType', { resourceType: 'medic' })
+        .andWhere('resource.resourceId = :resourceId', { resourceId: cognitoUserId })
+        .getMany();
+
+      if (medicResources.length === 0) {
+        this.logger.warn(
+          `No medic resources found for Cognito user ${cognitoUserId}`,
+        );
+        return [];
+      }
+
+      const userRoles: Array<UserRole & { businessId: string }> = [];
+
+      // Process each medic resource to extract role information
+      for (const medicResource of medicResources) {
+        try {
+          const roleName = medicResource.data?.role;
+          if (!roleName) {
+            this.logger.warn(
+              `No role found in medic resource for user ${cognitoUserId} in business location ${medicResource.businessLocationId}`,
+            );
+            continue;
+          }
+
+          // Extract businessId and locationId from businessLocationId (format: B010001-L010001)
+          const businessLocationId = medicResource.businessLocationId;
+          const [businessId, locationId] = businessLocationId.split('-');
+          
+          // Get location name from DynamoDB business-info
+          let locationName = locationId; // fallback to locationId
+          try {
+            const businessInfo = await this.businessInfoService.getBusinessInfo(businessId);
+            if (businessInfo && businessInfo.locations) {
+              const location = businessInfo.locations.find(loc => loc.id === locationId);
+              if (location) {
+                locationName = location.name;
+              }
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to get location name for ${businessId}-${locationId}: ${error.message}`,
+            );
+            // Continue with locationId as fallback
+          }
+
+          userRoles.push({
+            businessId,
+            locationId,
+            locationName,
+            roleName,
+          });
+
+          this.logger.debug(
+            `Found role ${roleName} for user ${cognitoUserId} in business ${businessId}, location ${locationId} (${locationName})`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Error processing medic resource for user ${cognitoUserId}: ${error.message}`,
+          );
+          continue;
+        }
+      }
+
+      this.logger.debug(
+        `Retrieved ${userRoles.length} roles for user ${cognitoUserId} across all businesses`,
+      );
+
+      return userRoles;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Error getting all user roles for user ${cognitoUserId}: ${errorMessage}`,
       );
       return [];
     }

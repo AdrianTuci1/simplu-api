@@ -326,110 +326,230 @@ export class PermissionService {
   private getDefaultPermissionsForRole(roleName: string): Permission[] {
     const rolePermissions: Record<string, Permission[]> = {
       admin: [
-        'timeline:create',
-        'timeline:read',
-        'timeline:update',
-        'timeline:delete',
-        'clients:create',
-        'clients:read',
-        'clients:update',
-        'clients:delete',
-        'staff:create',
-        'staff:read',
-        'staff:update',
-        'staff:delete',
-        'invoices:create',
-        'invoices:read',
-        'invoices:update',
-        'invoices:delete',
-        'stocks:create',
-        'stocks:read',
-        'stocks:update',
-        'stocks:delete',
-        'activities:create',
-        'activities:read',
-        'activities:update',
-        'activities:delete',
-        'report:create',
-        'report:read',
-        'report:update',
-        'report:delete',
+        // Appointment management
+        'appointment:create',
+        'appointment:read',
+        'appointment:update',
+        'appointment:patch',
+        'appointment:delete',
+        
+        // Patient management
+        'patient:create',
+        'patient:read',
+        'patient:update',
+        'patient:patch',
+        'patient:delete',
+        
+        // Medic management
+        'medic:create',
+        'medic:read',
+        'medic:update',
+        'medic:patch',
+        'medic:delete',
+        
+        // Treatment management
+        'treatment:create',
+        'treatment:read',
+        'treatment:update',
+        'treatment:patch',
+        'treatment:delete',
+        
+        // Product management
+        'product:create',
+        'product:read',
+        'product:update',
+        'product:patch',
+        'product:delete',
+        
+        // Role management
         'role:create',
         'role:read',
         'role:update',
+        'role:patch',
         'role:delete',
+        
+        // Reports
+        'report:create',
+        'report:read',
+        'report:update',
+        'report:patch',
+        'report:delete',
+        
+        // Sales
         'sale:create',
         'sale:read',
         'sale:update',
+        'sale:patch',
         'sale:delete',
-        'workflows:create',
-        'workflows:read',
-        'workflows:update',
-        'workflows:delete',
-        'permissions:create',
-        'permissions:read',
-        'permissions:update',
-        'permissions:delete',
-        'userData:create',
-        'userData:read',
-        'userData:update',
-        'userData:delete',
-        'history:create',
-        'history:read',
-        'history:update',
-        'history:delete',
+        
+        // Dental chart
+        'dental-chart:create',
+        'dental-chart:read',
+        'dental-chart:update',
+        'dental-chart:patch',
+        'dental-chart:delete',
+        
+        // Plans
+        'plan:create',
+        'plan:read',
+        'plan:update',
+        'plan:patch',
+        'plan:delete',
+        
+        // Settings
+        'setting:create',
+        'setting:read',
+        'setting:update',
+        'setting:patch',
+        'setting:delete',
+        
+        // Invoice client
+        'invoice-client:create',
+        'invoice-client:read',
+        'invoice-client:update',
+        'invoice-client:patch',
+        'invoice-client:delete',
+        
+        // Statistics
+        'statistics:create',
+        'statistics:read',
+        'statistics:update',
+        'statistics:patch',
+        'statistics:delete',
+        
+        // Recent activities
+        'recent-activities:create',
+        'recent-activities:read',
+        'recent-activities:update',
+        'recent-activities:patch',
+        'recent-activities:delete',
       ],
       manager: [
-        'timeline:create',
-        'timeline:read',
-        'timeline:update',
-        'clients:create',
-        'clients:read',
-        'clients:update',
-        'staff:read',
-        'staff:update',
-        'invoices:create',
-        'invoices:read',
-        'invoices:update',
-        'stocks:read',
-        'stocks:update',
-        'activities:read',
-        'activities:update',
-        'report:read',
+        // Appointment management
+        'appointment:create',
+        'appointment:read',
+        'appointment:update',
+        'appointment:patch',
+        
+        // Patient management
+        'patient:create',
+        'patient:read',
+        'patient:update',
+        'patient:patch',
+        
+        // Medic management (limited)
+        'medic:read',
+        'medic:update',
+        'medic:patch',
+        
+        // Treatment management
+        'treatment:create',
+        'treatment:read',
+        'treatment:update',
+        'treatment:patch',
+        
+        // Product management
+        'product:read',
+        'product:update',
+        'product:patch',
+        
+        // Role management (read-only)
         'role:read',
+        
+        // Reports
+        'report:read',
+        'report:update',
+        'report:patch',
+        
+        // Sales
         'sale:read',
         'sale:update',
-        'workflows:read',
-        'workflows:update',
-        'permissions:read',
-        'userData:read',
-        'userData:update',
-        'history:read',
+        'sale:patch',
+        
+        // Dental chart
+        'dental-chart:read',
+        'dental-chart:update',
+        'dental-chart:patch',
+        
+        // Plans
+        'plan:read',
+        'plan:update',
+        'plan:patch',
+        
+        // Settings
+        'setting:read',
+        'setting:update',
+        'setting:patch',
+        
+        // Invoice client
+        'invoice-client:read',
+        'invoice-client:update',
+        'invoice-client:patch',
+        
+        // Statistics
+        'statistics:read',
+        
+        // Recent activities
+        'recent-activities:read',
       ],
       user: [
-        'timeline:read',
-        'clients:read',
-        'staff:read',
-        'invoices:read',
-        'stocks:read',
-        'activities:read',
-        'report:read',
+        // Appointment management (read-only)
+        'appointment:read',
+        
+        // Patient management (read-only)
+        'patient:read',
+        
+        // Medic management (read-only)
+        'medic:read',
+        
+        // Treatment management (read-only)
+        'treatment:read',
+        
+        // Product management (read-only)
+        'product:read',
+        
+        // Role management (read-only)
         'role:read',
+        
+        // Reports (read-only)
+        'report:read',
+        
+        // Sales (read-only)
         'sale:read',
-        'workflows:read',
-        'permissions:read',
-        'userData:read',
-        'history:read',
+        
+        // Dental chart (read-only)
+        'dental-chart:read',
+        
+        // Plans (read-only)
+        'plan:read',
+        
+        // Settings (read-only)
+        'setting:read',
+        
+        // Invoice client (read-only)
+        'invoice-client:read',
+        
+        // Statistics (read-only)
+        'statistics:read',
+        
+        // Recent activities (read-only)
+        'recent-activities:read',
       ],
       viewer: [
-        'timeline:read',
-        'clients:read',
-        'staff:read',
-        'invoices:read',
-        'stocks:read',
-        'activities:read',
+        // Read-only access to all resources
+        'appointment:read',
+        'patient:read',
+        'medic:read',
+        'treatment:read',
+        'product:read',
         'report:read',
-        'history:read',
+        'sale:read',
+        'dental-chart:read',
+        'plan:read',
+        'setting:read',
+        'invoice-client:read',
+        'statistics:read',
+        'recent-activities:read',
       ],
     };
 

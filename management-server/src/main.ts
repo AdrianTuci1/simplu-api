@@ -4,6 +4,18 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
+// Polyfill for crypto module to fix NestJS scheduler issue
+if (typeof globalThis.crypto === 'undefined') {
+  const { webcrypto } = require('crypto');
+  globalThis.crypto = webcrypto;
+}
+
+// Ensure crypto.randomUUID is available
+if (typeof globalThis.crypto.randomUUID === 'undefined') {
+  const { randomUUID } = require('crypto');
+  globalThis.crypto.randomUUID = randomUUID;
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 

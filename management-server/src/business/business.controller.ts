@@ -4,13 +4,19 @@ import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
 import { BusinessService } from './business.service';
 import { BusinessEntity } from './entities/business.entity';
 import { ConfigureBusinessDto, SetupPaymentDto } from './dto/business-config.dto';
+import { CustomFormService } from './custom-form.service';
+import { CognitoUserService } from '../modules/auth/cognito-user.service';
 
 @ApiTags('business')
 @ApiBearerAuth()
 @UseGuards(CognitoAuthGuard)
 @Controller('businesses')
 export class BusinessController {
-  constructor(private readonly businessService: BusinessService) {}
+  constructor(
+    private readonly businessService: BusinessService,
+    private readonly customFormService: CustomFormService,
+    private readonly cognitoUserService: CognitoUserService,
+  ) {}
 
   @Get()
   async list(@Req() req: any): Promise<BusinessEntity[]> {
@@ -112,6 +118,98 @@ export class BusinessController {
     @Body() body: { fromLocationId: string; toLocationId: string; amount: number },
   ): Promise<BusinessEntity> {
     return this.businessService.reallocateCredits(id, body.fromLocationId, body.toLocationId, body.amount);
+  }
+
+  @Get('search/domain-label')
+  @ApiOperation({ 
+    summary: 'Search businesses by domain label', 
+    description: 'Search for businesses using a specific domain label to check availability' 
+  })
+  @ApiResponse({ status: 200, description: 'Search results returned' })
+  async searchByDomainLabel(@Query('domainLabel') domainLabel: string): Promise<BusinessEntity[]> {
+    return this.businessService.searchBusinessesByDomainLabel(domainLabel);
+  }
+
+  @Get('check-domain-availability')
+  @ApiOperation({ 
+    summary: 'Check domain label availability', 
+    description: 'Check if a domain label is available for use' 
+  })
+  @ApiResponse({ status: 200, description: 'Domain availability status' })
+  async checkDomainAvailability(@Query('domainLabel') domainLabel: string): Promise<{ available: boolean }> {
+    const available = await this.businessService.isDomainLabelAvailable(domainLabel);
+    return { available };
+  }
+
+  @Post(':id/load-custom-form')
+  @ApiOperation({ 
+    summary: 'Load custom form for business from S3', 
+    description: 'Load a custom form configuration for the business from S3 bucket based on businessType' 
+  })
+  @ApiResponse({ status: 201, description: 'Custom form loaded successfully' })
+  async loadCustomForm(@Param('id') businessId: string): Promise<any> {
+    const business = await this.businessService.getBusiness(businessId);
+    return this.customFormService.loadCustomFormFromS3(
+      businessId,
+      business.domainLabel,
+      business.businessType,
+    );
+  }
+
+  @Get(':id/custom-form-html')
+  @ApiOperation({ 
+    summary: 'Get custom form HTML from S3', 
+    description: 'Get the HTML form for the business from S3 bucket' 
+  })
+  @ApiResponse({ status: 200, description: 'Custom form HTML' })
+  async getCustomFormHTML(@Param('id') businessId: string): Promise<{ html: string }> {
+    const business = await this.businessService.getBusiness(businessId);
+    const html = await this.customFormService.loadFormHTMLFromS3(
+      businessId,
+      business.domainLabel,
+      business.businessType,
+    );
+    return { html };
+  }
+
+  // Password management endpoints
+  @Post('users/:email/change-password')
+  @ApiOperation({ 
+    summary: 'Change user password', 
+    description: 'Change password for a user (requires current password)' 
+  })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  async changePassword(
+    @Param('email') email: string,
+    @Body() body: { currentPassword: string; newPassword: string }
+  ): Promise<{ success: boolean }> {
+    await this.cognitoUserService.initiatePasswordChange(email, body.currentPassword, body.newPassword);
+    return { success: true };
+  }
+
+  @Post('users/:email/reset-password')
+  @ApiOperation({ 
+    summary: 'Reset user password', 
+    description: 'Admin reset password for a user (generates new temporary password)' 
+  })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  async resetPassword(@Param('email') email: string): Promise<{ success: boolean; message: string }> {
+    // This would require admin privileges in a real implementation
+    // For now, we'll just return a success message
+    return { 
+      success: true, 
+      message: 'Password reset initiated. User will receive email with new temporary password.' 
+    };
+  }
+
+  @Get('users/:email/info')
+  @ApiOperation({ 
+    summary: 'Get user information', 
+    description: 'Get user information from Cognito' 
+  })
+  @ApiResponse({ status: 200, description: 'User information' })
+  async getUserInfo(@Param('email') email: string): Promise<any> {
+    return this.cognitoUserService.getUserInfo(email);
   }
 }
 

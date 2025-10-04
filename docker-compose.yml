@@ -232,46 +232,58 @@ services:
     networks:
       - app-network
 
-  # # Management Server - handles business management and payments
+  # Management Server - handles business management and payments
   # management-server:
-    # build:
-    #   context: ./management-server
-    #   dockerfile: Dockerfile
-    # ports:
-    #   - "3003:3001"
-    # environment:
-    #   # Application Configuration
-    #   - NODE_ENV=development
-    #   - PORT=3001
+  #   build:
+  #     context: ./management-server
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3003:3001"
+  #   environment:
+  #     # Application Configuration
+  #     - NODE_ENV=development
+  #     - PORT=3001
       
-    #   # AWS Configuration
-    #   - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-    #   - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-    #   - AWS_REGION=${AWS_REGION:-us-east-1}
+  #     # AWS Configuration
+  #     - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+  #     - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+  #     - AWS_REGION=${AWS_REGION:-us-east-1}
       
-    #   # DynamoDB Configuration
-    #   - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME:-businesses}
-    #   - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+  #     # Cognito Configuration
+  #     - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+  #     - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
       
-    #   # Stripe Configuration
-    #   - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-    #   - STRIPE_DENTAL_PRICE_ID=${STRIPE_DENTAL_PRICE_ID:-price_dental_monthly}
-    #   - STRIPE_GYM_PRICE_ID=${STRIPE_GYM_PRICE_ID:-price_gym_monthly}
-    #   - STRIPE_HOTEL_PRICE_ID=${STRIPE_HOTEL_PRICE_ID:-price_hotel_monthly}
+  #     # DynamoDB Configuration
+  #     - DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME:-business-info}
+  #     - DYNAMODB_USERS_TABLE_NAME=${DYNAMODB_USERS_TABLE_NAME:-users}
+  #     - DYNAMODB_SUBSCRIPTIONS_TABLE_NAME=${DYNAMODB_SUBSCRIPTIONS_TABLE_NAME:-business-subscriptions}
+  #     - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
       
-    #   # Domain Configuration
-    #   - BASE_DOMAIN=${BASE_DOMAIN:-example.com}
+  #     # Stripe Configuration
+  #     - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+  #     - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+  #     - STRIPE_BASIC_PRODUCT_ID=${STRIPE_BASIC_PRODUCT_ID}
+  #     - STRIPE_PREMIUM_PRODUCT_ID=${STRIPE_PREMIUM_PRODUCT_ID}
+  #     - STRIPE_DENTAL_PRICE_ID=${STRIPE_DENTAL_PRICE_ID:-price_dental_monthly}
+  #     - STRIPE_GYM_PRICE_ID=${STRIPE_GYM_PRICE_ID:-price_gym_monthly}
+  #     - STRIPE_HOTEL_PRICE_ID=${STRIPE_HOTEL_PRICE_ID:-price_hotel_monthly}
       
-    #   # CloudFormation Configuration
-    #   - CLOUDFORMATION_STACK_PREFIX=${CLOUDFORMATION_STACK_PREFIX:-react-app-}
+  #     # Domain Configuration
+  #     - BASE_DOMAIN=${BASE_DOMAIN:-example.com}
       
-    #   # SQS Configuration for Shard Creation Notifications
-    #   - SQS_SHARD_CREATION_QUEUE_URL=${SQS_SHARD_CREATION_QUEUE_URL}
-    # depends_on:
-    #   postgres:
-    #     condition: service_healthy
-    # networks:
-    #   - app-network
+  #     # CloudFormation Configuration
+  #     - CLOUDFORMATION_STACK_PREFIX=${CLOUDFORMATION_STACK_PREFIX:-react-app-}
+      
+  #     # SQS Configuration for Shard Creation Notifications
+  #     - SQS_SHARD_CREATION_QUEUE_URL=${SQS_SHARD_CREATION_QUEUE_URL}
+      
+  #     # Email Configuration
+  #     - SES_SENDER_EMAIL=${SES_SENDER_EMAIL:-no-reply@simplu.ro}
+      
+  #     # Frontend Configuration
+  #     - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-https://app.simplu.ro}
+  #   networks:
+  #     - app-network
 
   # # External Citrus Sharding Service
   # citrus:

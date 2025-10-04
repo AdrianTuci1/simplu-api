@@ -220,4 +220,25 @@ export class DatabaseService {
       throw error;
     }
   }
+
+  async searchBusinessesByDomainLabel(domainLabel: string): Promise<BusinessEntity[]> {
+    try {
+      const command = new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: '#domainLabel = :domainLabel',
+        ExpressionAttributeNames: {
+          '#domainLabel': 'domainLabel',
+        },
+        ExpressionAttributeValues: {
+          ':domainLabel': domainLabel,
+        },
+      });
+
+      const result = await this.docClient.send(command);
+      return (result.Items as BusinessEntity[]) || [];
+    } catch (error) {
+      this.logger.error(`Error searching businesses by domainLabel: ${error.message}`);
+      throw error;
+    }
+  }
 } 

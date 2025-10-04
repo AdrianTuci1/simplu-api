@@ -17,6 +17,62 @@ export class AuthController {
     private readonly authService: AuthService,
   ) {}
 
+  @Get('me')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get current user profile with all roles from all businesses and locations',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing Bearer token',
+  })
+  async getMe(@CurrentUser() user: CognitoUser) {
+    try {
+      // Get all user roles from all businesses and locations
+      const userRoles = await this.authService.getAllUserRoles(user.userId);
+
+      // Group roles by business
+      const businessGroups = userRoles.reduce((acc, role) => {
+        if (!acc[role.businessId]) {
+          acc[role.businessId] = [];
+        }
+        acc[role.businessId].push({
+          locationId: role.locationId,
+          locationName: role.locationName,
+          role: role.roleName,
+        });
+        return acc;
+      }, {} as Record<string, Array<{ locationId: string; locationName: string; role: string }>>);
+
+      return {
+        success: true,
+        user: {
+          userId: user.userId,
+          userName: user.username,
+          email: user.email,
+          name: user.name,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          businesses: Object.entries(businessGroups).map(([businessId, locations]) => ({
+            businessId,
+            locations,
+          })),
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Failed to retrieve user roles',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   @Get('me/:businessId')
   @UseGuards(CognitoAuthGuard)
   @ApiBearerAuth()
@@ -32,7 +88,7 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized - Invalid or missing Bearer token',
   })
-  async getMe(
+  async getMeByBusiness(
     @CurrentUser() user: CognitoUser,
     @Param('businessId') businessId: string,
   ) {

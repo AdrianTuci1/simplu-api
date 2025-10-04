@@ -38,12 +38,16 @@ export class CognitoAuthGuard implements CanActivate {
       throw new UnauthorizedException('Authorization header required');
     }
 
-    if (!authHeader.startsWith('Bearer ')) {
-      this.logger.warn(`Invalid authorization header format for ${method} ${url}: ${authHeader.substring(0, 20)}...`);
-      throw new UnauthorizedException('Bearer token required');
+    let token: string;
+    
+    if (authHeader.startsWith('Bearer ')) {
+      // Standard Bearer token format
+      token = authHeader.substring(7);
+    } else {
+      // Handle case where token is sent without Bearer prefix
+      this.logger.debug(`Token received without Bearer prefix for ${method} ${url}, treating as raw token`);
+      token = authHeader;
     }
-
-    const token = authHeader.substring(7);
     this.logger.debug(`Token received for ${method} ${url}: ${token.substring(0, 20)}...`);
 
     try {

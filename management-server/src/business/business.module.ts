@@ -10,10 +10,12 @@ import { PaymentModule } from '../payment/payment.module';
 import { UsersModule } from '../users/users.module';
 import { BusinessScheduler } from './business.scheduler';
 import { BusinessIdService } from './business-id.service';
+import { CustomFormService } from './custom-form.service';
+import { CognitoUserService } from '../modules/auth/cognito-user.service';
 
 @Module({
   imports: [ConfigModule, DatabaseModule, SharedModule, InfrastructureModule, AuthModule, forwardRef(() => PaymentModule), UsersModule],
-  providers: [BusinessService, BusinessScheduler, BusinessIdService],
+  providers: [BusinessService, BusinessScheduler, BusinessIdService, CustomFormService, CognitoUserService],
   controllers: [BusinessController],
   exports: [BusinessService],
 })

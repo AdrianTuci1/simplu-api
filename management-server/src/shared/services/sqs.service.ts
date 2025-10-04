@@ -18,6 +18,16 @@ export interface ShardDestructionMessage {
   timestamp: string;
 }
 
+export interface AdminAccountCreationMessage {
+  businessId: string;
+  locationId: string;
+  adminEmail: string;
+  adminUserId: string;
+  businessType: string;
+  domainLabel: string;
+  timestamp: string;
+}
+
 @Injectable()
 export class SqsService {
   private readonly logger = new Logger(SqsService.name);
@@ -135,6 +145,44 @@ export class SqsService {
     } catch (error) {
       this.logger.error(`Failed to send SQS destruction message: ${error.message}`, error.stack);
       throw new Error(`Failed to send shard destruction message: ${error.message}`);
+    }
+  }
+
+  async sendAdminAccountCreationMessage(message: AdminAccountCreationMessage): Promise<void> {
+    try {
+      if (!this.queueUrl) {
+        this.logger.warn('SQS queue URL not configured, skipping admin account creation message send');
+        return;
+      }
+
+      const command = new SendMessageCommand({
+        QueueUrl: this.queueUrl,
+        MessageBody: JSON.stringify(message),
+        MessageAttributes: {
+          'MessageType': {
+            DataType: 'String',
+            StringValue: 'ADMIN_ACCOUNT_CREATION'
+          },
+          'BusinessId': {
+            DataType: 'String',
+            StringValue: message.businessId
+          },
+          'LocationId': {
+            DataType: 'String',
+            StringValue: message.locationId
+          },
+          'AdminEmail': {
+            DataType: 'String',
+            StringValue: message.adminEmail
+          }
+        }
+      });
+
+      await this.sqsClient.send(command);
+      this.logger.log(`Admin account creation message sent for business ${message.businessId}, location ${message.locationId}, admin ${message.adminEmail}`);
+    } catch (error) {
+      this.logger.error(`Failed to send admin account creation message: ${error.message}`, error.stack);
+      throw new Error(`Failed to send admin account creation message: ${error.message}`);
     }
   }
 } 

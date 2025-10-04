@@ -6,7 +6,9 @@ import { InfrastructureService } from '../infrastructure/infrastructure.service'
 import { PaymentService } from '../payment/payment.service';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../shared/services/email.service';
+import { CognitoUserService } from '../modules/auth/cognito-user.service';
 import { BusinessIdService } from './business-id.service';
+import { SqsService } from '../shared/services/sqs.service';
 
 @Injectable()
 export class BusinessService {
@@ -20,7 +22,9 @@ export class BusinessService {
     private readonly paymentService: PaymentService,
     private readonly usersService: UsersService,
     private readonly emailService: EmailService,
+    private readonly cognitoUserService: CognitoUserService,
     private readonly businessIdService: BusinessIdService,
+    private readonly sqsService: SqsService,
   ) {}
 
   private getDbType(): string {
@@ -59,6 +63,7 @@ export class BusinessService {
     let ownerUserId = user.userId;
     let ownerEmail = user.email;
     let isNewUser = false;
+    let temporaryPassword = '';
     
     if (input.configureForEmail && input.configureForEmail !== user.email) {
       try {
@@ -69,6 +74,23 @@ export class BusinessService {
         
         if (isNew) {
           this.logger.log(`Created placeholder user for email ${input.configureForEmail} - they will complete registration later`);
+          
+          // Create user in Cognito with temporary password
+          try {
+            const cognitoResult = await this.cognitoUserService.createUserWithTemporaryPassword(
+              input.configureForEmail,
+              undefined, // firstName - can be extracted from user object if available
+              undefined, // lastName - can be extracted from user object if available
+              input.companyName
+            );
+            
+            temporaryPassword = cognitoResult.temporaryPassword;
+            this.logger.log(`Created Cognito user for ${input.configureForEmail} with username: ${cognitoResult.username}`);
+          } catch (cognitoError) {
+            this.logger.error(`Failed to create Cognito user for ${input.configureForEmail}:`, cognitoError);
+            // Don't fail business creation if Cognito user creation fails
+            // The user can still complete registration later
+          }
         }
       } catch (error) {
         this.logger.error(`Failed to find/create user for email ${input.configureForEmail}:`, error);
@@ -109,13 +131,17 @@ export class BusinessService {
     if (isNewUser && input.configureForEmail) {
       try {
         const invitationUrl = `${this.getBaseUrl()}/businesses/${createdBusiness.businessId}/invitation?email=${encodeURIComponent(input.configureForEmail)}`;
+        
+        // Send the business invitation email (this will also include the temporary password if Cognito user was created)
         await this.emailService.sendBusinessInvitationEmail(
           input.configureForEmail,
           input.companyName,
           createdBusiness.businessId,
           invitationUrl,
-          user.email
+          user.email,
+          temporaryPassword // Pass the temporary password if available
         );
+        
         this.logger.log(`Invitation email sent to ${input.configureForEmail} for business ${createdBusiness.businessId}`);
       } catch (error) {
         this.logger.error(`Failed to send invitation email to ${input.configureForEmail}:`, error);
@@ -227,15 +253,34 @@ export class BusinessService {
     //  await this.eventBridgeService.createUsersForLocations(updated.businessId, updated.createdByUserId);
   
 
-    // Create React app infrastructure (domain may be subdomain/custom)
+    // Deploy business client to S3 bucket with domainLabel
     try {
-      await this.infraService.createReactApp(
-        updated.businessId,
-        updated.businessType,
-        updated.domainType === 'subdomain' ? updated.domainLabel : undefined,
-      );
+      if (updated.domainLabel) {
+        await this.infraService.deployBusinessClient(
+          updated.businessId,
+          updated.domainLabel,
+          updated.businessType,
+        );
+      }
     } catch (err) {
-      this.logger.warn(`Infra creation failed for business ${updated.businessId}: ${err?.message}`);
+      this.logger.warn(`S3 deployment failed for business ${updated.businessId}: ${err?.message}`);
+    }
+
+    // Trigger admin account creation for the first location
+    try {
+      const firstLocation = updated.locations?.[0];
+      if (firstLocation && updated.domainLabel) {
+        await this.triggerAdminAccountCreation(
+          updated.businessId,
+          firstLocation.id,
+          updated.ownerEmail,
+          updated.ownerUserId,
+          updated.businessType,
+          updated.domainLabel,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(`Admin account creation failed for business ${updated.businessId}: ${err?.message}`);
     }
 
     return updated;
@@ -452,6 +497,56 @@ export class BusinessService {
       return this.db.updateBusiness(businessId, { status: 'suspended', active: false, updatedAt: new Date().toISOString() });
     }
     return business;
+  }
+
+  /**
+   * Search for businesses by domainLabel to avoid duplicates
+   */
+  async searchBusinessesByDomainLabel(domainLabel: string): Promise<BusinessEntity[]> {
+    try {
+      return await this.db.searchBusinessesByDomainLabel(domainLabel);
+    } catch (error) {
+      this.logger.error(`Error searching businesses by domainLabel ${domainLabel}:`, error);
+      throw new BadRequestException(`Failed to search businesses by domainLabel: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if domainLabel is available (not already used)
+   */
+  async isDomainLabelAvailable(domainLabel: string): Promise<boolean> {
+    const existingBusinesses = await this.searchBusinessesByDomainLabel(domainLabel);
+    return existingBusinesses.length === 0;
+  }
+
+  /**
+   * Trigger admin account creation for business activation
+   */
+  async triggerAdminAccountCreation(
+    businessId: string,
+    locationId: string,
+    adminEmail: string,
+    adminUserId: string,
+    businessType: string,
+    domainLabel: string
+  ): Promise<void> {
+    try {
+      const message = {
+        businessId,
+        locationId,
+        adminEmail,
+        adminUserId,
+        businessType,
+        domainLabel,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.sqsService.sendAdminAccountCreationMessage(message);
+      this.logger.log(`Admin account creation triggered for business ${businessId}, location ${locationId}, admin ${adminEmail}`);
+    } catch (error) {
+      this.logger.error(`Failed to trigger admin account creation for business ${businessId}:`, error);
+      throw new BadRequestException(`Failed to trigger admin account creation: ${error.message}`);
+    }
   }
 }
 

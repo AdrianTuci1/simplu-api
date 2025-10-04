@@ -74,6 +74,9 @@ export class AuthService {
    */
   async getUserInfo(username: string): Promise<CognitoUser | null> {
     try {
+      this.logger.debug(`Fetching user info from Cognito for username: ${username}`);
+      this.logger.debug(`Using UserPoolId: ${this.config.userPoolId}, Region: ${this.config.region}`);
+      
       const command = new AdminGetUserCommand({
         UserPoolId: this.config.userPoolId,
         Username: username,
@@ -82,8 +85,11 @@ export class AuthService {
       const result = await this.cognitoClient.send(command);
 
       if (!result.UserAttributes) {
+        this.logger.warn(`No user attributes found for username: ${username}`);
         return null;
       }
+
+      this.logger.debug(`User attributes found: ${result.UserAttributes.length} attributes`);
 
       // Extract user attributes
       const attributes = result.UserAttributes.reduce(
@@ -96,11 +102,13 @@ export class AuthService {
         {} as Record<string, string>,
       );
 
+      this.logger.debug(`Extracted attributes: ${JSON.stringify(Object.keys(attributes))}`);
+
       // Extract and split name
       const fullName = attributes.name || attributes['custom:name'] || '';
       const { firstName, lastName } = this.splitFullName(fullName);
 
-      return {
+      const userInfo = {
         userId: attributes.sub || username,
         username: result.Username || username,
         email: attributes.email || '',
@@ -108,8 +116,11 @@ export class AuthService {
         firstName,
         lastName,
       };
+
+      this.logger.debug(`User info constructed: ${JSON.stringify(userInfo)}`);
+      return userInfo;
     } catch (error) {
-      console.error(`Error fetching user info for ${username}:`, error);
+      this.logger.error(`Error fetching user info for ${username}: ${error.message}`, error.stack);
       return null;
     }
   }
@@ -197,11 +208,14 @@ export class AuthService {
         return null;
       }
 
+      this.logger.debug(`Token decoded successfully, claims: ${JSON.stringify(Object.keys(decodedToken))}`);
+
       // 2. Extract username from token
       const username = decodedToken['cognito:username'] || decodedToken.username || decodedToken.sub;
       
       if (!username) {
         this.logger.warn('No username found in token');
+        this.logger.debug(`Available claims: ${JSON.stringify(decodedToken)}`);
         return null;
       }
 
@@ -212,6 +226,7 @@ export class AuthService {
       
       if (!userInfo) {
         this.logger.warn(`User not found in Cognito: ${username}`);
+        this.logger.debug(`Cognito config - UserPoolId: ${this.config.userPoolId}, Region: ${this.config.region}`);
         return null;
       }
 

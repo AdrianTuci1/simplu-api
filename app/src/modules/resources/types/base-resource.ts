@@ -12,19 +12,8 @@ export interface BaseResource {
 
 // Valid resource types - simplified list matching resources-server
 export const VALID_RESOURCE_TYPES = [
-  'timeline', // Reservations, appointments, events
-  'clients', // Customers, members, patients
-  'visits', // Customer visits and check-ins
-  'staff', // Employees, team members
-  'invoices', // Billing and payments
-  'stocks', // Inventory management
-  'activities', // Business activities and logs
-  'workflows', // Business processes
-  'permissions', // Access control
-  'userData', // User-specific data
-  'history', // Alias for activities (frontend compatibility)
-  'pickups', // Automated pickup operations
 
+  // Dental resource types
   'appointment',
   'patient',
   'medic',
@@ -35,7 +24,8 @@ export const VALID_RESOURCE_TYPES = [
   'sale', // Sales data
   'dental-chart', // Dental chart
   'plan', // Dental plan
-  'settings', // Settings
+  'setting', // Settings
+  'invoice-client',
 
   // Statistics resource types
   'statistics', // General business statistics
