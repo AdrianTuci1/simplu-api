@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CloudFormationClient, CreateStackCommand, DeleteStackCommand, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
-import { Route53Client, CreateHostedZoneCommand, ChangeResourceRecordSetsCommand } from '@aws-sdk/client-route-53';
+import { Route53Client } from '@aws-sdk/client-route-53';
 import { S3Client, CopyObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
-import { ACMClient, RequestCertificateCommand, DescribeCertificateCommand, ListCertificatesCommand } from '@aws-sdk/client-acm';
+import { ACMClient, RequestCertificateCommand, ListCertificatesCommand } from '@aws-sdk/client-acm';
 
 @Injectable()
 export class InfrastructureService {
@@ -119,7 +119,7 @@ export class InfrastructureService {
    */
   async deployBusinessClient(businessId: string, domainLabel: string, businessType: string): Promise<{ bucketName: string; appUrl: string }> {
     try {
-      const bucketName = `business-client-${businessId}-${domainLabel}`;
+      const bucketName = `${domainLabel}.simplu.io`;
       
       // Get or create SSL certificate for the domain
       const sslCertificateArn = await this.getOrCreateSSLCertificate();
@@ -127,7 +127,7 @@ export class InfrastructureService {
       // CloudFormation template for S3 bucket deployment
       const templateBody = this.generateS3DeploymentTemplate(businessId, domainLabel, businessType);
       
-      const stackName = `business-client-${businessId}`;
+      const stackName = `business-${domainLabel}`;
       const command = new CreateStackCommand({
         StackName: stackName,
         TemplateBody: templateBody,
@@ -289,7 +289,7 @@ export class InfrastructureService {
     
     return JSON.stringify({
       AWSTemplateFormatVersion: '2010-09-09',
-      Description: `S3 deployment for business ${businessId} with domain ${fullDomain}`,
+      Description: `S3 deployment for business ${businessId} with domain ${fullDomain} for business type ${businessType}`,
       Parameters: {
         BusinessId: {
           Type: 'String',
@@ -313,16 +313,10 @@ export class InfrastructureService {
         S3Bucket: {
           Type: 'AWS::S3::Bucket',
           Properties: {
-            BucketName: `business-client-${businessId}-${domainLabel}`,
+            BucketName: `${domainLabel}.simplu.io`,
             WebsiteConfiguration: {
               IndexDocument: 'index.html',
               ErrorDocument: 'index.html',
-            },
-            PublicAccessBlockConfiguration: {
-              BlockPublicAcls: false,
-              BlockPublicPolicy: false,
-              IgnorePublicAcls: false,
-              RestrictPublicBuckets: false,
             },
           },
         },
@@ -337,7 +331,7 @@ export class InfrastructureService {
                   Effect: 'Allow',
                   Principal: '*',
                   Action: 's3:GetObject',
-                  Resource: { 'Fn::Sub': '${S3Bucket}/*' },
+                  Resource: { 'Fn::Sub': 'arn:aws:s3:::${S3Bucket}/*' },
                 },
               ],
             },
@@ -604,7 +598,14 @@ export class InfrastructureService {
    */
   private async copyFormFilesFromBusinessType(businessType: string, targetBucketName: string): Promise<void> {
     try {
-      const sourceBucketName = `business-forms-${businessType}`;
+      // Map business types to their actual bucket names
+      const bucketNameMap = {
+        'dental': 'dental-form-simplu',
+        'gym': 'gym-form-simplu',
+        'hotel': 'hotel-form-simplu'
+      };
+      
+      const sourceBucketName = bucketNameMap[businessType] || `business-forms-${businessType}`;
       
       this.logger.log(`Copying form files from ${sourceBucketName} to ${targetBucketName}`);
       

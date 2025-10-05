@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { KinesisService, ResourceOperation } from '../../kinesis.service';
 import {
   VALID_RESOURCE_TYPES,
@@ -9,6 +9,9 @@ import {
   PermissionService,
   AuthenticatedUser,
 } from './services/permission.service';
+import { MessageAutomationService, AppointmentData } from '../../services/message-automation.service';
+import { ExternalApiConfigService } from '../../services/external-api-config.service';
+import { BusinessInfoService } from '../business-info/business-info.service';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ResourceOperationRequest {
@@ -30,9 +33,14 @@ interface StandardResponse {
 
 @Injectable()
 export class ResourcesService {
+  private readonly logger = new Logger(ResourcesService.name);
+
   constructor(
     private readonly kinesisService: KinesisService,
     private readonly permissionService: PermissionService,
+    private readonly messageAutomationService: MessageAutomationService,
+    private readonly externalApiConfigService: ExternalApiConfigService,
+    private readonly businessInfoService: BusinessInfoService,
   ) {}
 
   async processResourceOperation(
@@ -67,6 +75,11 @@ export class ResourcesService {
 
     // Send to Kinesis stream
     await this.kinesisService.sendResourceOperation(operation);
+
+    // Send automated messages for appointment creation
+    if (request.operation === 'create' && request.resourceType === 'appointment' && request.data) {
+      await this.sendAutomatedMessages(request.businessId, request.locationId, request.data);
+    }
 
     return {
       success: true,
@@ -118,5 +131,106 @@ export class ResourcesService {
         );
       }
     }
+  }
+
+  private async sendAutomatedMessages(
+    businessId: string,
+    locationId: string,
+    appointmentData: any
+  ): Promise<void> {
+    try {
+      // Check if any automation services are enabled
+      const isAnyServiceEnabled = await this.externalApiConfigService.isAnyServiceEnabled(businessId, locationId);
+      
+      if (!isAnyServiceEnabled) {
+        this.logger.debug(`No automation services enabled for business ${businessId}, location ${locationId}`);
+        return;
+      }
+
+      // Check what services should send on booking
+      const shouldSend = await this.externalApiConfigService.shouldSendOnBooking(businessId, locationId);
+      
+      if (!shouldSend.sms && !shouldSend.email) {
+        this.logger.debug(`No services configured to send on booking for business ${businessId}, location ${locationId}`);
+        return;
+      }
+
+      // Populate business and location info
+      const enrichedAppointmentData = await this.enrichAppointmentData(businessId, locationId, appointmentData);
+
+      // Send booking confirmation
+      const success = await this.messageAutomationService.sendBookingConfirmation(
+        businessId,
+        enrichedAppointmentData,
+        locationId
+      );
+
+      if (success) {
+        this.logger.log(`Booking confirmation sent successfully for business ${businessId}, location ${locationId}`);
+      } else {
+        this.logger.warn(`Failed to send booking confirmation for business ${businessId}, location ${locationId}`);
+      }
+
+    } catch (error) {
+      this.logger.error(`Failed to send automated messages: ${error.message}`);
+      // Don't throw error to avoid affecting appointment creation
+    }
+  }
+
+  private async enrichAppointmentData(
+    businessId: string,
+    locationId: string,
+    appointmentData: any
+  ): Promise<AppointmentData> {
+    try {
+      // Get business info
+      const businessInfo = await this.businessInfoService.getBusinessInfo(businessId);
+      const locationInfo = await this.businessInfoService.getLocationInfo(businessId, locationId);
+
+      // Extract appointment data from the resource data
+      const patientName = appointmentData?.patient?.name || appointmentData?.customer?.name || 'Unknown Patient';
+      const patientPhone = appointmentData?.patient?.phone || appointmentData?.customer?.phone;
+      const patientEmail = appointmentData?.patient?.email || appointmentData?.customer?.email;
+      const appointmentDate = this.formatDate(appointmentData?.date || appointmentData?.startDate);
+      const appointmentTime = appointmentData?.time;
+      const serviceName = appointmentData?.service?.name || 'Service';
+      const doctorName = appointmentData?.medic?.name || appointmentData?.doctor?.name || 'Unknown Doctor';
+
+      return {
+        patientName,
+        patientPhone,
+        patientEmail,
+        appointmentDate,
+        appointmentTime,
+        businessName: businessInfo?.businessName || 'Business',
+        locationName: locationInfo?.name || 'Location',
+        serviceName,
+        doctorName,
+        phoneNumber: (businessInfo as any)?.phoneNumber || ''
+      };
+    } catch (error) {
+      this.logger.error(`Failed to enrich appointment data: ${error.message}`);
+      return {
+        patientName: 'Unknown Patient',
+        patientPhone: '',
+        patientEmail: '',
+        appointmentDate: '',
+        appointmentTime: '',
+        businessName: 'Business',
+        locationName: 'Location',
+        serviceName: 'Service',
+        doctorName: 'Unknown Doctor',
+        phoneNumber: ''
+      };
+    }
+  }
+
+  private formatDate(date: string): string {
+    const d = new Date(date + 'T00:00:00Z');
+    return d.toLocaleDateString('ro-RO', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   }
 }

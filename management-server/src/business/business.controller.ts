@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagg
 import { CognitoAuthGuard } from '../modules/auth/guards/cognito-auth.guard';
 import { BusinessService } from './business.service';
 import { BusinessEntity } from './entities/business.entity';
-import { ConfigureBusinessDto, SetupPaymentDto } from './dto/business-config.dto';
+import { ConfigureBusinessDto, SetupPaymentDto, LaunchBusinessDto } from './dto/business-config.dto';
 import { CustomFormService } from './custom-form.service';
 import { CognitoUserService } from '../modules/auth/cognito-user.service';
 
@@ -52,14 +52,19 @@ export class BusinessController {
     return this.businessService.setupPayment(businessId, body, user);
   }
 
-  // Step 3: Launch - Activate business and deploy infrastructure
+  // Step 3: Launch - Activate business and deploy infrastructure (with secret code)
   @Post(':id/launch')
+  @SetMetadata('isPublic', true)
+  @ApiOperation({ 
+    summary: 'Launch business with secret code', 
+    description: 'Launch business using a secret code instead of user authorization' 
+  })
+  @ApiResponse({ status: 200, description: 'Business launched successfully' })
   async launchBusiness(
-    @Req() req: any,
-    @Param('id') businessId: string
+    @Param('id') businessId: string,
+    @Body() body: LaunchBusinessDto
   ): Promise<BusinessEntity> {
-    const user = req.user;
-    return this.businessService.launchBusiness(businessId, user);
+    return this.businessService.launchBusinessWithSecret(businessId, body.secretCode);
   }
 
   // Invitation endpoint - for new users to access their business (public endpoint)

@@ -199,4 +199,47 @@ export class BusinessInfoService {
       return [];
     }
   }
+
+  async getBusinessByDomainLabel(domainLabel: string): Promise<BusinessSearchResultDto | null> {
+    try {
+      const command = new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: '#domainLabel = :domainLabel',
+        ExpressionAttributeNames: {
+          '#domainLabel': 'domainLabel',
+        },
+        ExpressionAttributeValues: {
+          ':domainLabel': domainLabel,
+        },
+      });
+
+      const result = await this.dynamoClient.send(command);
+      const businesses = result.Items || [];
+      
+      if (businesses.length === 0) {
+        return null;
+      }
+
+      // Return the first match (domain labels should be unique)
+      const business = businesses[0];
+      return {
+        businessId: business.businessId,
+        companyName: business.companyName,
+        locations: (business.locations || []).map((location: any) => ({
+          id: location.id,
+          name: location.name,
+          address: location.address,
+          timezone: location.timezone,
+          active: location.active,
+        })),
+        active: business.active,
+        businessType: business.businessType,
+        domainLabel: business.domainLabel || '',
+        registrationNumber: business.registrationNumber || '',
+      };
+    } catch (error) {
+      console.error(`Error getting business by domain label: ${error.message}`);
+      return null;
+    }
+  }
 }

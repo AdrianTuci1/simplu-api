@@ -70,7 +70,7 @@ export class CustomFormService {
     try {
       this.logger.log(`Loading custom form from S3 for business ${businessId} with domain ${domainLabel}`);
 
-      const bucketName = `business-client-${businessId}-${domainLabel}`;
+      const bucketName = `${domainLabel}.simplu.io`;
       
       // Try to load form configuration from business-specific bucket first
       try {
@@ -125,139 +125,6 @@ export class CustomFormService {
   }
 
   /**
-   * Get form fields based on business type
-   */
-  private getBusinessTypeFormFields(businessType: string): FormField[] {
-    const baseFields: FormField[] = [
-      {
-        id: 'name',
-        type: 'text',
-        label: 'Nume complet',
-        placeholder: 'Introduceți numele complet',
-        required: true,
-        validation: {
-          minLength: 2,
-          maxLength: 100,
-        },
-      },
-      {
-        id: 'email',
-        type: 'email',
-        label: 'Adresa de email',
-        placeholder: 'exemplu@email.com',
-        required: true,
-        validation: {
-          pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
-        },
-      },
-      {
-        id: 'phone',
-        type: 'phone',
-        label: 'Număr de telefon',
-        placeholder: '+40 123 456 789',
-        required: true,
-        validation: {
-          pattern: '^\\+40[0-9]{9}$',
-        },
-      },
-    ];
-
-    // Add business-specific fields
-    switch (businessType) {
-      case 'dental':
-        return [
-          ...baseFields,
-          {
-            id: 'appointment_type',
-            type: 'select',
-            label: 'Tipul programării',
-            required: true,
-            options: ['Consult', 'Tratament', 'Urgență', 'Control'],
-          },
-          {
-            id: 'preferred_date',
-            type: 'date',
-            label: 'Data preferată',
-            required: true,
-          },
-          {
-            id: 'preferred_time',
-            type: 'select',
-            label: 'Ora preferată',
-            required: true,
-            options: ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'],
-          },
-          {
-            id: 'notes',
-            type: 'textarea',
-            label: 'Observații',
-            placeholder: 'Descrieți problema sau cerința dumneavoastră...',
-            required: false,
-          },
-        ];
-      
-      case 'gym':
-        return [
-          ...baseFields,
-          {
-            id: 'membership_type',
-            type: 'select',
-            label: 'Tipul abonamentului',
-            required: true,
-            options: ['Lunar', 'Trimestrial', 'Anual', 'Trial'],
-          },
-          {
-            id: 'preferred_start_date',
-            type: 'date',
-            label: 'Data de început preferată',
-            required: true,
-          },
-          {
-            id: 'fitness_goals',
-            type: 'textarea',
-            label: 'Obiectivele fitness',
-            placeholder: 'Descrieți obiectivele dumneavoastră...',
-            required: false,
-          },
-        ];
-      
-      case 'hotel':
-        return [
-          ...baseFields,
-          {
-            id: 'check_in',
-            type: 'date',
-            label: 'Data check-in',
-            required: true,
-          },
-          {
-            id: 'check_out',
-            type: 'date',
-            label: 'Data check-out',
-            required: true,
-          },
-          {
-            id: 'guests',
-            type: 'select',
-            label: 'Numărul de oaspeți',
-            required: true,
-            options: ['1', '2', '3', '4', '5+'],
-          },
-          {
-            id: 'special_requests',
-            type: 'textarea',
-            label: 'Cerințe speciale',
-            placeholder: 'Aveți cerințe speciale pentru cazare?',
-            required: false,
-          },
-        ];
-      
-      default:
-        return baseFields;
-    }
-  }
-
-  /**
    * Generate custom styling based on domainLabel
    */
   private generateCustomStyling(domainLabel: string): FormStyling {
@@ -275,47 +142,13 @@ export class CustomFormService {
     };
   }
 
-  /**
-   * Generate validation rules for form fields
-   */
-  private generateValidationRules(formFields: FormField[]): FormValidation {
-    const requiredFields = formFields
-      .filter(field => field.required)
-      .map(field => field.id);
-
-    const customRules: CustomRule[] = [
-      {
-        fieldId: 'email',
-        rule: 'email',
-        message: 'Vă rugăm să introduceți o adresă de email validă',
-      },
-      {
-        fieldId: 'phone',
-        rule: 'phone',
-        message: 'Vă rugăm să introduceți un număr de telefon valid',
-      },
-    ];
-
-    return {
-      requiredFields,
-      customRules,
-    };
-  }
-
-  /**
-   * Store form configuration (placeholder implementation)
-   */
-  private async storeFormConfiguration(config: CustomFormConfig): Promise<void> {
-    // TODO: Implement actual storage in database
-    this.logger.log(`Form configuration stored for business ${config.businessId}`);
-  }
 
   /**
    * Load HTML form from S3 bucket or generate from configuration
    */
   async loadFormHTMLFromS3(businessId: string, domainLabel: string, businessType: string): Promise<string> {
     try {
-      const bucketName = `business-client-${businessId}-${domainLabel}`;
+      const bucketName = `${domainLabel}.simplu.io`;
       
       // Try to load HTML form from business-specific bucket first
       try {

@@ -41,14 +41,14 @@ export class SqsConsumerService {
 
   constructor(private readonly configService: ConfigService) {
     this.sqsClient = new SQSClient({
-      region: this.configService.get('AWS_REGION', 'us-east-1'),
+      region: this.configService.get('sqs.awsSqsRegion', 'us-east-1'),
       credentials: {
         accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
         secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
       },
     });
 
-    this.queueUrl = this.configService.get('SQS_SHARD_CREATION_QUEUE_URL');
+    this.queueUrl = this.configService.get('sqs.shardCreationQueueUrl');
     this.citrusBaseUrl = this.configService.get('CITRUS_SERVER_URL', 'http://citrus:8080');
     this.citrusApiKey = this.configService.get('CITRUS_API_KEY', '');
   }
@@ -255,24 +255,117 @@ export class SqsConsumerService {
    * Create admin role resource
    */
   private async createAdminRole(adminData: AdminAccountCreationMessage): Promise<void> {
-    // TODO: Implement admin role creation
-    // This should create a role resource with admin permissions
-    this.logger.log(`Creating admin role for business ${adminData.businessId}, location ${adminData.locationId}`);
-    
-    // Simulate role creation
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      this.logger.log(`Creating admin role for business ${adminData.businessId}, location ${adminData.locationId}`);
+      
+      // Create admin role with full permissions
+      const roleData = {
+        name: "Administrator",
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        description: "Administrator principal al clinicii",
+        permissions: [
+          "appointment:read",
+          "appointment:create", 
+          "appointment:update",
+          "appointment:delete",
+          "patient:read",
+          "patient:create",
+          "patient:update", 
+          "patient:delete",
+          "medic:read",
+          "medic:create",
+          "medic:update",
+          "medic:delete",
+          "treatment:read",
+          "treatment:create",
+          "treatment:update",
+          "treatment:delete",
+          "product:read",
+          "product:create",
+          "product:update",
+          "product:delete",
+          "role:read",
+          "role:create",
+          "role:update",
+          "role:delete",
+          "report:read",
+          "sale:read",
+          "sale:create",
+          "dental-chart:read",
+          "dental-chart:create",
+          "dental-chart:update",
+          "plan:read",
+          "plan:create",
+          "plan:update",
+          "setting:read",
+          "setting:update",
+          "invoice-client:read",
+          "invoice-client:create",
+          "statistics:read",
+          "recent-activities:read"
+        ]
+      };
+
+      // Use direct database service to create role resource
+      const { DatabaseService } = await import('../resources/services/database.service');
+      const databaseService = new DatabaseService(this.configService, null);
+      
+      await databaseService.saveResource(
+        adminData.businessId,
+        adminData.locationId,
+        'role',
+        roleData,
+        new Date().toISOString().split('T')[0], // start_date
+        null, // end_date
+        adminData.adminUserId // Use admin's Cognito user ID as resource_id
+      );
+
+      this.logger.log(`✅ Admin role created successfully for business ${adminData.businessId}, location ${adminData.locationId}`);
+    } catch (error) {
+      this.logger.error(`Error creating admin role for business ${adminData.businessId}:`, error);
+      throw error;
+    }
   }
 
   /**
    * Create medic resource with admin account's resource_id
    */
   private async createMedicResource(adminData: AdminAccountCreationMessage): Promise<void> {
-    // TODO: Implement medic resource creation
-    // This should create a medic resource with the admin account's resource_id
-    this.logger.log(`Creating medic resource for admin ${adminData.adminUserId} in business ${adminData.businessId}, location ${adminData.locationId}`);
-    
-    // Simulate medic resource creation
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      this.logger.log(`Creating medic resource for admin ${adminData.adminUserId} in business ${adminData.businessId}, location ${adminData.locationId}`);
+      
+      // Create medic resource with admin's Cognito user ID as resource_id
+      const medicData = {
+        role: "Administrator",
+        email: adminData.adminEmail,
+        phone: "", // Will be filled by user later
+        dutyDays: ["Luni", "Marți", "Miercuri", "Joi", "Vineri"], // Default working days
+        createdAt: new Date().toISOString(),
+        medicName: `${adminData.adminEmail.split('@')[0]}`, // Generate name from email
+        updatedAt: new Date().toISOString()
+      };
+
+      // Use direct database service to create medic resource
+      const { DatabaseService } = await import('../resources/services/database.service');
+      const databaseService = new DatabaseService(this.configService, null);
+      
+      await databaseService.saveResource(
+        adminData.businessId,
+        adminData.locationId,
+        'medic',
+        medicData,
+        new Date().toISOString().split('T')[0], // start_date
+        null, // end_date
+        adminData.adminUserId // Use admin's Cognito user ID as resource_id
+      );
+
+      this.logger.log(`✅ Medic resource created successfully for admin ${adminData.adminUserId} in business ${adminData.businessId}, location ${adminData.locationId}`);
+    } catch (error) {
+      this.logger.error(`Error creating medic resource for business ${adminData.businessId}:`, error);
+      throw error;
+    }
   }
 
   /**

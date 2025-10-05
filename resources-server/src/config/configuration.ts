@@ -48,4 +48,10 @@ export default () => ({
   validation: {
     enabled: process.env.VALIDATION_ENABLED === 'true' || true,
   },
+  
+  // SQS Configuration
+  sqs: {
+    shardCreationQueueUrl: process.env.SQS_SHARD_CREATION_QUEUE_URL,
+    awsSqsRegion: process.env.AWS_SQS_REGION || 'eu-central-1',
+  },
 }); 

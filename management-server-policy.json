@@ -45,6 +45,8 @@
         "s3:PutBucketPolicy",
         "s3:PutBucketWebsite",
         "s3:DeleteBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketPublicAccessBlock",
         "s3:ListBucket",
         "s3:GetObject",
         "s3:PutObject",
@@ -54,7 +56,8 @@
       "Resource": [
         "arn:aws:s3:::business-client-*",
         "arn:aws:s3:::business-forms-*",
-        "arn:aws:s3:::react-app-*"
+        "arn:aws:s3:::react-app-*",
+        "arn:aws:s3:::*-simplu"
       ]
     },
     {

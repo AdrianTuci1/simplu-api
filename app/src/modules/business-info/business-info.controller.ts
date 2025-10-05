@@ -29,6 +29,27 @@ export class BusinessInfoController {
     return this.businessInfoService.searchBusinesses(searchTerm.trim());
   }
 
+  @Get('by-domain/:domainLabel')
+  @ApiOperation({ 
+    summary: 'Get business by domain label', 
+    description: 'Get business information by exact domain label match (e.g., "best-dent" for best-dent.simplu.io)' 
+  })
+  @ApiParam({ name: 'domainLabel', description: 'Domain label (without .simplu.io)', required: true })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Business found', 
+    type: BusinessSearchResultDto 
+  })
+  @ApiResponse({ status: 404, description: 'Business not found' })
+  async getBusinessByDomain(
+    @Param('domainLabel') domainLabel: string,
+  ): Promise<BusinessSearchResultDto | null> {
+    if (!domainLabel || domainLabel.trim().length === 0) {
+      return null;
+    }
+    return this.businessInfoService.getBusinessByDomainLabel(domainLabel.trim());
+  }
+
   @Get(':businessId')
   @ApiOperation({ summary: 'Get business information by ID' })
   @ApiResponse({

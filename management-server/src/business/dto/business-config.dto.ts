@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray, IsEnum, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsEnum, ValidateNested, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class BusinessLocationDto {
@@ -107,4 +107,11 @@ export class SetupPaymentDto {
   @IsOptional()
   @IsString()
   currency?: string;
+}
+
+export class LaunchBusinessDto {
+  @ApiProperty({ description: 'Secret code required to launch business', example: 'LAUNCH_SECRET_2024' })
+  @IsString()
+  @IsNotEmpty()
+  secretCode: string;
 } 

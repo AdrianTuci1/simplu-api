@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { KinesisModule } from './modules/kinesis/kinesis.module';
+import { SqsModule } from './modules/sqs/sqs.module';
 import { HealthModule } from './modules/health/health.module';
 import configuration from './config/configuration';
 
@@ -51,6 +52,7 @@ import configuration from './config/configuration';
     }),
     ResourcesModule,
     KinesisModule,
+    SqsModule,
     HealthModule,
   ],
 })

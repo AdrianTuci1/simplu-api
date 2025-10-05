@@ -119,7 +119,7 @@ export class BusinessService {
       billingEmail: input.billingEmail || ownerEmail,
       createdByUserId: user.userId,
       nextPaymentDate: null,
-      paymentStatus: 'unpaid',
+      paymentStatus: 'unpaid', // Will be set to 'active' when launched without payment
       createdAt: nowIso,
       updatedAt: nowIso,
       deletedAt: null,
@@ -209,9 +209,97 @@ export class BusinessService {
     });
   }
 
-  // Step 3: Launch - Activate business and deploy infrastructure
+  // Step 3: Launch - Activate business and deploy infrastructure (with secret code)
+  async launchBusinessWithSecret(businessId: string, secretCode: string): Promise<BusinessEntity> {
+    // Validate secret code
+    const expectedSecretCode = process.env.BUSINESS_LAUNCH_SECRET_CODE || 'LAUNCH_SECRET_2024';
+    if (secretCode !== expectedSecretCode) {
+      throw new BadRequestException('Invalid secret code');
+    }
 
-  // TODO: EDIT THIS ( LAUNCH )
+    return this.launchBusinessInternal(businessId);
+  }
+
+  // Internal method for business launch logic (shared by both secret code and user auth)
+  private async launchBusinessInternal(businessId: string): Promise<BusinessEntity> {
+    const business = await this.getBusiness(businessId);
+
+    // Check if business is already active
+    if (business.status === 'active' && business.active === true) {
+      this.logger.warn(`Business ${businessId} is already active, skipping launch`);
+      return business;
+    }
+
+    // Skip payment validation for free businesses
+    // Note: Payment validation can be re-enabled by uncommenting the lines below
+    // const subscriptionStatus = await this.paymentService.refreshSubscriptionStatus(businessId);
+    // if (subscriptionStatus.status !== 'active' && subscriptionStatus.status !== 'trialing') {
+    //   throw new BadRequestException('Business subscription is not active. Please complete payment first.');
+    // }
+
+    // Deploy business client to S3 bucket with domainLabel first
+    try {
+      if (business.domainLabel) {
+        await this.infraService.deployBusinessClient(
+          business.businessId,
+          business.domainLabel,
+          business.businessType,
+        );
+        
+        // Only trigger shard creation AFTER successful infrastructure deployment
+        if (this.getDbType() === 'citrus') {
+          const activeLocations = (business.locations || []).filter((l) => l.active !== false);
+          await this.shardService.triggerMultipleShardCreations(
+            business.businessId,
+            activeLocations.map((l) => ({ id: l.id, businessType: business.businessType })),
+          );
+        }
+      }
+    } catch (err) {
+      this.logger.error(`S3 deployment failed for business ${business.businessId}: ${err?.message}`);
+      throw err; // Re-throw to prevent business from being marked as active if deployment fails
+    }
+
+    // Mark business as active ONLY after successful infrastructure deployment
+    const updated = await this.db.updateBusiness(businessId, {
+      active: true,
+      status: 'active' as BusinessStatus,
+      paymentStatus: 'active', // Set as active for free businesses
+      updatedAt: new Date().toISOString(),
+    });
+
+    //  // EVENT BRIDGE - CREATE USERS FOR EACH LOCATION BASED ON createdByUserId
+    //  await this.eventBridgeService.createUsersForLocations(updated.businessId, updated.createdByUserId);
+
+    // Trigger admin account creation for all active locations
+    try {
+      const activeLocations = (updated.locations || []).filter((l) => l.active !== false);
+      if (activeLocations.length > 0 && updated.domainLabel) {
+        // Create admin accounts for all active locations
+        const adminCreationPromises = activeLocations.map(location =>
+          this.triggerAdminAccountCreation(
+            updated.businessId,
+            location.id,
+            updated.ownerEmail,
+            updated.ownerUserId,
+            updated.businessType,
+            updated.domainLabel,
+          )
+        );
+        
+        await Promise.all(adminCreationPromises);
+        this.logger.log(`Admin accounts created for ${activeLocations.length} locations in business ${updated.businessId}`);
+      }
+    } catch (err) {
+      this.logger.error(`Admin account creation failed for business ${updated.businessId}: ${err?.message}`);
+      // Don't throw here to avoid breaking the launch process
+    }
+
+    return updated;
+  }
+
+  // Step 3: Launch - Activate business and deploy infrastructure (legacy with user auth)
+  // Note: Payment validation is disabled to allow free business launches
   async launchBusiness(businessId: string, user: any): Promise<BusinessEntity> {
     const business = await this.getBusiness(businessId);
     
@@ -220,70 +308,7 @@ export class BusinessService {
       throw new BadRequestException('Unauthorized to launch this business');
     }
 
-    // Check if business is already active
-    if (business.status === 'active' && business.active === true) {
-      this.logger.warn(`Business ${businessId} is already active, skipping launch`);
-      return business;
-    }
-
-    // Check payment status
-    const subscriptionStatus = await this.paymentService.refreshSubscriptionStatus(businessId);
-    if (subscriptionStatus.status !== 'active' && subscriptionStatus.status !== 'trialing') {
-      throw new BadRequestException('Business subscription is not active. Please complete payment first.');
-    }
-
-    // Mark business as active
-    const updated = await this.db.updateBusiness(businessId, {
-      active: true,
-      status: 'active' as BusinessStatus,
-      paymentStatus: 'active',
-      updatedAt: new Date().toISOString(),
-    });
-
-    if (this.getDbType() === 'citrus') {
-    // Trigger shard creation for each active location
-    const activeLocations = (updated.locations || []).filter((l) => l.active !== false);
-    await this.shardService.triggerMultipleShardCreations(
-      updated.businessId,
-      activeLocations.map((l) => ({ id: l.id, businessType: updated.businessType })),
-    );
-  }
-
-    //  // EVENT BRIDGE - CREATE USERS FOR EACH LOCATION BASED ON createdByUserId
-    //  await this.eventBridgeService.createUsersForLocations(updated.businessId, updated.createdByUserId);
-  
-
-    // Deploy business client to S3 bucket with domainLabel
-    try {
-      if (updated.domainLabel) {
-        await this.infraService.deployBusinessClient(
-          updated.businessId,
-          updated.domainLabel,
-          updated.businessType,
-        );
-      }
-    } catch (err) {
-      this.logger.warn(`S3 deployment failed for business ${updated.businessId}: ${err?.message}`);
-    }
-
-    // Trigger admin account creation for the first location
-    try {
-      const firstLocation = updated.locations?.[0];
-      if (firstLocation && updated.domainLabel) {
-        await this.triggerAdminAccountCreation(
-          updated.businessId,
-          firstLocation.id,
-          updated.ownerEmail,
-          updated.ownerUserId,
-          updated.businessType,
-          updated.domainLabel,
-        );
-      }
-    } catch (err) {
-      this.logger.warn(`Admin account creation failed for business ${updated.businessId}: ${err?.message}`);
-    }
-
-    return updated;
+    return this.launchBusinessInternal(businessId);
   }
 
   // Legacy method for backward compatibility
@@ -335,7 +360,7 @@ export class BusinessService {
       billingEmail: input.billingEmail || '',
       createdByUserId: input.createdByUserId || '',
       nextPaymentDate: null,
-      paymentStatus: 'unpaid',
+      paymentStatus: 'unpaid', // Will be set to 'active' when launched without payment
       createdAt: nowIso,
       updatedAt: nowIso,
       deletedAt: null,
