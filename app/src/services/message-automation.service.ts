@@ -12,6 +12,7 @@ export interface AppointmentData {
   serviceName: string;
   doctorName: string;
   phoneNumber?: string;
+  address?: string; // Location address
 }
 
 export interface AutomationStatus {

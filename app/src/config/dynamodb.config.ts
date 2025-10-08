@@ -7,6 +7,7 @@ export interface DynamoDBConfig {
   secretAccessKey?: string;
   endpoint?: string; // For local development
   businessInfoTableName: string;
+  externalApiConfigTableName: string;
 }
 
 export const dynamoDBConfig = (): DynamoDBConfig => ({
@@ -16,6 +17,8 @@ export const dynamoDBConfig = (): DynamoDBConfig => ({
   endpoint: process.env.DYNAMODB_ENDPOINT, // For local DynamoDB
   businessInfoTableName:
     process.env.DYNAMODB_BUSINESS_INFO_TABLE || 'business-info',
+  externalApiConfigTableName:
+    process.env.DYNAMODB_EXTERNAL_API_CONFIG_TABLE || 'business-external-api-config',
 });
 
 export class DynamoDBService {
@@ -46,6 +49,10 @@ export class DynamoDBService {
 
   getTableName(): string {
     return this.config.businessInfoTableName;
+  }
+
+  getExternalApiConfigTableName(): string {
+    return this.config.externalApiConfigTableName;
   }
 }
 

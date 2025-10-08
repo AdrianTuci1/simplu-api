@@ -1,0 +1,123 @@
+{
+  "Comment": "Business Launch Orchestration",
+  "StartAt": "ValidateInput",
+  "States": {
+    "ValidateInput": {
+      "Type": "Pass",
+      "ResultPath": null,
+      "Next": "StartInfraDeployment"
+    },
+    "StartInfraDeployment": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:864981730944:function:start-infra:$LATEST",
+        "Payload": {
+          "businessId.$": "$.detail.businessId",
+          "businessType.$": "$.detail.businessType",
+          "domainLabel.$": "$.detail.domainLabel",
+          "ownerEmail.$": "$.detail.ownerEmail",
+          "ownerUserId.$": "$.detail.ownerUserId",
+          "locations.$": "$.detail.locations",
+          "timestamp.$": "$.detail.timestamp"
+        }
+      },
+      "ResultPath": "$.infraStartResult",
+      "Next": "WaitBeforeCheck"
+    },
+    "WaitBeforeCheck": {
+      "Type": "Wait",
+      "Seconds": 300,
+      "Next": "CheckInfraStatus"
+    },
+    "CheckInfraStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:864981730944:function:check-infra-status:$LATEST",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.infraStatus",
+      "Next": "InfraComplete?"
+    },
+    "InfraComplete?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.infraStatus.Payload.stackStatus",
+          "StringEquals": "CREATE_COMPLETE",
+          "Next": "CopyBusinessFiles"
+        },
+        {
+          "Variable": "$.infraStatus.Payload.stackStatus",
+          "StringEquals": "FAILED",
+          "Next": "FailDeployment"
+        }
+      ],
+      "Default": "WaitBeforeCheck"
+    },
+    "CopyBusinessFiles": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:864981730944:function:copy-business-files:$LATEST",
+        "Payload": {
+          "businessId.$": "$.detail.businessId",
+          "businessType.$": "$.detail.businessType",
+          "domainLabel.$": "$.detail.domainLabel"
+        }
+      },
+      "ResultPath": "$.copyResult",
+      "Next": "UpdateBusinessStatus",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "FailDeployment",
+          "ResultPath": "$.copyError"
+        }
+      ]
+    },
+    "UpdateBusinessStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:864981730944:function:update-business-status:$LATEST",
+        "Payload.$": "$"
+      },
+      "ResultPath": null,
+      "Next": "EnqueueAdminAccounts"
+    },
+    "EnqueueAdminAccounts": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:864981730944:function:enqueue-admin-accounts:$LATEST",
+        "Payload.$": "$"
+      },
+      "ResultPath": null,
+      "Next": "Success"
+    },
+    "FailDeployment": {
+      "Type": "Fail",
+      "Error": "InfrastructureDeploymentFailed",
+      "Cause": "CloudFormation or infra setup failed"
+    },
+    "Success": {
+      "Type": "Succeed"
+    }
+  }
+}

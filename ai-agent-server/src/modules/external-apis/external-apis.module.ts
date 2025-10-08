@@ -11,8 +11,10 @@ import { ExternalApiConfigService } from './services/external-api-config.service
 import { MessageAutomationService } from './services/message-automation.service';
 import { MessageAutomationController } from './controllers/message-automation.controller';
 import { SMSController } from './sms/sms.controller';
+import { BusinessInfoModule } from '@/modules/business-info/business-info.module';
 
 @Module({
+  imports: [BusinessInfoModule],
   providers: [ExternalApisService, GmailService, ElevenLabsService, MetaService, ExternalApiConfigService, MessageAutomationService],
   controllers: [GmailController, ElevenLabsController, MetaController, ExternalApiConfigController, MessageAutomationController, SMSController],
   exports: [ExternalApisService, GmailService, ElevenLabsService, MetaService, ExternalApiConfigService, MessageAutomationService],

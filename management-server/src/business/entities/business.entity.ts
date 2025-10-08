@@ -17,8 +17,6 @@ export interface BusinessCredits {
   total: number;
   available: number;
   currency: string;
-  perLocation?: Record<string, number>;
-  lockedLocations?: string[];
 }
 
 export interface BusinessEntity {

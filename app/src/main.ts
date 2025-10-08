@@ -11,7 +11,27 @@ async function bootstrap() {
 
 
   app.enableCors({
-    origin: ['https://dental.simplu.io', 'http://localhost:5173'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Allow localhost for development
+      if (origin.startsWith('http://localhost:')) {
+        return callback(null, true);
+      }
+
+      // Allow any subdomain of simplu.io with https (including multi-level subdomains)
+      // Supports: dental.simplu.io, admin.simplu.io, admin.dental.simplu.io, etc.
+      // Allows letters, numbers, hyphens, underscores, and dots in subdomain
+      if (/^https:\/\/[a-zA-Z0-9._-]+\.simplu\.io$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Reject all other origins
+      callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Resource-Type'],
     credentials: true,

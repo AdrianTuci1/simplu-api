@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import {
   AdminGetUserCommand,
   GetUserCommand,
+  AdminListGroupsForUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { cognitoService } from '../../config/cognito.config';
 import { JwtService } from '@nestjs/jwt';
@@ -16,6 +17,7 @@ export interface CognitoUser {
   name?: string;        // Full name from Cognito (if available)
   firstName?: string;   // Extracted first name
   lastName?: string;    // Extracted last name
+  groups?: string[];    // Cognito groups (roles)
 }
 
 export interface AuthResult {
@@ -108,6 +110,9 @@ export class AuthService {
       const fullName = attributes.name || attributes['custom:name'] || '';
       const { firstName, lastName } = this.splitFullName(fullName);
 
+      // Get user groups
+      const groups = await this.getUserGroups(username);
+
       const userInfo = {
         userId: attributes.sub || username,
         username: result.Username || username,
@@ -115,6 +120,7 @@ export class AuthService {
         name: fullName,
         firstName,
         lastName,
+        groups,
       };
 
       this.logger.debug(`User info constructed: ${JSON.stringify(userInfo)}`);
@@ -122,6 +128,30 @@ export class AuthService {
     } catch (error) {
       this.logger.error(`Error fetching user info for ${username}: ${error.message}`, error.stack);
       return null;
+    }
+  }
+
+  /**
+   * Gets user groups from Cognito
+   */
+  async getUserGroups(username: string): Promise<string[]> {
+    try {
+      this.logger.debug(`Fetching groups for user: ${username}`);
+      
+      const command = new AdminListGroupsForUserCommand({
+        UserPoolId: this.config.userPoolId,
+        Username: username,
+      });
+
+      const result = await this.cognitoClient.send(command);
+      
+      const groups = result.Groups?.map(group => group.GroupName || '') || [];
+      this.logger.debug(`User groups found: ${JSON.stringify(groups)}`);
+      
+      return groups;
+    } catch (error) {
+      this.logger.error(`Error fetching groups for user ${username}: ${error.message}`, error.stack);
+      return [];
     }
   }
 

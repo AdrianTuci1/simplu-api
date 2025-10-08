@@ -57,6 +57,7 @@
         "arn:aws:s3:::business-client-*",
         "arn:aws:s3:::business-forms-*",
         "arn:aws:s3:::react-app-*",
+        "arn:aws:s3:::*-simplu.io",
         "arn:aws:s3:::*-simplu"
       ]
     },

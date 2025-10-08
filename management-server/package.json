@@ -17,7 +17,11 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "deploy:lambdas": "node scripts/deploy-lambdas.js",
+    "fix:lambda-permissions": "node scripts/fix-lambda-permissions.js",
+    "apply:lambda-policy": "./scripts/apply-lambda-policy.sh",
+    "setup:copy-files-permissions": "./scripts/setup-copy-business-files-permissions.sh"
   },
   "dependencies": {
     "@aws-sdk/client-acm": "^3.901.0",
@@ -25,6 +29,7 @@
     "@aws-sdk/client-cloudfront": "^3.901.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.859.0",
     "@aws-sdk/client-dynamodb": "^3.859.0",
+    "@aws-sdk/client-eventbridge": "^3.901.0",
     "@aws-sdk/client-route-53": "^3.859.0",
     "@aws-sdk/client-s3": "^3.901.0",
     "@aws-sdk/client-ses": "3.864.0",

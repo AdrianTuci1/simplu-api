@@ -24,6 +24,7 @@ export class AuthController {
           name: user.name,
           firstName: user.firstName,
           lastName: user.lastName,
+          groups: user.groups,
         },
       };
     } catch (error) {
@@ -47,6 +48,7 @@ export class AuthController {
         name: user.name,
         firstName: user.firstName,
         lastName: user.lastName,
+        groups: user.groups,
       },
     };
   }

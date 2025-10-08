@@ -57,61 +57,7 @@ export class InfrastructureService {
     });
   }
 
-  async createReactApp(businessId: string, businessType: string, subdomain?: string, customDomain?: string): Promise<{ stackName: string; appUrl: string }> {
-    try {
-      const stackName = `react-app-${businessId}`;
-      
-      // CloudFormation template for React app
-      const templateBody = this.generateReactAppTemplate(businessId, businessType, subdomain, customDomain);
-      
-      const command = new CreateStackCommand({
-        StackName: stackName,
-        TemplateBody: templateBody,
-        Capabilities: ['CAPABILITY_IAM'],
-        Parameters: [
-          {
-            ParameterKey: 'BusinessId',
-            ParameterValue: businessId,
-          },
-          {
-            ParameterKey: 'BusinessType',
-            ParameterValue: businessType,
-          },
-        ],
-      });
 
-      await this.cloudFormationClient.send(command);
-      
-      // Wait for stack creation to complete
-      await this.waitForStackCreation(stackName);
-      
-      const appUrl = customDomain || `${subdomain}.${this.configService.get('BASE_DOMAIN', 'example.com')}`;
-      
-      this.logger.log(`React app created for business ${businessId}: ${appUrl}`);
-      
-      return {
-        stackName,
-        appUrl: `https://${appUrl}`,
-      };
-    } catch (error) {
-      this.logger.error(`Error creating React app: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async deleteReactApp(stackName: string): Promise<void> {
-    try {
-      const command = new DeleteStackCommand({
-        StackName: stackName,
-      });
-
-      await this.cloudFormationClient.send(command);
-      this.logger.log(`React app deleted: ${stackName}`);
-    } catch (error) {
-      this.logger.error(`Error deleting React app: ${error.message}`);
-      throw error;
-    }
-  }
 
   /**
    * Deploy business client to S3 bucket with domainLabel
@@ -174,115 +120,11 @@ export class InfrastructureService {
     }
   }
 
-  async destroyReactApp(businessId: string): Promise<void> {
-    try {
-      const stackName = `react-app-${businessId}`;
-      
-      // Check if stack exists before trying to delete
-      try {
-        const describeCommand = new DescribeStacksCommand({
-          StackName: stackName,
-        });
-        await this.cloudFormationClient.send(describeCommand);
-      } catch (error) {
-        // Stack doesn't exist, nothing to delete
-        this.logger.log(`Stack ${stackName} doesn't exist, skipping deletion`);
-        return;
-      }
 
-      const command = new DeleteStackCommand({
-        StackName: stackName,
-      });
 
-      await this.cloudFormationClient.send(command);
-      this.logger.log(`React app infrastructure destroyed for business: ${businessId}`);
-    } catch (error) {
-      this.logger.error(`Error destroying React app infrastructure for business ${businessId}: ${error.message}`);
-      throw error;
-    }
-  }
 
-  async createCustomDomain(domain: string): Promise<string> {
-    try {
-      // This would typically involve domain registration through a domain registrar
-      // For now, we'll simulate the process
-      this.logger.log(`Custom domain created: ${domain}`);
-      return domain;
-    } catch (error) {
-      this.logger.error(`Error creating custom domain: ${error.message}`);
-      throw error;
-    }
-  }
 
-  async setupDomainDNS(domain: string, targetUrl: string): Promise<void> {
-    try {
-      // Setup DNS records for the domain
-      // This would involve creating A records or CNAME records
-      this.logger.log(`DNS setup completed for ${domain} -> ${targetUrl}`);
-    } catch (error) {
-      this.logger.error(`Error setting up DNS: ${error.message}`);
-      throw error;
-    }
-  }
 
-  private generateReactAppTemplate(businessId: string, businessType: string, subdomain?: string, customDomain?: string): string {
-    // This is a simplified CloudFormation template
-    // In a real implementation, this would be a comprehensive template
-    return JSON.stringify({
-      AWSTemplateFormatVersion: '2010-09-09',
-      Description: `React app for business ${businessId}`,
-      Parameters: {
-        BusinessId: {
-          Type: 'String',
-          Description: 'Business ID',
-        },
-        BusinessType: {
-          Type: 'String',
-          Description: 'Business type',
-        },
-      },
-      Resources: {
-        S3Bucket: {
-          Type: 'AWS::S3::Bucket',
-          Properties: {
-            BucketName: `react-app-${businessId}`,
-            WebsiteConfiguration: {
-              IndexDocument: 'index.html',
-              ErrorDocument: 'index.html',
-            },
-          },
-        },
-        CloudFrontDistribution: {
-          Type: 'AWS::CloudFront::Distribution',
-          Properties: {
-            DistributionConfig: {
-              Origins: [
-                {
-                  Id: 'S3Origin',
-                  DomainName: { 'Fn::GetAtt': ['S3Bucket', 'DomainName'] },
-                  S3OriginConfig: {
-                    OriginAccessIdentity: '',
-                  },
-                },
-              ],
-              DefaultCacheBehavior: {
-                TargetOriginId: 'S3Origin',
-                ViewerProtocolPolicy: 'redirect-to-https',
-              },
-              Enabled: true,
-              DefaultRootObject: 'index.html',
-            },
-          },
-        },
-      },
-      Outputs: {
-        AppUrl: {
-          Description: 'URL of the React app',
-          Value: { 'Fn::GetAtt': ['CloudFrontDistribution', 'DomainName'] },
-        },
-      },
-    });
-  }
 
   private generateS3DeploymentTemplate(businessId: string, domainLabel: string, businessType: string): string {
     const fullDomain = `${domainLabel}.simplu.io`;
@@ -314,6 +156,12 @@ export class InfrastructureService {
           Type: 'AWS::S3::Bucket',
           Properties: {
             BucketName: `${domainLabel}.simplu.io`,
+            PublicAccessBlockConfiguration: {
+              BlockPublicAcls: false,
+              BlockPublicPolicy: false,
+              IgnorePublicAcls: false,
+              RestrictPublicBuckets: false,
+            },
             WebsiteConfiguration: {
               IndexDocument: 'index.html',
               ErrorDocument: 'index.html',

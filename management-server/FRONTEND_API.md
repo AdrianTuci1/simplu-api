@@ -53,7 +53,7 @@ Exemplu răspuns:
       { "id":"loc-1","name":"Clinica Centrală","address":"...","timezone":"Europe/Bucharest","active":true }
     ],
     "settings": { "currency":"RON","language":"ro" },
-    "credits": { "total":0,"available":0,"currency":"RON","perLocation":{},"lockedLocations":[] },
+    "credits": { "total":0,"available":0,"currency":"RON" },
     "createdAt": "iso", "updatedAt": "iso"
   }
 ]

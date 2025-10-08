@@ -33,7 +33,7 @@ export class ExternalApiConfigService {
 
   constructor(private configService: ConfigService) {
     this.dynamoClient = dynamoDBService.getClient();
-    this.tableName = this.configService.get('EXTERNAL_API_CONFIG_TABLE_NAME') || 'external-api-config';
+    this.tableName = dynamoDBService.getExternalApiConfigTableName();
   }
 
   async getConfig(businessId: string, locationId?: string): Promise<ExternalApiConfig | null> {

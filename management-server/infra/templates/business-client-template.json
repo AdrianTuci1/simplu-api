@@ -1,0 +1,149 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Simplu - Business Client infra (S3 + CloudFront + Route53)",
+  "Parameters": {
+    "BusinessId": {
+      "Type": "String",
+      "Description": "Unique business identifier"
+    },
+    "BusinessType": {
+      "Type": "String",
+      "AllowedValues": ["dental", "gym", "hotel"],
+      "Description": "Business vertical"
+    },
+    "DomainLabel": {
+      "Type": "String",
+      "Description": "Subdomain label (e.g. clinic-alpha)"
+    },
+    "BaseDomain": {
+      "Type": "String",
+      "Default": "simplu.io",
+      "Description": "Base domain (hosted zone must exist)"
+    },
+    "SSLCertificateArn": {
+      "Type": "String",
+      "Default": "",
+      "Description": "ACM certificate ARN in us-east-1 for CloudFront"
+    }
+  },
+  "Resources": {
+    "BusinessClientBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "${DomainLabel}.${BaseDomain}" },
+        "WebsiteConfiguration": {
+          "IndexDocument": "index.html",
+          "ErrorDocument": "error.html"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": false
+        },
+        "Tags": [
+          { "Key": "simplu:resource", "Value": "business-client" },
+          { "Key": "simplu:business-id", "Value": { "Ref": "BusinessId" } },
+          { "Key": "simplu:business-type", "Value": { "Ref": "BusinessType" } },
+          { "Key": "simplu:domain-label", "Value": { "Ref": "DomainLabel" } }
+        ]
+      }
+    },
+    "BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": { "Ref": "BusinessClientBucket" },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowPublicReadAccess",
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": ["s3:GetObject"],
+              "Resource": { "Fn::Sub": "arn:aws:s3:::${BusinessClientBucket}/*" }
+            }
+          ]
+        }
+      }
+    },
+    "CloudFrontDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true,
+          "Aliases": [{ "Fn::Sub": "${DomainLabel}.${BaseDomain}" }],
+          "DefaultRootObject": "index.html",
+          "Origins": [
+            {
+              "Id": { "Fn::Sub": "${BusinessClientBucket}.s3-website-${AWS::Region}.amazonaws.com" },
+              "DomainName": { "Fn::Sub": "${BusinessClientBucket}.s3-website-${AWS::Region}.amazonaws.com" },
+              "CustomOriginConfig": {
+                "HTTPPort": 80,
+                "HTTPSPort": 443,
+                "OriginProtocolPolicy": "http-only"
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": { "Fn::Sub": "${BusinessClientBucket}.s3-website-${AWS::Region}.amazonaws.com" },
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+            "CachedMethods": ["GET", "HEAD"],
+            "Compress": true,
+            "ForwardedValues": { "QueryString": false, "Cookies": { "Forward": "none" } }
+          },
+          "CacheBehaviors": [
+            {
+              "PathPattern": { "Fn::Sub": "${DomainLabel}.${BaseDomain}/*" },
+              "TargetOriginId": "S3Origin",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "AllowedMethods": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+              "CachedMethods": ["GET", "HEAD"],
+              "Compress": true,
+              "ForwardedValues": { "QueryString": false, "Cookies": { "Forward": "none" } }
+            }
+          ],
+          "ViewerCertificate": {
+            "AcmCertificateArn": { "Ref": "SSLCertificateArn" },
+            "SslSupportMethod": "sni-only",
+            "MinimumProtocolVersion": "TLSv1.2_2021"
+          },
+          "HttpVersion": "http2"
+        }
+      }
+    },
+    "DnsRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneName": { "Fn::Sub": "${BaseDomain}." },
+        "Name": { "Fn::Sub": "${DomainLabel}.${BaseDomain}" },
+        "Type": "A",
+        "AliasTarget": {
+          "DNSName": { "Fn::GetAtt": ["CloudFrontDistribution", "DomainName"] },
+          "HostedZoneId": "Z2FDTNDATAQYW2"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "BucketName": {
+      "Description": "Name of the S3 bucket for the business client",
+      "Value": { "Ref": "BusinessClientBucket" }
+    },
+    "WebsiteURL": {
+      "Description": "S3 website endpoint URL",
+      "Value": { "Fn::GetAtt": ["BusinessClientBucket", "WebsiteURL"] }
+    },
+    "DistributionDomain": {
+      "Description": "CloudFront distribution domain",
+      "Value": { "Fn::GetAtt": ["CloudFrontDistribution", "DomainName"] }
+    },
+    "AppUrl": {
+      "Description": "Business client URL",
+      "Value": { "Fn::Sub": "https://${DomainLabel}.${BaseDomain}" }
+    }
+  }
+}
+
+

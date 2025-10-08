@@ -4,10 +4,49 @@ import { Repository } from 'typeorm';
 import { ResourceEntity } from '../entities/resource.entity';
 
 export interface BusinessStatistics {
-  registeredPatients: number;
-  scheduledVisits: number;
-  completedVisits: number;
-  canceledVisits: number;
+  totalAppointments: number;
+  totalPatients: number;
+  appointmentStats: {
+    completed: number;
+    cancelled: number;
+    pending: number;
+    absent: number;
+  };
+  appointmentsToday: AppointmentToday[];
+  revenue: {
+    monthly: number;
+  };
+  websiteBookings: number;
+  clinicRating: {
+    average: number;
+    totalReviews: number;
+  };
+  smsStats: {
+    sent: number;
+    limit: number;
+    percentage: number;
+  };
+  occupancyRate: number;
+  doctorProgress: DoctorProgress[];
+  popularTreatments: TreatmentCount[];
+}
+
+export interface AppointmentToday {
+  id: number;
+  patientName: string;
+  time: string;
+  status: string;
+}
+
+export interface DoctorProgress {
+  doctor: string;
+  progress: number;
+  appointments: number;
+}
+
+export interface TreatmentCount {
+  treatment: string;
+  count: number;
 }
 
 export interface RecentActivity {
@@ -20,11 +59,21 @@ export interface RecentActivity {
     | 'product'
     | 'pickup'
     | 'sale'
+    | 'invoice'
+    | 'medic'
+    | 'treatment'
     | 'other';
   title: string;
   description: string;
   amount?: number;
   status?: string;
+  time?: string; // Ora activității
+  action?: string; // Acțiunea realizată (creat, actualizat, etc.)
+  // Detalii specifice pentru appointments
+  serviceName?: string; // data.service.name
+  medicName?: string; // data.medic.name
+  patientName?: string; // data.patient.name sau patientName pentru resursa patient
+  productName?: string; //
   updatedAt: Date;
   createdAt: Date;
 }
@@ -44,7 +93,7 @@ export class StatisticsService {
   ) {}
 
   /**
-   * Get simplified business statistics with only 4 KPIs for current month
+   * Get comprehensive business statistics for current month
    */
   async getBusinessStatistics(
     businessId: string,
@@ -52,31 +101,51 @@ export class StatisticsService {
   ): Promise<BusinessStatistics> {
     try {
       this.logger.log(
-        `Generating simplified statistics for ${businessId}/${locationId}`,
+        `Generating comprehensive statistics for ${businessId}/${locationId}`,
       );
 
       const businessLocationId = `${businessId}-${locationId}`;
       const { thisMonth } = this.getMonthRanges();
-
-      console.log('thisMonth', thisMonth);
+      const today = this.getTodayRange();
 
       const [
-        registeredPatients,
-        scheduledVisits,
-        completedVisits,
-        canceledVisits,
+        totalAppointments,
+        totalPatients,
+        appointmentStats,
+        appointmentsToday,
+        revenue,
+        websiteBookings,
+        clinicRating,
+        smsStats,
+        occupancyRate,
+        doctorProgress,
+        popularTreatments,
       ] = await Promise.all([
-        this.getRegisteredPatients(businessLocationId, thisMonth),
-        this.getScheduledVisits(businessLocationId, thisMonth),
-        this.getCompletedVisits(businessLocationId, thisMonth),
-        this.getCanceledVisits(businessLocationId, thisMonth),
+        this.getTotalAppointments(businessLocationId, thisMonth),
+        this.getTotalPatients(businessLocationId),
+        this.getAppointmentStats(businessLocationId, thisMonth),
+        this.getAppointmentsToday(businessLocationId, today),
+        this.getMonthlyRevenue(businessLocationId, thisMonth),
+        this.getWebsiteBookings(businessLocationId, thisMonth),
+        this.getClinicRating(businessLocationId),
+        this.getSmsStats(businessLocationId, thisMonth),
+        this.getOccupancyRate(businessLocationId, thisMonth),
+        this.getDoctorProgress(businessLocationId, thisMonth),
+        this.getPopularTreatments(businessLocationId, thisMonth),
       ]);
 
       return {
-        registeredPatients,
-        scheduledVisits,
-        completedVisits,
-        canceledVisits,
+        totalAppointments,
+        totalPatients,
+        appointmentStats,
+        appointmentsToday,
+        revenue: { monthly: revenue },
+        websiteBookings,
+        clinicRating,
+        smsStats,
+        occupancyRate,
+        doctorProgress,
+        popularTreatments,
       };
     } catch (error) {
       this.logger.error(
@@ -180,11 +249,41 @@ export class StatisticsService {
   }
 
   /**
-   * Get registered patients count for current month
+   * Get total appointments count for current month
    */
-  private async getRegisteredPatients(
+  private async getTotalAppointments(
     businessLocationId: string,
     dateRange: DateRange,
+  ): Promise<number> {
+    try {
+      const count = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'appointment',
+        })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.startDate <= :endDate', {
+          endDate: dateRange.endDate,
+        })
+        .getCount();
+
+      return count;
+    } catch (error) {
+      this.logger.error(`Error counting total appointments: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Get total patients count (all time)
+   */
+  private async getTotalPatients(
+    businessLocationId: string,
   ): Promise<number> {
     try {
       const count = await this.resourceRepository
@@ -195,6 +294,223 @@ export class StatisticsService {
         .andWhere('resource.resourceType = :resourceType', {
           resourceType: 'patient',
         })
+        .getCount();
+
+      return count;
+    } catch (error) {
+      this.logger.error(`Error counting total patients: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Get appointment statistics breakdown by status
+   */
+  private async getAppointmentStats(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<BusinessStatistics['appointmentStats']> {
+    try {
+      const appointments = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'appointment',
+        })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.startDate <= :endDate', {
+          endDate: dateRange.endDate,
+        })
+        .getMany();
+
+      const stats = {
+        completed: 0,
+        cancelled: 0,
+        pending: 0,
+        absent: 0,
+      };
+
+      appointments.forEach((apt) => {
+        const status = apt.data.status?.toLowerCase() || 'pending';
+        if (status === 'completed') {
+          stats.completed++;
+        } else if (status === 'cancelled' || status === 'canceled') {
+          stats.cancelled++;
+        } else if (status === 'absent') {
+          stats.absent++;
+        } else {
+          stats.pending++;
+        }
+      });
+
+      return stats;
+    } catch (error) {
+      this.logger.error(`Error getting appointment stats: ${error.message}`);
+      return { completed: 0, cancelled: 0, pending: 0, absent: 0 };
+    }
+  }
+
+  /**
+   * Get today's appointments with patient details
+   */
+  private async getAppointmentsToday(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<AppointmentToday[]> {
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      const appointments = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'appointment',
+        })
+        .andWhere('resource.startDate = :todayStr', { todayStr })
+        .orderBy('resource.data->>\'time\'', 'ASC')
+        .getMany();
+
+      return appointments.map((apt) => ({
+        id: apt.id,
+        patientName: apt.data.patientName || apt.data.patient || 'Pacient necunoscut',
+        time: apt.data.time || apt.data.startTime || '00:00',
+        status: apt.data.status || 'pending',
+      }));
+    } catch (error) {
+      this.logger.error(`Error getting today's appointments: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get monthly revenue from sales and appointments
+   */
+  private async getMonthlyRevenue(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<number> {
+    try {
+      const resources = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType IN (:...types)', {
+          types: ['sale', 'sales', 'appointment'],
+        })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.startDate <= :endDate', {
+          endDate: dateRange.endDate,
+        })
+        .getMany();
+
+      const total = resources.reduce((sum, res) => {
+        const amount = res.data.amount || res.data.price || res.data.total || 0;
+        return sum + Number(amount);
+      }, 0);
+
+      return Math.round(total * 100) / 100;
+    } catch (error) {
+      this.logger.error(`Error calculating monthly revenue: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Get website bookings count
+   */
+  private async getWebsiteBookings(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<number> {
+    try {
+      const count = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'appointment',
+        })
+        .andWhere('resource.startDate >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.startDate <= :endDate', {
+          endDate: dateRange.endDate,
+        })
+        .andWhere("resource.data->>'source' = :source", { source: 'website' })
+        .getCount();
+
+      return count;
+    } catch (error) {
+      this.logger.error(`Error counting website bookings: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Get clinic rating (from reviews or ratings resource)
+   */
+  private async getClinicRating(
+    businessLocationId: string,
+  ): Promise<BusinessStatistics['clinicRating']> {
+    try {
+      const reviews = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'review',
+        })
+        .getMany();
+
+      if (reviews.length === 0) {
+        return { average: 0, totalReviews: 0 };
+      }
+
+      const totalRating = reviews.reduce((sum, review) => {
+        const rating = review.data.rating || review.data.score || 0;
+        return sum + Number(rating);
+      }, 0);
+
+      const average = totalRating / reviews.length;
+
+      return {
+        average: Math.round(average * 10) / 10,
+        totalReviews: reviews.length,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting clinic rating: ${error.message}`);
+      return { average: 0, totalReviews: 0 };
+    }
+  }
+
+  /**
+   * Get SMS statistics (placeholder - needs integration with SMS service)
+   */
+  private async getSmsStats(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<BusinessStatistics['smsStats']> {
+    try {
+      // This would need to come from an SMS tracking resource or external service
+      const smsResources = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'sms',
+        })
         .andWhere('resource.createdAt >= :startDate', {
           startDate: dateRange.startDate,
         })
@@ -203,22 +519,29 @@ export class StatisticsService {
         })
         .getCount();
 
-      return count;
+      const limit = 300; // Default SMS limit
+      const percentage = Math.round((smsResources / limit) * 100);
+
+      return {
+        sent: smsResources,
+        limit,
+        percentage,
+      };
     } catch (error) {
-      this.logger.error(`Error counting registered patients: ${error.message}`);
-      return 0;
+      this.logger.error(`Error getting SMS stats: ${error.message}`);
+      return { sent: 0, limit: 300, percentage: 0 };
     }
   }
 
   /**
-   * Get scheduled visits count for current month
+   * Calculate occupancy rate (booked slots / available slots)
    */
-  private async getScheduledVisits(
+  private async getOccupancyRate(
     businessLocationId: string,
     dateRange: DateRange,
   ): Promise<number> {
     try {
-      const count = await this.resourceRepository
+      const appointments = await this.resourceRepository
         .createQueryBuilder('resource')
         .where('resource.businessLocationId = :businessLocationId', {
           businessLocationId,
@@ -232,25 +555,35 @@ export class StatisticsService {
         .andWhere('resource.startDate <= :endDate', {
           endDate: dateRange.endDate,
         })
-        .andWhere("resource.data->>'status' = :status", { status: 'scheduled' })
         .getCount();
 
-      return count;
+      // Calculate available slots (assuming 8 hours/day, 30-min slots = 16 slots/day)
+      const now = new Date();
+      const daysInMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+      ).getDate();
+      const workDays = Math.floor(daysInMonth * 0.7); // Assuming 70% work days
+      const totalSlots = workDays * 16; // 16 slots per day
+
+      const rate = Math.round((appointments / totalSlots) * 100);
+      return Math.min(rate, 100); // Cap at 100%
     } catch (error) {
-      this.logger.error(`Error counting scheduled visits: ${error.message}`);
+      this.logger.error(`Error calculating occupancy rate: ${error.message}`);
       return 0;
     }
   }
 
   /**
-   * Get completed visits count for current month
+   * Get doctor progress and appointment counts
    */
-  private async getCompletedVisits(
+  private async getDoctorProgress(
     businessLocationId: string,
     dateRange: DateRange,
-  ): Promise<number> {
+  ): Promise<DoctorProgress[]> {
     try {
-      const count = await this.resourceRepository
+      const appointments = await this.resourceRepository
         .createQueryBuilder('resource')
         .where('resource.businessLocationId = :businessLocationId', {
           businessLocationId,
@@ -264,25 +597,53 @@ export class StatisticsService {
         .andWhere('resource.startDate <= :endDate', {
           endDate: dateRange.endDate,
         })
-        .andWhere("resource.data->>'status' = :status", { status: 'completed' })
-        .getCount();
+        .getMany();
 
-      return count;
+      // Group by doctor
+      const doctorMap = new Map<string, { total: number; completed: number }>();
+
+      appointments.forEach((apt) => {
+        const doctor = apt.data.doctor || apt.data.doctorName || 'Dr. Necunoscut';
+        const status = apt.data.status?.toLowerCase() || '';
+        
+        if (!doctorMap.has(doctor)) {
+          doctorMap.set(doctor, { total: 0, completed: 0 });
+        }
+
+        const stats = doctorMap.get(doctor)!;
+        stats.total++;
+        if (status === 'completed') {
+          stats.completed++;
+        }
+      });
+
+      // Convert to array and calculate progress
+      const doctorProgress: DoctorProgress[] = Array.from(doctorMap.entries())
+        .map(([doctor, stats]) => ({
+          doctor,
+          progress: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0,
+          appointments: stats.total,
+        }))
+        .sort((a, b) => b.appointments - a.appointments)
+        .slice(0, 10); // Top 10 doctors
+
+      return doctorProgress;
     } catch (error) {
-      this.logger.error(`Error counting completed visits: ${error.message}`);
-      return 0;
+      this.logger.error(`Error getting doctor progress: ${error.message}`);
+      return [];
     }
   }
 
   /**
-   * Get canceled visits count for current month
+   * Get popular treatments/services based on appointment counts
    */
-  private async getCanceledVisits(
+  private async getPopularTreatments(
     businessLocationId: string,
     dateRange: DateRange,
-  ): Promise<number> {
+  ): Promise<TreatmentCount[]> {
     try {
-      const count = await this.resourceRepository
+      // Get all appointments in the month
+      const appointments = await this.resourceRepository
         .createQueryBuilder('resource')
         .where('resource.businessLocationId = :businessLocationId', {
           businessLocationId,
@@ -296,13 +657,57 @@ export class StatisticsService {
         .andWhere('resource.startDate <= :endDate', {
           endDate: dateRange.endDate,
         })
-        .andWhere("resource.data->>'status' = :status", { status: 'canceled' })
-        .getCount();
+        .getMany();
 
-      return count;
+      // Count appointments by service.id
+      const serviceIdCountMap = new Map<string, number>();
+
+      appointments.forEach((apt) => {
+        const serviceId = apt.data.service?.id;
+        if (serviceId) {
+          serviceIdCountMap.set(serviceId, (serviceIdCountMap.get(serviceId) || 0) + 1);
+        }
+      });
+
+      // Get treatment resources for these service IDs
+      const serviceIds = Array.from(serviceIdCountMap.keys());
+      
+      if (serviceIds.length === 0) {
+        return [];
+      }
+
+      const treatments = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'treatment',
+        })
+        .andWhere('resource.resourceId IN (:...serviceIds)', {
+          serviceIds,
+        })
+        .getMany();
+
+      // Map service IDs to treatment names
+      const treatmentNameMap = new Map<string, string>();
+      treatments.forEach((treatment) => {
+        treatmentNameMap.set(treatment.resourceId, treatment.data.name || treatment.data.treatmentType || 'Consultație');
+      });
+
+      // Build the result with treatment names and counts
+      const treatmentCounts: TreatmentCount[] = Array.from(serviceIdCountMap.entries())
+        .map(([serviceId, count]) => ({
+          treatment: treatmentNameMap.get(serviceId) || `Tratament ${serviceId}`,
+          count,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10); // Top 10 treatments
+
+      return treatmentCounts;
     } catch (error) {
-      this.logger.error(`Error counting canceled visits: ${error.message}`);
-      return 0;
+      this.logger.error(`Error getting popular treatments: ${error.message}`);
+      return [];
     }
   }
 
@@ -363,6 +768,9 @@ export class StatisticsService {
         'product',
         'pickups',
         'sales',
+        'invoice',
+        'medic',
+        'treatment',
       ];
 
       const activities = await this.resourceRepository
@@ -386,7 +794,11 @@ export class StatisticsService {
           res.resourceType,
         );
 
-        return {
+        // Determine action based on timestamps
+        const action = this.getActivityAction(res);
+
+        // Base activity object
+        const activity: RecentActivity = {
           id: res.id.toString(),
           resourceType: res.resourceType,
           resourceId: res.resourceId,
@@ -401,9 +813,33 @@ export class StatisticsService {
             this.getDefaultDescription(res.resourceType),
           amount: res.data.amount || res.data.price || res.data.total,
           status: res.data.status || res.data.state,
+          action,
+          time: this.extractTime(res),
           updatedAt: res.updatedAt,
           createdAt: res.createdAt,
         };
+
+        // Add specific fields based on resource type
+        if (res.resourceType === 'appointment') {
+          activity.serviceName = res.data.service?.name || res.data.serviceName;
+          activity.medicName = res.data.medic?.name || res.data.medicName || res.data.doctor;
+          activity.patientName = res.data.patient?.name || res.data.patientName;
+        } else if (res.resourceType === 'patient') {
+          activity.patientName = res.data.name || res.data.patientName || res.data.fullName;
+        } else if (res.resourceType === 'invoice') {
+          activity.patientName = res.data.patient?.name || res.data.patientName;
+          activity.amount = res.data.total || res.data.amount || res.data.totalAmount;
+        } else if (res.resourceType === 'medic') {
+          activity.medicName = res.data.name || res.data.fullName || res.data.medicName;
+        } else if (res.resourceType === 'treatment') {
+          activity.serviceName = res.data.name || res.data.treatmentType;
+          activity.amount = res.data.price || res.data.cost || res.data.amount;
+        } else if (res.resourceType === 'product') {
+          activity.serviceName = res.data.name || res.data.productName;
+          activity.amount = res.data.price || res.data.cost || res.data.amount;
+        }
+
+        return activity;
       });
     } catch (error) {
       this.logger.error(`Error fetching all activities: ${error.message}`);
@@ -428,9 +864,70 @@ export class StatisticsService {
         return 'pickup';
       case 'sales':
         return 'sale';
+      case 'invoice':
+        return 'invoice';
+      case 'medic':
+        return 'medic';
+      case 'treatment':
+        return 'treatment';
       default:
         return 'other';
     }
+  }
+
+  /**
+   * Determine the action performed on a resource
+   */
+  private getActivityAction(resource: ResourceEntity): string {
+    const createdTime = new Date(resource.createdAt).getTime();
+    const updatedTime = new Date(resource.updatedAt).getTime();
+    
+    // If created and updated are within 1 second, it's a new creation
+    if (Math.abs(updatedTime - createdTime) < 1000) {
+      return 'Creat';
+    }
+    
+    // Check for status changes or specific actions in data
+    if (resource.data.action) {
+      return resource.data.action;
+    }
+    
+    return 'Actualizat';
+  }
+
+  /**
+   * Extract time from resource data
+   */
+  private extractTime(resource: ResourceEntity): string {
+    // Try different time field formats
+    if (resource.data.time) {
+      return resource.data.time;
+    }
+    
+    if (resource.data.startTime) {
+      return resource.data.startTime;
+    }
+    
+    if (resource.data.appointmentTime) {
+      return resource.data.appointmentTime;
+    }
+    
+    // For appointments, try to extract from startDate if it has time component
+    if (resource.resourceType === 'appointment' && resource.startDate) {
+      const date = new Date(resource.startDate);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleTimeString('ro-RO', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+      }
+    }
+    
+    // Fallback to updatedAt time
+    return new Date(resource.updatedAt).toLocaleTimeString('ro-RO', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
   }
 
   /**
@@ -448,6 +945,12 @@ export class StatisticsService {
         return 'Ridicare';
       case 'sales':
         return 'Vânzare';
+      case 'invoice':
+        return 'Factură';
+      case 'medic':
+        return 'Medic';
+      case 'treatment':
+        return 'Tratament';
       default:
         return 'Activitate';
     }
@@ -468,6 +971,12 @@ export class StatisticsService {
         return 'Ridicare programată';
       case 'sales':
         return 'Vânzare nouă';
+      case 'invoice':
+        return 'Factură nouă sau actualizată';
+      case 'medic':
+        return 'Medic nou sau actualizat';
+      case 'treatment':
+        return 'Tratament nou sau actualizat';
       default:
         return 'Activitate nouă';
     }

@@ -26,6 +26,7 @@ export const VALID_RESOURCE_TYPES = [
   'plan', // Dental plan
   'setting', // Settings
   'invoice-client',
+  'invoice',
 
   // Statistics resource types
   'statistics', // General business statistics

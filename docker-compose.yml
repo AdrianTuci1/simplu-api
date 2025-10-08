@@ -15,6 +15,8 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION:-us-east-1}
+
+      - AI_AGENT_SERVER_URL=${AI_AGENT_SERVER_URL}
       
       # Kinesis Configuration (produces streams consumed by resources-server)
       - KINESIS_STREAM_NAME=${KINESIS_STREAM_NAME:-resources-stream}
@@ -30,6 +32,7 @@ services:
       
       # External AWS DynamoDB Configuration (Business Info)
       - DYNAMODB_BUSINESS_INFO_TABLE=${DYNAMODB_BUSINESS_INFO_TABLE:-business-info}
+      - DYNAMODB_EXTERNAL_API_CONFIG_TABLE=${DYNAMODB_EXTERNAL_API_CONFIG_TABLE:-business-external-api-config}
 
     
       # # External Citrus Sharding Service Configuration

@@ -9,6 +9,7 @@ import { EmailService } from '../shared/services/email.service';
 import { CognitoUserService } from '../modules/auth/cognito-user.service';
 import { BusinessIdService } from './business-id.service';
 import { SqsService } from '../shared/services/sqs.service';
+import { EventBridgeService } from '../shared/services/event-bridge.service';
 
 @Injectable()
 export class BusinessService {
@@ -25,6 +26,7 @@ export class BusinessService {
     private readonly cognitoUserService: CognitoUserService,
     private readonly businessIdService: BusinessIdService,
     private readonly sqsService: SqsService,
+    private readonly eventBridgeService: EventBridgeService,
   ) {}
 
   private getDbType(): string {
@@ -111,7 +113,7 @@ export class BusinessService {
       customTld: input.customTld,
       clientPageType: input.clientPageType || 'website',
       subscriptionType, // Use automatically determined subscription type
-      credits: input.credits || { total: 0, available: 0, currency: settings.currency, perLocation: {}, lockedLocations: [] },
+      credits: input.credits || { total: 0, available: 0, currency: settings.currency },
       active: false,
       status: 'suspended',
       ownerUserId,
@@ -230,6 +232,11 @@ export class BusinessService {
       return business;
     }
 
+    // Validate that domainLabel is set for infrastructure deployment
+    if (!business.domainLabel) {
+      throw new BadRequestException('Domain label is required for business launch. Please configure the business domain first.');
+    }
+
     // Skip payment validation for free businesses
     // Note: Payment validation can be re-enabled by uncommenting the lines below
     // const subscriptionStatus = await this.paymentService.refreshSubscriptionStatus(businessId);
@@ -237,65 +244,20 @@ export class BusinessService {
     //   throw new BadRequestException('Business subscription is not active. Please complete payment first.');
     // }
 
-    // Deploy business client to S3 bucket with domainLabel first
-    try {
-      if (business.domainLabel) {
-        await this.infraService.deployBusinessClient(
-          business.businessId,
-          business.domainLabel,
-          business.businessType,
-        );
-        
-        // Only trigger shard creation AFTER successful infrastructure deployment
-        if (this.getDbType() === 'citrus') {
-          const activeLocations = (business.locations || []).filter((l) => l.active !== false);
-          await this.shardService.triggerMultipleShardCreations(
-            business.businessId,
-            activeLocations.map((l) => ({ id: l.id, businessType: business.businessType })),
-          );
-        }
-      }
-    } catch (err) {
-      this.logger.error(`S3 deployment failed for business ${business.businessId}: ${err?.message}`);
-      throw err; // Re-throw to prevent business from being marked as active if deployment fails
-    }
-
-    // Mark business as active ONLY after successful infrastructure deployment
-    const updated = await this.db.updateBusiness(businessId, {
-      active: true,
-      status: 'active' as BusinessStatus,
-      paymentStatus: 'active', // Set as active for free businesses
-      updatedAt: new Date().toISOString(),
+    // Publish EventBridge event to process launch asynchronously (deploy, update, admin creation handled externally)
+    // Send all locations with their IDs, but downstream will process only active ones
+    await this.eventBridgeService.publishBusinessLaunchRequested({
+      businessId: business.businessId,
+      businessType: business.businessType,
+      domainLabel: business.domainLabel,
+      ownerEmail: business.ownerEmail,
+      ownerUserId: business.ownerUserId,
+      locations: (business.locations || []).map((l) => ({ id: l.id, active: l.active })),
+      timestamp: new Date().toISOString(),
     });
 
-    //  // EVENT BRIDGE - CREATE USERS FOR EACH LOCATION BASED ON createdByUserId
-    //  await this.eventBridgeService.createUsersForLocations(updated.businessId, updated.createdByUserId);
-
-    // Trigger admin account creation for all active locations
-    try {
-      const activeLocations = (updated.locations || []).filter((l) => l.active !== false);
-      if (activeLocations.length > 0 && updated.domainLabel) {
-        // Create admin accounts for all active locations
-        const adminCreationPromises = activeLocations.map(location =>
-          this.triggerAdminAccountCreation(
-            updated.businessId,
-            location.id,
-            updated.ownerEmail,
-            updated.ownerUserId,
-            updated.businessType,
-            updated.domainLabel,
-          )
-        );
-        
-        await Promise.all(adminCreationPromises);
-        this.logger.log(`Admin accounts created for ${activeLocations.length} locations in business ${updated.businessId}`);
-      }
-    } catch (err) {
-      this.logger.error(`Admin account creation failed for business ${updated.businessId}: ${err?.message}`);
-      // Don't throw here to avoid breaking the launch process
-    }
-
-    return updated;
+    // Do not change status/active; frontend will show: "cererea a fost trimisa spre procesare, poate dura pana la 10 minute pana primiti acces"
+    return this.db.updateBusiness(businessId, { updatedAt: new Date().toISOString() });
   }
 
   // Step 3: Launch - Activate business and deploy infrastructure (legacy with user auth)
@@ -311,63 +273,7 @@ export class BusinessService {
     return this.launchBusinessInternal(businessId);
   }
 
-  // Legacy method for backward compatibility
-  async createBusiness(input: Partial<BusinessEntity> & { companyName: string; businessType: string }): Promise<BusinessEntity> {
-    const nowIso = new Date().toISOString();
 
-    // Generate business ID first
-    const businessId = await this.businessIdService.generateBusinessId();
-
-    const locations: BusinessLocation[] = await Promise.all((input.locations || []).map(async (l) => ({
-      id: l.id || await this.businessIdService.generateLocationId(businessId),
-      name: l.name,
-      address: l.address,
-      active: l.active ?? true,
-      timezone: l.timezone || 'Europe/Bucharest',
-    })));
-
-    // Determine subscription type automatically based on number of locations
-    const subscriptionType = locations.length === 1 ? 'solo' : 'enterprise';
-    
-    // Validate solo plan constraint
-    if (subscriptionType === 'solo' && locations.length > 1) {
-      throw new BadRequestException('Planul solo permite o singură locație');
-    }
-
-    const settings: BusinessSettings = {
-      currency: input.settings?.currency || 'RON',
-      language: input.settings?.language || 'ro',
-    };
-
-    const business: BusinessEntity = {
-      businessId: businessId,
-      companyName: input.companyName,
-      registrationNumber: input.registrationNumber || '',
-      businessType: input.businessType,
-      locations,
-      settings,
-      configureForEmail: input.configureForEmail || '',
-      domainType: input.domainType || 'subdomain',
-      domainLabel: input.domainLabel || '',
-      customTld: input.customTld,
-      clientPageType: input.clientPageType || 'website',
-      subscriptionType, // Use automatically determined subscription type
-      credits: input.credits || { total: 0, available: 0, currency: settings.currency, perLocation: {}, lockedLocations: [] },
-      active: false,
-      status: 'suspended',
-      ownerUserId: input.ownerUserId || null,
-      ownerEmail: input.ownerEmail || '',
-      billingEmail: input.billingEmail || '',
-      createdByUserId: input.createdByUserId || '',
-      nextPaymentDate: null,
-      paymentStatus: 'unpaid', // Will be set to 'active' when launched without payment
-      createdAt: nowIso,
-      updatedAt: nowIso,
-      deletedAt: null,
-    };
-
-    return this.db.createBusiness(business);
-  }
 
   async getBusiness(businessId: string): Promise<BusinessEntity> {
     const business = await this.db.getBusiness(businessId);
@@ -390,6 +296,12 @@ export class BusinessService {
     );
   }
 
+
+
+  async getAllBusinesses(): Promise<BusinessEntity[]> {
+    return this.db.getAllBusinesses();
+  }
+
   async updateBusiness(businessId: string, updates: Partial<BusinessEntity>): Promise<BusinessEntity> {
     // If locations are being updated, validate subscription type constraint
     if (updates.locations) {
@@ -404,109 +316,11 @@ export class BusinessService {
     return this.db.updateBusiness(businessId, { ...updates, updatedAt: new Date().toISOString() });
   }
 
-  async deleteBusiness(businessId: string): Promise<void> {
-    const business = await this.getBusiness(businessId);
-    
-    // Mark business as deleted
-    await this.db.updateBusiness(businessId, {
-      status: 'deleted' as BusinessStatus,
-      active: false,
-      deletedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    // Send destruction messages to SQS for each location's shard (businessId-locationId)
-    try {
-      const activeLocations = (business.locations || []).filter((l) => l.active !== false);
-      for (const location of activeLocations) {
-        await this.shardService.triggerShardDestruction(businessId, location.id);
-      }
-      this.logger.log(`Triggered shard destruction for ${activeLocations.length} locations of business ${businessId}`);
-    } catch (err) {
-      this.logger.warn(`Failed to trigger shard destruction for business ${businessId}: ${err?.message}`);
-    }
-
-    // Send destruction message to CloudFormation for stack deletion
-    try {
-      await this.infraService.destroyReactApp(businessId);
-    } catch (err) {
-      this.logger.warn(`Failed to trigger infrastructure destruction for business ${businessId}: ${err?.message}`);
-    }
-
-    // Finally delete from database
-    await this.db.deleteBusiness(businessId);
-  }
 
 
 
 
-  async allocateCredits(businessId: string, locationId: string | null, amount: number, lockLocationUse?: boolean): Promise<BusinessEntity> {
-    if (amount <= 0) throw new BadRequestException('Amount must be > 0');
-    const business = await this.getBusiness(businessId);
-    const credits = business.credits || { total: 0, available: 0, currency: business.settings.currency, perLocation: {}, lockedLocations: [] };
 
-    credits.total = (credits.total || 0) + amount;
-    credits.available = (credits.available || 0) + amount;
-
-    if (locationId) {
-      credits.perLocation = credits.perLocation || {};
-      credits.perLocation[locationId] = (credits.perLocation[locationId] || 0) + amount;
-      if (lockLocationUse) {
-        credits.lockedLocations = Array.from(new Set([...(credits.lockedLocations || []), locationId]));
-      }
-    }
-
-    return this.db.updateBusiness(businessId, { credits, updatedAt: new Date().toISOString() });
-  }
-
-  async deallocateCredits(businessId: string, locationId: string | null, amount: number): Promise<BusinessEntity> {
-    if (amount <= 0) throw new BadRequestException('Amount must be > 0');
-    const business = await this.getBusiness(businessId);
-    const credits = business.credits;
-    if (!credits) throw new BadRequestException('No credits available');
-
-    if (locationId) {
-      const current = credits.perLocation?.[locationId] || 0;
-      if (current < amount) throw new BadRequestException('Insufficient location credits');
-      credits.perLocation = credits.perLocation || {};
-      credits.perLocation[locationId] = current - amount;
-    }
-    const totalAvail = credits.available || 0;
-    if (totalAvail < amount) throw new BadRequestException('Insufficient available credits');
-    credits.available = totalAvail - amount;
-    credits.total = Math.max(0, (credits.total || 0) - amount);
-
-    return this.db.updateBusiness(businessId, { credits, updatedAt: new Date().toISOString() });
-  }
-
-  async reallocateCredits(businessId: string, fromLocationId: string, toLocationId: string, amount: number): Promise<BusinessEntity> {
-    if (amount <= 0) throw new BadRequestException('Amount must be > 0');
-    const business = await this.getBusiness(businessId);
-    const credits = business.credits;
-    if (!credits) throw new BadRequestException('No credits available');
-
-    const from = credits.perLocation?.[fromLocationId] || 0;
-    if (from < amount) throw new BadRequestException('Insufficient source location credits');
-    credits.perLocation = credits.perLocation || {};
-    credits.perLocation[fromLocationId] = from - amount;
-    credits.perLocation[toLocationId] = (credits.perLocation[toLocationId] || 0) + amount;
-
-    return this.db.updateBusiness(businessId, { credits, updatedAt: new Date().toISOString() });
-  }
-
-  async lockLocation(businessId: string, locationId: string): Promise<BusinessEntity> {
-    const business = await this.getBusiness(businessId);
-    const credits = business.credits || { total: 0, available: 0, currency: business.settings.currency, perLocation: {}, lockedLocations: [] };
-    credits.lockedLocations = Array.from(new Set([...(credits.lockedLocations || []), locationId]));
-    return this.db.updateBusiness(businessId, { credits, updatedAt: new Date().toISOString() });
-  }
-
-  async unlockLocation(businessId: string, locationId: string): Promise<BusinessEntity> {
-    const business = await this.getBusiness(businessId);
-    const credits = business.credits || { total: 0, available: 0, currency: business.settings.currency, perLocation: {}, lockedLocations: [] };
-    credits.lockedLocations = (credits.lockedLocations || []).filter((id) => id !== locationId);
-    return this.db.updateBusiness(businessId, { credits, updatedAt: new Date().toISOString() });
-  }
 
   async updatePaymentInfo(businessId: string, params: { paymentStatus: BusinessEntity['paymentStatus']; nextPaymentDate?: string | null }): Promise<BusinessEntity> {
     return this.db.updateBusiness(businessId, { paymentStatus: params.paymentStatus, nextPaymentDate: params.nextPaymentDate ?? null, updatedAt: new Date().toISOString() });

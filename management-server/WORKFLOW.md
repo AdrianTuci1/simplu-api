@@ -1,105 +1,161 @@
-1. USER CREATION
+## Business Launch Processing via EventBridge
 
-1.1Detalii
+This document describes how a business launch request is processed asynchronously using AWS EventBridge and a downstream worker (Step Functions preferred; Lambda fallback).
 
-1.1.1 Informatii personale
-Prenume
-Nume
-Adresa
-Numar de telefon
+### Overview
 
-1.1.2 Adresa Facturare
-Companie
-Adresa
-Oras
-Judet
-Cod Postal
-Tara
-Modalitate plata (card, transfer bancar)
+1) management-server emits `BUSINESS_LAUNCH_REQUESTED` to EventBridge.
+2) An EventBridge rule triggers a Step Functions state machine (recommended) or a Lambda function (fallback).
+3) The worker performs infrastructure deployment and provisioning, then updates business status and triggers admin account creation via SQS.
 
+### Event
 
-1.1.3 Informatii Suplimentare
-Entitate (persoana fizica, juridica, pfa)
-Registru comertului
-Cod fiscal
+- Source: `management-server.business`
+- DetailType: `BUSINESS_LAUNCH_REQUESTED`
+- Detail payload:
 
-
-1.2 Modalitati de plata
-Adauga un nou card
-
--> Descriere, nume, data expirarii, Adresa de facturare (selectie anterioara)
-
-
-
-2. Servicii
-
-2.1 Serviciile Mele
-
-Produs/serviciu ex: Abonament solo - SC.ODENT S.R.L
-Pret anual/lunar
-Urmatoarea scadenta
-Stare
-
--> Afisare detalii
-
-2.2 Adaugare / Afisare
-
-Nume companie
-CUI
-Tip business (dental, gym, hotel)
-Locatii [
-    {
-        name,
-        address,
-        active,
-    }
-]
-Setari {
-    currency,
-    language,
+```
+{
+  "businessId": "...",
+  "businessType": "dental|gym|hotel",
+  "domainLabel": "...",
+  "ownerEmail": "...",
+  "ownerUserId": "...",
+  "locations": [{ "id": "loc-1", "active": true }],
+  "timestamp": "ISO8601"
 }
-configureForEmail,
-domainType, ("subdomain", "custom")
-label,
-customTld,
-clientPageType, ("website", "form")
-subscriptionType ("solo", "enterprise" - trebuie preluata din stripe)
-credits
-active (devine true dupa ce platim)
+```
+
+### Environment variables (management-server)
+
+```
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+EVENT_BRIDGE_BUS_NAME=simplu-bus
+```
+
+### IAM permissions (management-server)
+
+Allow `events:PutEvents` on the target bus.
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["events:PutEvents"],
+    "Resource": "*"
+  }]
+}
+```
+
+### Recommended: Step Functions State Machine
+
+Use a state machine to orchestrate long-running tasks instead of keeping a Lambda warm. Typical steps:
+- Validate input
+- Kick off infra deployment (CloudFormation/S3/CloudFront) asynchronously
+- Wait/poll for stack completion (DescribeStacks with backoff) or subscribe to stack events
+- Update business status in DynamoDB when infra is ready
+- Enqueue admin account creation in SQS for each active location
+- Success/Failure branches with metrics and alerts
+
+EventBridge Rule → Target: Step Functions state machine ARN.
+
+### Fallback: Lambda Worker
+
+If Step Functions is not available, attach a Lambda as the target of the EventBridge rule, but DO NOT block until CloudFormation finishes. Instead, Lambda should:
+- Start CloudFormation stack creation (async) and return immediately
+- Use another mechanism to finalize (e.g., EventBridge stack events → another Lambda, or a scheduled poller) that updates business status and sends SQS messages once the stack reaches a terminal state
+
+### SQS (Admin Account Creation)
+
+Use the existing `SQS_SHARD_CREATION_QUEUE_URL`. Produce messages of type `ADMIN_ACCOUNT_CREATION` for each active location once the infrastructure is ready.
+
+### Frontend UX
+
+After emitting the event, the API returns quickly and the UI shows:
+
+"cererea a fost trimisa spre procesare, poate dura pana la 10 minute pana primiti acces"
+
+### Operations
+
+- Event bus creation:
+
+```
+aws events create-event-bus --name simplu-bus --region us-east-1
+```
+
+- Rule creation:
+
+```
+aws events put-rule \
+  --name business-launch-requested \
+  --event-bus-name simplu-bus \
+  --event-pattern '{
+    "source": ["management-server.business"],
+    "detail-type": ["BUSINESS_LAUNCH_REQUESTED"]
+  }' \
+  --region us-east-1
+```
+
+- Target Step Functions (preferred):
+
+```
+aws events put-targets \
+  --event-bus-name simplu-bus \
+  --rule business-launch-requested \
+  --targets "Id"="launch-sfn","Arn"="arn:aws:states:us-east-1:ACCOUNT_ID:stateMachine:business-launch"
+```
+
+Create/Update the state machine (example assumes you resolve ${...} placeholders):
+
+```
+aws stepfunctions create-state-machine \
+  --name business-launch \
+  --definition file://infra/business-launch-state-machine.json \
+  --role-arn arn:aws:iam::ACCOUNT_ID:role/StepFunctionsExecutionRole
+
+# or update
+aws stepfunctions update-state-machine \
+  --state-machine-arn arn:aws:states:us-east-1:ACCOUNT_ID:stateMachine:business-launch \
+  --definition file://infra/business-launch-state-machine.json
+```
+
+### CloudFormation template
+
+Un template minim este inclus la `infra/templates/business-client-template.json` (crează un S3 bucket privat pentru client). Publică-l într-un S3 accesibil CFN și setează variabila `CLOUDFORMATION_TEMPLATE_URL` pentru Lambda `start-infra`:
+
+```
+aws s3 cp infra/templates/business-client-template.json s3://YOUR-INFRA-TEMPLATES-BUCKET/business-client-template.json
+
+# apoi în configurarea Lambda:
+CLOUDFORMATION_TEMPLATE_URL = https://s3.amazonaws.com/YOUR-INFRA-TEMPLATES-BUCKET/business-client-template.json
+CLOUDFORMATION_STACK_PREFIX = react-app-
+```
+
+Pentru evoluții viitoare poți extinde template-ul cu CloudFront, ACM și Route53, păstrând același flux orchestrat de Step Functions.
+
+- Target Lambda (fallback):
+
+```
+aws events put-targets \
+  --event-bus-name simplu-bus \
+  --rule business-launch-requested \
+  --targets "Id"="launch-worker","Arn"="arn:aws:lambda:us-east-1:ACCOUNT_ID:function:launch-worker"
+
+aws lambda add-permission \
+  --function-name launch-worker \
+  --statement-id allow-eventbridge-invoke \
+  --action lambda:InvokeFunction \
+  --principal events.amazonaws.com \
+  --source-arn arn:aws:events:us-east-1:ACCOUNT_ID:rule/business-launch-requested
+```
+
+### Notes
+
+- Prefer Step Functions for reliability, retries, long-running orchestration, and observability.
+- Keep Lambda short-lived; offload waiting to Step Functions or EventBridge-driven callbacks.
+- Ensure CloudWatch Logs and alerts for all components (rule, state machine/Lambda, CFN, SQS consumers).
 
 
-vreau sa
--> pot da upgrade/downgrade la subscriptie (cea solo nu poate avea decat o locatie)
--> sa pot atribui credite la locatii sau general
--> sa pot bloca locatiile din a folosi credite din general (doar creditele alocate)
--> sa pot aloca altcuiva plata si sa devina
-active (ultimul) true abia dupa
--> sa pot achizitiona credite ulterior
--> dupa ce devine activa trebuie trimise mesaje in sqs (pentru shard creation) si
-in cloudformation (pentru client sau form creation)
--> putem modifica adresa de plata a facturii
--> stergerea companiei declanseaza stergerea shard-ului si al stack-ului 
--> afacerea ramane activa o luna de la expirarea abonamentului
-
-
-3. Facturile mele
-
-3.1 Afisare
-
-Factura (id)
-Data emiterii
-Data scadenta
-Total
-Situatia financiara (achitata/ neachitata)
-
-
-4. Pagina acasa
-
-Afisam (numere)
-Servicii 
-Facturi neachitate
-Tichete suport
-
-Servicii active (lista)
-
-Tichete (lista)

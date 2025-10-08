@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ExternalApisService } from '../external-apis.service';
 import { ExternalApiConfigService } from './external-api-config.service';
 import { ExternalApiConfig } from '../interfaces/external-api-config.interface';
+import { BusinessInfoService } from '@/modules/business-info/business-info.service';
 
 export interface AppointmentData {
   patientName: string;
@@ -14,6 +15,7 @@ export interface AppointmentData {
   serviceName: string;
   doctorName: string;
   phoneNumber?: string;
+  address?: string; // Added for location address
 }
 
 export interface MessageResult {
@@ -29,7 +31,8 @@ export class MessageAutomationService {
 
   constructor(
     private readonly externalApisService: ExternalApisService,
-    private readonly configService: ExternalApiConfigService
+    private readonly configService: ExternalApiConfigService,
+    private readonly businessInfoService: BusinessInfoService
   ) {}
 
   async sendBookingConfirmation(
@@ -37,37 +40,54 @@ export class MessageAutomationService {
     appointmentData: AppointmentData,
     locationId?: string
   ): Promise<MessageResult[]> {
+    this.logger.log(`Processing booking confirmation for business ${businessId}, location ${locationId}`);
+    
     const config = await this.configService.getConfig(businessId, locationId);
     if (!config) {
       this.logger.warn(`No external API config found for business ${businessId}`);
       return [];
     }
 
+    this.logger.log(`Config found - SMS enabled: ${config.sms.enabled}, Email enabled: ${config.email.enabled}`);
+    this.logger.log(`SMS sendOnBooking: ${config.sms.sendOnBooking}, Email sendOnBooking: ${config.email.sendOnBooking}`);
+
+    // Enrich appointment data with business info from DynamoDB
+    const enrichedData = await this.enrichAppointmentData(businessId, locationId, appointmentData);
+    this.logger.log(`Enriched data - Business: ${enrichedData.businessName}, Location: ${enrichedData.locationName}, Address: ${enrichedData.address}`);
+
     const results: MessageResult[] = [];
 
     // Send SMS if enabled
-    if (config.sms.enabled && config.sms.sendOnBooking && appointmentData.patientPhone) {
+    if (config.sms.enabled && config.sms.sendOnBooking && enrichedData.patientPhone) {
+      this.logger.log(`Sending SMS to ${enrichedData.patientPhone}`);
       const smsResult = await this.sendSMSMessage(
         businessId,
-        appointmentData.patientPhone,
+        enrichedData.patientPhone,
         config.sms,
-        appointmentData,
+        enrichedData,
         'booking_confirmation'
       );
+      this.logger.log(`SMS result: ${JSON.stringify(smsResult)}`);
       results.push({ ...smsResult, channel: 'sms' });
+    } else {
+      this.logger.log(`SMS not sent - enabled: ${config.sms.enabled}, sendOnBooking: ${config.sms.sendOnBooking}, hasPhone: ${!!enrichedData.patientPhone}`);
     }
 
     // Send Email if enabled
-    if (config.email.enabled && config.email.sendOnBooking && appointmentData.patientEmail) {
+    if (config.email.enabled && config.email.sendOnBooking && enrichedData.patientEmail) {
+      this.logger.log(`Sending Email to ${enrichedData.patientEmail}`);
       const emailResult = await this.sendEmailMessage(
         businessId,
-        appointmentData.patientEmail,
+        enrichedData.patientEmail,
         config.email,
-        appointmentData,
+        enrichedData,
         'booking_confirmation',
         locationId
       );
+      this.logger.log(`Email result: ${JSON.stringify(emailResult)}`);
       results.push({ ...emailResult, channel: 'email' });
+    } else {
+      this.logger.log(`Email not sent - enabled: ${config.email.enabled}, sendOnBooking: ${config.email.sendOnBooking}, hasEmail: ${!!enrichedData.patientEmail}`);
     }
 
     return results;
@@ -205,7 +225,7 @@ export class MessageAutomationService {
   }
 
   private buildTemplateVariables(appointmentData: AppointmentData): Record<string, string> {
-    return {
+    const variables = {
       patientName: appointmentData.patientName || '',
       appointmentDate: appointmentData.appointmentDate || '',
       appointmentTime: appointmentData.appointmentTime || '',
@@ -213,8 +233,89 @@ export class MessageAutomationService {
       locationName: appointmentData.locationName || '',
       serviceName: appointmentData.serviceName || '',
       doctorName: appointmentData.doctorName || '',
-      phoneNumber: appointmentData.phoneNumber || ''
+      phoneNumber: appointmentData.phoneNumber || '',
+      address: appointmentData.address || ''
     };
+    
+    this.logger.log(`📝 Template variables:`);
+    this.logger.log(`   businessName: "${variables.businessName}"`);
+    this.logger.log(`   locationName: "${variables.locationName}"`);
+    this.logger.log(`   address: "${variables.address}"`);
+    
+    return variables;
+  }
+
+  /**
+   * Enrich appointment data with business and location information from DynamoDB
+   */
+  private async enrichAppointmentData(
+    businessId: string,
+    locationId: string,
+    appointmentData: AppointmentData
+  ): Promise<AppointmentData> {
+    try {
+      this.logger.log(`Enriching appointment data for business ${businessId}, location ${locationId}`);
+      
+      // Get business info from DynamoDB
+      const businessInfo = await this.businessInfoService.getBusinessInfo(businessId);
+      
+      if (!businessInfo) {
+        this.logger.warn(`No business info found for ${businessId}, using original data`);
+        return appointmentData;
+      }
+
+      this.logger.log(`Found business: ${businessInfo.businessName}`);
+      this.logger.log(`Total locations: ${businessInfo.locations.length}`);
+      businessInfo.locations.forEach((loc, index) => {
+        this.logger.log(`  Location ${index + 1}: ID=${loc.locationId}, Name="${loc.name}", Address="${loc.address}"`);
+      });
+      this.logger.log(`Looking for locationId: "${locationId}"`);
+
+      // Find the specific location by locationId
+      const location = businessInfo.locations.find(loc => loc.locationId === locationId);
+      
+      if (!location) {
+        this.logger.warn(`❌ Location ${locationId} NOT FOUND in available locations`);
+        this.logger.warn(`Available locationIds: ${businessInfo.locations.map(l => l.locationId).join(', ')}`);
+        return {
+          ...appointmentData,
+          businessName: businessInfo.businessName,
+          locationName: appointmentData.locationName || 'Locație',
+          phoneNumber: businessInfo.locations[0]?.phone || appointmentData.phoneNumber
+        };
+      }
+
+      this.logger.log(`✅ Found matching location:`);
+      this.logger.log(`   - Location ID: ${location.locationId}`);
+      this.logger.log(`   - Location Name: "${location.name}"`);
+      this.logger.log(`   - Address: "${location.address}"`);
+      this.logger.log(`   - Phone: "${location.phone || 'N/A'}"`);
+      
+      // Check if location name is empty
+      if (!location.name || location.name.trim() === '') {
+        this.logger.warn(`⚠️ Location name is EMPTY! Using business name as fallback`);
+      }
+
+      // Return enriched data
+      const enrichedData = {
+        ...appointmentData,
+        businessName: businessInfo.businessName,
+        locationName: location.name || businessInfo.businessName, // Fallback to businessName if empty
+        phoneNumber: location.phone || businessInfo.locations[0]?.phone || appointmentData.phoneNumber,
+        address: location.address
+      };
+      
+      this.logger.log(`📦 Final enriched data:`);
+      this.logger.log(`   - Business Name: "${enrichedData.businessName}"`);
+      this.logger.log(`   - Location Name: "${enrichedData.locationName}"`);
+      this.logger.log(`   - Phone: "${enrichedData.phoneNumber}"`);
+      this.logger.log(`   - Address: "${enrichedData.address}"`);
+      
+      return enrichedData;
+    } catch (error) {
+      this.logger.error(`Failed to enrich appointment data: ${error.message}`);
+      return appointmentData; // Return original data if enrichment fails
+    }
   }
 
   // Utility method to check if automation is enabled for a business
