@@ -41,9 +41,11 @@ services:
       # - CITRUS_TIMEOUT=${CITRUS_TIMEOUT:-5000}
       # - CITRUS_RETRY_ATTEMPTS=${CITRUS_RETRY_ATTEMPTS:-3}
 
-      - DEMO_MODE=true
+      - DEMO_MODE=false
 
       - DATABASE_TYPE=${DATABASE_TYPE:-rds}
+
+      - AI_SERVER_KEY=${AI_SERVER_KEY}
 
       #RDS Configuration
       - RDS_HOST=${RDS_HOST}
@@ -61,10 +63,13 @@ services:
       - ENABLE_REQUEST_LOGGING=${ENABLE_REQUEST_LOGGING:-true}
       - HEALTH_CHECK_ENABLED=${HEALTH_CHECK_ENABLED:-true}
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
+
+      - SES_ENABLED=${SES_ENABLED:-true}
+      - SES_SENDER_EMAIL=${SES_SENDER_EMAIL:-no-reply@simplu.io}
       
       # Security Configuration
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:4000}
-      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-1000}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-5000}
     networks:
       - app-network
 
@@ -198,6 +203,8 @@ services:
 
 
       - DATABASE_TYPE=${DATABASE_TYPE:-rds}
+
+      - AI_SERVER_KEY=${AI_SERVER_KEY}
 
       #RDS Configuration
       - RDS_HOST=${RDS_HOST}

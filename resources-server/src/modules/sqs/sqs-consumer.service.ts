@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';
+import { DatabaseService } from '../resources/services/database.service';
 
 export interface ShardCreationMessage {
   businessId: string;
@@ -30,6 +31,17 @@ export interface AdminAccountCreationMessage {
   timestamp: string;
 }
 
+export interface UpdateResourceIdMessage {
+  messageType: 'UPDATE_RESOURCE_ID';
+  businessId: string;
+  locationId: string;
+  resourceType: string;
+  oldResourceId: string;
+  newResourceId: string;
+  additionalData?: Record<string, any>; // Additional fields to update in data column
+  timestamp: string;
+}
+
 @Injectable()
 export class SqsConsumerService {
   private readonly logger = new Logger(SqsConsumerService.name);
@@ -39,7 +51,10 @@ export class SqsConsumerService {
   private readonly citrusApiKey: string;
   private isPolling = false;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly databaseService: DatabaseService,
+  ) {
     this.sqsClient = new SQSClient({
       region: this.configService.get('sqs.awsSqsRegion', 'us-east-1'),
       credentials: {
@@ -131,6 +146,8 @@ export class SqsConsumerService {
       await this.handleShardCreationMessage(message);
     } else if (messageType === 'ADMIN_ACCOUNT_CREATION') {
       await this.handleAdminAccountCreationMessage(message);
+    } else if (messageType === 'UPDATE_RESOURCE_ID') {
+      await this.handleUpdateResourceIdMessage(message);
     } else {
       this.logger.warn(`Unknown message type: ${messageType}`);
     }
@@ -364,6 +381,31 @@ export class SqsConsumerService {
       this.logger.log(`✅ Medic resource created successfully for admin ${adminData.adminUserId} in business ${adminData.businessId}, location ${adminData.locationId}`);
     } catch (error) {
       this.logger.error(`Error creating medic resource for business ${adminData.businessId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle UPDATE_RESOURCE_ID messages (e.g., when user accepts invitation)
+   */
+  private async handleUpdateResourceIdMessage(message: any): Promise<void> {
+    const data: UpdateResourceIdMessage = JSON.parse(message.Body);
+    this.logger.log(`Processing UPDATE_RESOURCE_ID message for ${data.resourceType}`);
+    this.logger.log(`Updating resource_id from ${data.oldResourceId} to ${data.newResourceId}`);
+
+    try {
+      await this.databaseService.updateResourceId(
+        data.businessId,
+        data.locationId,
+        data.resourceType,
+        data.oldResourceId,
+        data.newResourceId,
+        data.additionalData || {}
+      );
+
+      this.logger.log(`✅ Successfully updated resource_id from ${data.oldResourceId} to ${data.newResourceId} for ${data.resourceType} in ${data.businessId}/${data.locationId}`);
+    } catch (error) {
+      this.logger.error(`Error updating resource_id for ${data.resourceType}:`, error);
       throw error;
     }
   }

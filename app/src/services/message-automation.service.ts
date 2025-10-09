@@ -5,6 +5,8 @@ export interface AppointmentData {
   patientName: string;
   patientPhone?: string;
   patientEmail?: string;
+  patientId?: string; // Patient ID for URL generation
+  appointmentId?: string; // Appointment ID
   appointmentDate: string;
   appointmentTime: string;
   businessName: string;
@@ -13,6 +15,9 @@ export interface AppointmentData {
   doctorName: string;
   phoneNumber?: string;
   address?: string; // Location address
+  domainLabel?: string; // Domain label for URL generation
+  accessCode?: string; // Pre-generated 6-digit access code (generated in app, sent via ai-agent-server)
+  patientUrl?: string; // Pre-generated patient URL (generated in app, sent via ai-agent-server)
 }
 
 export interface AutomationStatus {

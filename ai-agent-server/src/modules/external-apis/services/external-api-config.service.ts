@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
 import { 
   ExternalApiConfig, 
@@ -55,6 +55,19 @@ export class ExternalApiConfigService {
     } catch (error) {
       console.error('Error getting external API config:', error);
       return null;
+    }
+  }
+
+  async getAllConfigs(): Promise<ExternalApiConfig[]> {
+    try {
+      const result = await this.dynamoClient.send(new ScanCommand({
+        TableName: tableNames.externalApiConfig
+      }));
+
+      return (result.Items as ExternalApiConfig[]) || [];
+    } catch (error) {
+      console.error('Error scanning external API configs:', error);
+      return [];
     }
   }
 
@@ -368,8 +381,13 @@ export class ExternalApiConfigService {
     const defaultTemplate: SMSTemplate = {
       id: 'default',
       name: 'Template Implicit',
-      content: 'Salut {{patientName}}! Programarea ta la {{businessName}} este confirmată pentru {{appointmentDate}} la ora {{appointmentTime}}. Te așteptăm!',
-      variables: ['patientName', 'businessName', 'appointmentDate', 'appointmentTime']
+      content: `Salut {{patientName}}! Programarea ta la {{locationName}} este confirmată pentru {{appointmentDate}} la ora {{appointmentTime}}.
+
+Codul tău de acces: {{accessCode}}
+Link: {{patientUrl}}
+
+Te așteptăm!`,
+      variables: ['patientName', 'locationName', 'appointmentDate', 'appointmentTime', 'accessCode', 'patientUrl']
     };
 
     return {
@@ -388,22 +406,37 @@ export class ExternalApiConfigService {
     const defaultTemplate: EmailTemplate = {
       id: 'default',
       name: 'Template Implicit',
-      subject: 'Confirmare programare - {{businessName}}',
+      subject: 'Confirmare programare - {{locationName}}',
       content: `Salut {{patientName}},
 
-Programarea ta la {{businessName}} a fost confirmată cu succes!
+Programarea ta la {{locationName}} a fost confirmată cu succes!
 
 Detalii programare:
 - Data: {{appointmentDate}}
 - Ora: {{appointmentTime}}
 - Serviciu: {{serviceName}}
 - Doctor: {{doctorName}}
+- Adresă: {{address}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📱 CODUL TĂU DE ACCES: {{accessCode}}
+
+Folosește acest cod pentru a accesa pagina ta de pacient unde poți:
+• Vedea programările tale
+• Anula programări
+• Vezi planul de tratament
+• Accesa istoric și facturi
+
+🔗 Link rapid: {{patientUrl}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Dacă ai întrebări, ne poți contacta la {{phoneNumber}}.
 
 Cu stimă,
-Echipa {{businessName}}`,
-      variables: ['patientName', 'businessName', 'appointmentDate', 'appointmentTime', 'serviceName', 'doctorName', 'phoneNumber']
+Echipa {{locationName}}`,
+      variables: ['patientName', 'locationName', 'appointmentDate', 'appointmentTime', 'serviceName', 'doctorName', 'address', 'phoneNumber', 'accessCode', 'patientUrl']
     };
 
     return {

@@ -1099,6 +1099,97 @@ export class PatientBookingService {
       day: 'numeric'
     });
   }
+
+  /**
+   * Get appointments for a specific patient using patientId
+   * Used for patient access code authentication
+   */
+  async getPatientAppointmentsByPatientId(
+    businessLocationId: string,
+    patientId: string,
+    params: { from?: string; to?: string; status?: string; page?: number; limit?: number },
+  ) {
+    const page = params.page ?? 1;
+    const limit = Math.min(params.limit ?? 50, 200);
+
+    const qb = this.resourceRepo
+      .createQueryBuilder('resource')
+      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+      .andWhere('resource.resourceType = :type', { type: 'appointment' })
+      .andWhere("resource.data->'patient'->>'id' = :patientId", { patientId })
+      .orderBy('resource.startDate', 'DESC')
+      .addOrderBy('resource.createdAt', 'DESC')
+      .limit(limit)
+      .offset((page - 1) * limit);
+
+    if (params.from) {
+      qb.andWhere('resource.startDate >= :from', { from: params.from });
+    }
+    if (params.to) {
+      qb.andWhere('resource.startDate <= :to', { to: params.to });
+    }
+    if (params.status) {
+      qb.andWhere("resource.data->>'status' = :status", { status: params.status });
+    }
+
+    const items = await qb.getMany();
+    return { success: true, data: items.map(i => ({ id: i.resourceId, date: i.startDate, ...i.data })) };
+  }
+
+  /**
+   * Cancel appointment by patient using patientId
+   * Used for patient access code authentication
+   */
+  async cancelAppointmentByPatient(
+    businessId: string,
+    locationId: string,
+    appointmentId: string,
+    patientId: string,
+  ) {
+    const businessLocationId = `${businessId}-${locationId}`;
+
+    // Read existing appointment to verify it belongs to this patient
+    const existing = await this.resourceRepo
+      .createQueryBuilder('resource')
+      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+      .andWhere('resource.resourceType = :type', { type: 'appointment' })
+      .andWhere('resource.resourceId = :id', { id: appointmentId })
+      .andWhere("resource.data->'patient'->>'id' = :patientId", { patientId })
+      .getOne();
+
+    if (!existing) {
+      throw new BadRequestException('Appointment not found or does not belong to this patient');
+    }
+
+    const currentStatus = (existing.data as any)?.status || 'scheduled';
+
+    if (currentStatus !== 'scheduled') {
+      throw new BadRequestException('Only appointments with status "scheduled" can be canceled');
+    }
+
+    // Send cancel operation to Kinesis
+    const operation = {
+      operation: 'update',
+      businessId,
+      locationId,
+      resourceType: 'appointment',
+      resourceId: appointmentId,
+      data: {
+        ...existing.data,
+        status: 'canceled',
+        canceledAt: new Date().toISOString(),
+        canceledBy: {
+          userId: patientId,
+          type: 'patient'
+        }
+      },
+      timestamp: new Date().toISOString(),
+      requestId: Date.now().toString(),
+    } as any;
+
+    await this.kinesisService.sendResourceOperation(operation);
+    return { success: true, message: 'Appointment canceled successfully', requestId: operation.requestId };
+  }
 }
 
 

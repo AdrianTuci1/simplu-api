@@ -22,6 +22,7 @@ export class CognitoAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     let authHeader = request.headers.authorization;
+    const aiServerKey = request.headers['ai-server-key'] as string;
     const url = request.url;
     const method = request.method;
 
@@ -37,9 +38,15 @@ export class CognitoAuthGuard implements CanActivate {
       return true;
     }
 
+    // Check AI-SERVER-KEY first (for internal services like cron jobs)
+    if (aiServerKey) {
+      return this.validateAiServerKey(aiServerKey, method, url, request);
+    }
+
+    // Fall back to Authorization header (Cognito tokens)
     if (!authHeader) {
-      this.logger.warn(`No authorization header for ${method} ${url}`);
-      throw new UnauthorizedException('Authorization header required');
+      this.logger.warn(`No authorization header or AI-SERVER-KEY for ${method} ${url}`);
+      throw new UnauthorizedException('Authorization header or AI-SERVER-KEY required');
     }
 
     // Clean the authorization header by removing backticks and extra whitespace
@@ -83,5 +90,38 @@ export class CognitoAuthGuard implements CanActivate {
         `Token validation failed: ${error.message}`,
       );
     }
+  }
+
+  /**
+   * Validate AI-SERVER-KEY for internal service authentication
+   * Used by cron jobs and other internal services
+   * Sets an internal system user with full access
+   */
+  private validateAiServerKey(apiKey: string, method: string, url: string, request: any): boolean {
+    const validApiKey = process.env.AI_SERVER_KEY;
+    
+    if (!validApiKey) {
+      this.logger.error('AI_SERVER_KEY environment variable not configured');
+      throw new UnauthorizedException('Internal authentication not configured');
+    }
+
+    if (apiKey !== validApiKey) {
+      this.logger.warn(`Invalid AI-SERVER-KEY for ${method} ${url}`);
+      throw new UnauthorizedException('Invalid AI-SERVER-KEY');
+    }
+
+    this.logger.log(`AI-SERVER-KEY validated successfully for ${method} ${url}`);
+    
+    // Set an internal system user with full access
+    // This bypasses permission checks as it's an internal service
+    request.user = {
+      userId: 'system-internal',
+      username: 'ai-agent-server',
+      email: 'system@internal.service',
+      businessId: 'system',
+      isInternalService: true, // Flag to identify internal service requests
+    };
+
+    return true;
   }
 }

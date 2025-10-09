@@ -289,6 +289,14 @@ export class PermissionService {
       `Checking permission from medic: ${cognitoUserId} -> ${permission} in ${businessId}/${locationId}`,
     );
 
+    // Allow internal service requests (from AI Agent Server cron jobs, etc.)
+    if (cognitoUserId === 'system-internal') {
+      this.logger.log(
+        `Permission granted for internal service: ${permission} in ${businessId}/${locationId}`,
+      );
+      return; // Internal services have full access
+    }
+
     // Check if authentication bypass is enabled for development
     const authBypass = this.configService.get<boolean>('AUTH_BYPASS');
     if (authBypass) {

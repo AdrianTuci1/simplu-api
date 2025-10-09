@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 
 export interface MetaCredentials {
   accessToken: string;
@@ -223,7 +223,7 @@ export class ExternalApisService {
     text: string
   ): Promise<{ success: boolean; messageId?: string; error?: string }>
   {
-    const creds = await this.getGmailCredentials(businessId, locationId);
+    let creds = await this.getGmailCredentials(businessId, locationId);
     if (!creds) {
       return { success: false, error: 'Missing Gmail credentials for location' };
     }
@@ -233,44 +233,85 @@ export class ExternalApisService {
       return { success: false, error: 'Missing GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET' };
     }
 
-    let transporter: any = null;
     try {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          type: 'OAuth2',
-          user: creds.email,
-          clientId,
-          clientSecret,
-          accessToken: creds.accessToken,
-          refreshToken: creds.refreshToken,
-        },
-        // Add connection pooling limits to prevent memory leaks
-        pool: true,
-        maxConnections: 1,
-        maxMessages: 1,
-        rateLimit: 1,
-      } as any);
+      // Create OAuth2 client
+      const oauth2Client = new google.auth.OAuth2(
+        clientId,
+        clientSecret,
+        process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3003/external/gmail/callback'
+      );
 
-      const info = await transporter.sendMail({
-        from: creds.email,
-        to,
-        subject,
-        text,
+      // Set credentials
+      oauth2Client.setCredentials({
+        access_token: creds.accessToken,
+        refresh_token: creds.refreshToken,
+        expiry_date: creds.expiryDate,
       });
-      return { success: true, messageId: info.messageId };
+
+      // OAuth2 client will automatically refresh the token if expired
+      oauth2Client.on('tokens', async (tokens) => {
+        if (tokens.access_token) {
+          console.log('Gmail access token refreshed automatically');
+          const updatedCreds: GmailCredentials = {
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token || creds.refreshToken,
+            expiryDate: tokens.expiry_date || undefined,
+            email: creds.email,
+          };
+          await this.saveGmailCredentials(businessId, locationId, updatedCreds);
+        }
+      });
+
+      // Create Gmail API client
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+      // Create email in RFC 2822 format
+      const emailLines = [
+        `From: ${creds.email}`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        text,
+      ];
+      const email = emailLines.join('\r\n');
+
+      // Encode email in base64url
+      const encodedEmail = Buffer.from(email)
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      // Send email using Gmail API
+      const response = await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: encodedEmail,
+        },
+      });
+
+      console.log('Gmail API send response:', response.data);
+      return { 
+        success: true, 
+        messageId: response.data.id || `gmail_${Date.now()}` 
+      };
     } catch (err: any) {
       console.error('sendEmailFromGmail failed:', err?.message || err);
-      return { success: false, error: err?.message || 'Failed to send email via Gmail' };
-    } finally {
-      // CRITICAL: Always close the transporter to prevent memory leaks
-      if (transporter) {
-        try {
-          transporter.close();
-        } catch (closeErr) {
-          console.error('Error closing nodemailer transporter:', closeErr);
-        }
+      
+      // Check if it's an auth error
+      if (err?.code === 401 || err?.message?.includes('invalid_grant')) {
+        return { 
+          success: false, 
+          error: 'Gmail authentication failed. Please re-authenticate your Gmail account.' 
+        };
       }
+      
+      return { 
+        success: false, 
+        error: err?.message || 'Failed to send email via Gmail' 
+      };
     }
   }
 

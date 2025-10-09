@@ -6,6 +6,7 @@ export interface BusinessInfo {
   businessId: string;
   businessName: string;
   businessType: 'dental' | 'gym' | 'hotel';
+  domainLabel?: string; // Domain label for URL generation
   locations: LocationInfo[];
   settings: BusinessSettings;
   permissions: string[];
@@ -110,30 +111,31 @@ export class BusinessInfoService {
       const currency = (dynamoData as any).settings?.currency || (dynamoData as any).credits?.currency || 'RON';
       const language = (dynamoData as any).settings?.language || (dynamoData as any).customTld || 'ro';
   
-      return {
-        businessId,
-        businessName,
-        businessType: this.mapBusinessType(businessTypeRaw),
-        locations: (dynamoData.locations || []).map(location => ({
-          locationId: location.id,
-          name: location.name,
-          address: location.address,
-          phone: location.phone,
-          email: location.email,
-          timezone: location.timezone,
-          isActive: location.active
-        })),
-        settings: {
-          currency,
-          language,
-          dateFormat: 'DD/MM/YYYY', // Default value
-          timeFormat: 'HH:mm', // Default value
-          workingHours: this.getDefaultWorkingHours()
-        },
-        permissions: this.getDefaultPermissions(String(businessTypeRaw)),
-        createdAt: (dynamoData as any).createdAt || new Date().toISOString(),
-        updatedAt: (dynamoData as any).updatedAt || new Date().toISOString()
-      };
+    return {
+      businessId,
+      businessName,
+      businessType: this.mapBusinessType(businessTypeRaw),
+      domainLabel: (dynamoData as any).domainLabel || undefined,
+      locations: (dynamoData.locations || []).map(location => ({
+        locationId: location.id,
+        name: location.name,
+        address: location.address,
+        phone: location.phone,
+        email: location.email,
+        timezone: location.timezone,
+        isActive: location.active
+      })),
+      settings: {
+        currency,
+        language,
+        dateFormat: 'DD/MM/YYYY', // Default value
+        timeFormat: 'HH:mm', // Default value
+        workingHours: this.getDefaultWorkingHours()
+      },
+      permissions: this.getDefaultPermissions(String(businessTypeRaw)),
+      createdAt: (dynamoData as any).createdAt || new Date().toISOString(),
+      updatedAt: (dynamoData as any).updatedAt || new Date().toISOString()
+    };
     }
 
   async getLocationInfo(businessId: string, locationId: string): Promise<LocationInfo | null> {

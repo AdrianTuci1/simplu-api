@@ -12,6 +12,7 @@ import { AuthModule } from '../auth/auth.module';
 import { BusinessInfoModule } from '../business-info/business-info.module';
 import { MessageAutomationService } from '../../services/message-automation.service';
 import { ExternalApiConfigService } from '../../services/external-api-config.service';
+import { PatientAccessService } from '../patient-booking/patient-access.service';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ExternalApiConfigService } from '../../services/external-api-config.ser
     KinesisService,
     MessageAutomationService,
     ExternalApiConfigService,
+    PatientAccessService,
   ],
   exports: [
     ResourcesService,

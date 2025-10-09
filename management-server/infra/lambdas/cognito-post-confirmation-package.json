@@ -1,0 +1,8 @@
+{
+  "name": "cognito-post-confirmation-lambda",
+  "version": "1.0.0",
+  "description": "Cognito Post-Confirmation Trigger Lambda - No Dependencies!",
+  "type": "module",
+  "main": "cognito-post-confirmation.mjs"
+}
+

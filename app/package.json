@@ -30,6 +30,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.846.0",
     "@aws-sdk/client-dynamodb": "^3.846.0",
     "@aws-sdk/client-kinesis": "^3.859.0",
+    "@aws-sdk/client-ses": "^3.906.0",
     "@aws-sdk/lib-dynamodb": "^3.845.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",

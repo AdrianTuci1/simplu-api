@@ -1,9 +1,10 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { SqsConsumerService } from './sqs-consumer.service';
+import { ResourcesModule } from '../resources/resources.module';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, ResourcesModule],
   providers: [SqsConsumerService],
   exports: [SqsConsumerService],
 })

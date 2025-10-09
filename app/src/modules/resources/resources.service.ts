@@ -12,6 +12,7 @@ import {
 import { MessageAutomationService, AppointmentData } from '../../services/message-automation.service';
 import { ExternalApiConfigService } from '../../services/external-api-config.service';
 import { BusinessInfoService } from '../business-info/business-info.service';
+import { PatientAccessService } from '../patient-booking/patient-access.service';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ResourceOperationRequest {
@@ -41,6 +42,7 @@ export class ResourcesService {
     private readonly messageAutomationService: MessageAutomationService,
     private readonly externalApiConfigService: ExternalApiConfigService,
     private readonly businessInfoService: BusinessInfoService,
+    private readonly patientAccessService: PatientAccessService,
   ) {}
 
   async processResourceOperation(
@@ -195,8 +197,31 @@ export class ResourcesService {
       const appointmentTime = appointmentData?.time;
       const serviceName = appointmentData?.service?.name || 'Service';
       const doctorName = appointmentData?.medic?.name || appointmentData?.doctor?.name || 'Unknown Doctor';
+      const patientId = appointmentData?.patient?.id;
+      const appointmentId = appointmentData?.resourceId;
+
+      // Generate access code and patient URL if patientId is available
+      let accessCode = '';
+      let patientUrl = '';
+      const domainLabel = (businessInfo as any)?.domainLabel;
+      
+      if (patientId && domainLabel && locationInfo?.name) {
+        accessCode = this.patientAccessService.generateAccessCode(patientId, appointmentId);
+        patientUrl = this.patientAccessService.generatePatientUrl(
+          domainLabel,
+          locationInfo.name,
+          patientId
+        );
+        
+        this.logger.log(`Generated access code for patient ${patientId}: ${accessCode}`);
+        this.logger.log(`Generated patient URL: ${patientUrl}`);
+      } else {
+        this.logger.warn(`Cannot generate access code - Missing: patientId=${!!patientId}, domainLabel=${!!domainLabel}, locationName=${!!locationInfo?.name}`);
+      }
 
       return {
+        appointmentId,
+        patientId,
         patientName,
         patientPhone,
         patientEmail,
@@ -206,7 +231,10 @@ export class ResourcesService {
         locationName: locationInfo?.name || 'Location',
         serviceName,
         doctorName,
-        phoneNumber: (businessInfo as any)?.phoneNumber || ''
+        phoneNumber: (businessInfo as any)?.phoneNumber || '',
+        domainLabel: (businessInfo as any)?.domainLabel,
+        accessCode,
+        patientUrl
       };
     } catch (error) {
       this.logger.error(`Failed to enrich appointment data: ${error.message}`);

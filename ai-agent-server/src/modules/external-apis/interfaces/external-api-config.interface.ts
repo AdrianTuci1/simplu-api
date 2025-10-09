@@ -111,5 +111,23 @@ export const COMMON_TEMPLATE_VARIABLES: TemplateVariable[] = [
     description: 'Numărul de telefon pentru contact',
     example: '+40 721 234 567',
     required: false
+  },
+  {
+    name: 'address',
+    description: 'Adresa locației',
+    example: 'Str. Principală nr. 10, București',
+    required: false
+  },
+  {
+    name: 'accessCode',
+    description: 'Codul de acces pentru pacient (6 cifre)',
+    example: '123456',
+    required: false
+  },
+  {
+    name: 'patientUrl',
+    description: 'URL-ul pentru pagina pacientului',
+    example: 'https://clinica-alfa.simplu.io/sediu-central/details?patient00000',
+    required: false
   }
 ];

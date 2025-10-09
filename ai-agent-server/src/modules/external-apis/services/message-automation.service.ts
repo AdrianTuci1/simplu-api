@@ -8,6 +8,8 @@ export interface AppointmentData {
   patientName: string;
   patientPhone?: string;
   patientEmail?: string;
+  patientId?: string; // Patient ID for URL generation
+  appointmentId?: string; // Appointment ID
   appointmentDate: string;
   appointmentTime: string;
   businessName: string;
@@ -15,7 +17,10 @@ export interface AppointmentData {
   serviceName: string;
   doctorName: string;
   phoneNumber?: string;
-  address?: string; // Added for location address
+  address?: string; // Location address
+  domainLabel?: string; // Domain label for URL generation
+  accessCode?: string; // Pre-generated 6-digit access code (generated in app, sent via ai-agent-server)
+  patientUrl?: string; // Pre-generated patient URL (generated in app, sent via ai-agent-server)
 }
 
 export interface MessageResult {
@@ -225,7 +230,7 @@ export class MessageAutomationService {
   }
 
   private buildTemplateVariables(appointmentData: AppointmentData): Record<string, string> {
-    const variables = {
+    const variables: Record<string, string> = {
       patientName: appointmentData.patientName || '',
       appointmentDate: appointmentData.appointmentDate || '',
       appointmentTime: appointmentData.appointmentTime || '',
@@ -234,19 +239,25 @@ export class MessageAutomationService {
       serviceName: appointmentData.serviceName || '',
       doctorName: appointmentData.doctorName || '',
       phoneNumber: appointmentData.phoneNumber || '',
-      address: appointmentData.address || ''
+      address: appointmentData.address || '',
+      // Use pre-generated access code and URL from app server
+      accessCode: appointmentData.accessCode || '',
+      patientUrl: appointmentData.patientUrl || ''
     };
     
     this.logger.log(`📝 Template variables:`);
     this.logger.log(`   businessName: "${variables.businessName}"`);
     this.logger.log(`   locationName: "${variables.locationName}"`);
     this.logger.log(`   address: "${variables.address}"`);
+    this.logger.log(`   accessCode: "${variables.accessCode}"`);
+    this.logger.log(`   patientUrl: "${variables.patientUrl}"`);
     
     return variables;
   }
 
   /**
    * Enrich appointment data with business and location information from DynamoDB
+   * Note: accessCode and patientUrl are now generated in app server and passed here
    */
   private async enrichAppointmentData(
     businessId: string,
@@ -281,7 +292,8 @@ export class MessageAutomationService {
           ...appointmentData,
           businessName: businessInfo.businessName,
           locationName: appointmentData.locationName || 'Locație',
-          phoneNumber: businessInfo.locations[0]?.phone || appointmentData.phoneNumber
+          phoneNumber: businessInfo.locations[0]?.phone || appointmentData.phoneNumber,
+          domainLabel: businessInfo.domainLabel || appointmentData.domainLabel
         };
       }
 
@@ -296,13 +308,14 @@ export class MessageAutomationService {
         this.logger.warn(`⚠️ Location name is EMPTY! Using business name as fallback`);
       }
 
-      // Return enriched data
+      // Return enriched data - preserve all original data including pre-generated access code and URL
       const enrichedData = {
         ...appointmentData,
         businessName: businessInfo.businessName,
         locationName: location.name || businessInfo.businessName, // Fallback to businessName if empty
         phoneNumber: location.phone || businessInfo.locations[0]?.phone || appointmentData.phoneNumber,
-        address: location.address
+        address: location.address,
+        domainLabel: businessInfo.domainLabel || appointmentData.domainLabel
       };
       
       this.logger.log(`📦 Final enriched data:`);
@@ -310,6 +323,10 @@ export class MessageAutomationService {
       this.logger.log(`   - Location Name: "${enrichedData.locationName}"`);
       this.logger.log(`   - Phone: "${enrichedData.phoneNumber}"`);
       this.logger.log(`   - Address: "${enrichedData.address}"`);
+      this.logger.log(`   - Domain Label: "${enrichedData.domainLabel}"`);
+      this.logger.log(`   - Patient ID: "${enrichedData.patientId || 'N/A'}"`);
+      this.logger.log(`   - Access Code: "${enrichedData.accessCode || 'N/A'}"`);
+      this.logger.log(`   - Patient URL: "${enrichedData.patientUrl || 'N/A'}"`);
       
       return enrichedData;
     } catch (error) {

@@ -6,9 +6,11 @@ import {
   Param,
   Query,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags, ApiBody } from '@nestjs/swagger';
 import { PatientBookingService } from './patient-booking.service';
+import { PatientAccessService } from './patient-access.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { CognitoAuthGuard } from '../auth/guards/cognito-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -17,7 +19,10 @@ import { CognitoUser } from '../auth/auth.service';
 @ApiTags('Patient Booking')
 @Controller('patient-booking')
 export class PatientBookingController {
-  constructor(private readonly bookingService: PatientBookingService) {}
+  constructor(
+    private readonly bookingService: PatientBookingService,
+    private readonly patientAccessService: PatientAccessService,
+  ) {}
 
   @Get('services/:businessId-:locationId')
   @Public()
@@ -241,6 +246,138 @@ export class PatientBookingController {
       user,
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 50,
+    );
+  }
+
+  // ========================================
+  // Patient Access Code Endpoints
+  // ========================================
+
+  @Post('validate-access/:businessId-:locationId')
+  @Public()
+  @ApiOperation({ 
+    summary: 'Validate patient access code',
+    description: 'Validates the 6-digit access code sent via SMS/Email against the patientId'
+  })
+  @ApiParam({ name: 'businessId' })
+  @ApiParam({ name: 'locationId' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        patientId: { type: 'string', description: 'Patient ID from URL query parameter' },
+        accessCode: { type: 'string', description: '6-digit access code received via SMS/Email' },
+      },
+      required: ['patientId', 'accessCode'],
+    },
+  })
+  async validateAccessCode(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Body() body: { patientId: string; accessCode: string },
+  ) {
+    const { patientId, accessCode } = body;
+    
+    const isValid = this.patientAccessService.validateAccessCode(patientId, accessCode);
+    
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid access code');
+    }
+
+    return {
+      success: true,
+      message: 'Access code validated successfully',
+      patientId,
+    };
+  }
+
+  @Get('patient-appointments/:businessId-:locationId')
+  @Public()
+  @ApiOperation({ 
+    summary: 'Get patient appointments using access code',
+    description: 'Returns appointments for a patient after validating their access code'
+  })
+  @ApiParam({ name: 'businessId' })
+  @ApiParam({ name: 'locationId' })
+  @ApiQuery({ name: 'patientId', required: true, description: 'Patient ID' })
+  @ApiQuery({ name: 'accessCode', required: true, description: '6-digit access code' })
+  @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'to', required: false, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'status', required: false, description: 'scheduled|completed|canceled' })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async getPatientAppointments(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Query('patientId') patientId: string,
+    @Query('accessCode') accessCode: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    // Validate access code
+    const isValid = this.patientAccessService.validateAccessCode(patientId, accessCode);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid access code');
+    }
+
+    // Get appointments for this patient
+    const businessLocationId = `${businessId}-${locationId}`;
+    
+    return this.bookingService.getPatientAppointmentsByPatientId(
+      businessLocationId,
+      patientId,
+      {
+        from,
+        to,
+        status,
+        page: page ? parseInt(page, 10) : undefined,
+        limit: limit ? parseInt(limit, 10) : undefined,
+      },
+    );
+  }
+
+  @Post('cancel-appointment/:businessId-:locationId/:appointmentId')
+  @Public()
+  @ApiOperation({ 
+    summary: 'Cancel appointment using access code',
+    description: 'Allows patient to cancel their appointment after validating access code'
+  })
+  @ApiParam({ name: 'businessId' })
+  @ApiParam({ name: 'locationId' })
+  @ApiParam({ name: 'appointmentId' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        patientId: { type: 'string', description: 'Patient ID' },
+        accessCode: { type: 'string', description: '6-digit access code' },
+      },
+      required: ['patientId', 'accessCode'],
+    },
+  })
+  async cancelAppointmentWithAccessCode(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('appointmentId') appointmentId: string,
+    @Body() body: { patientId: string; accessCode: string },
+  ) {
+    const { patientId, accessCode } = body;
+    
+    // Validate access code
+    const isValid = this.patientAccessService.validateAccessCode(patientId, accessCode);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid access code');
+    }
+
+    // Cancel the appointment
+    return this.bookingService.cancelAppointmentByPatient(
+      businessId,
+      locationId,
+      appointmentId,
+      patientId,
     );
   }
 }

@@ -560,4 +560,75 @@ export class DatabaseService {
         this.citrusConnections.clear();
         this.logger.log('All database connections closed successfully');
     }
+
+    /**
+     * Update resource_id (e.g., when user accepts invitation)
+     * This uses direct SQL UPDATE to change the resource_id column
+     */
+    async updateResourceId(
+        businessId: string,
+        locationId: string,
+        resourceType: string,
+        oldResourceId: string,
+        newResourceId: string,
+        additionalData?: Record<string, any>
+    ): Promise<ResourceRecord> {
+        const connection = await this.getConnection(businessId, locationId);
+        const businessLocationId = `${businessId}-${locationId}`;
+
+        this.logger.log(`🔄 Updating resource_id from ${oldResourceId} to ${newResourceId} for ${resourceType} in ${businessLocationId}`);
+
+        // Build SQL query to update resource_id and merge additionalData into data column
+        let query: string;
+        let values: any[];
+
+        if (additionalData && Object.keys(additionalData).length > 0) {
+            // Update resource_id AND merge additionalData into data JSONB column
+            query = `
+                UPDATE resources 
+                SET resource_id = $1,
+                    data = data || $2::jsonb,
+                    updated_at = NOW()
+                WHERE business_location_id = $3 
+                  AND resource_type = $4 
+                  AND resource_id = $5
+                RETURNING *;
+            `;
+            values = [
+                newResourceId,
+                JSON.stringify(additionalData),
+                businessLocationId,
+                resourceType,
+                oldResourceId
+            ];
+        } else {
+            // Only update resource_id
+            query = `
+                UPDATE resources 
+                SET resource_id = $1,
+                    updated_at = NOW()
+                WHERE business_location_id = $2 
+                  AND resource_type = $3 
+                  AND resource_id = $4
+                RETURNING *;
+            `;
+            values = [
+                newResourceId,
+                businessLocationId,
+                resourceType,
+                oldResourceId
+            ];
+        }
+
+        const result = await connection.pool.query(query, values);
+
+        if (result.rowCount === 0) {
+            throw new Error(`Resource with ID ${oldResourceId} not found for update`);
+        }
+
+        const updatedResource = result.rows[0];
+        this.logger.log(`✅ Successfully updated resource_id from ${oldResourceId} to ${newResourceId}`);
+
+        return updatedResource;
+    }
 }

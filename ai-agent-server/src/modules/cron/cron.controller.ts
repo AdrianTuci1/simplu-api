@@ -1,14 +1,16 @@
-import { Controller, Post, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { CronService } from './cron.service';
 import { ScheduledTasksJob } from './jobs/scheduled-tasks.job';
 import { CleanupJob } from './jobs/cleanup.job';
+import { AppointmentRemindersJob } from './jobs/appointment-reminders.job';
 
 @Controller('cron')
 export class CronController {
   constructor(
     private readonly cronService: CronService,
     private readonly scheduledTasksJob: ScheduledTasksJob,
-    private readonly cleanupJob: CleanupJob
+    private readonly cleanupJob: CleanupJob,
+    private readonly appointmentRemindersJob: AppointmentRemindersJob,
   ) {}
 
   @Post('trigger/cleanup-sessions')
@@ -95,6 +97,14 @@ export class CronController {
     return { message: 'System performance check triggered successfully' };
   }
 
+  @Post('trigger/appointment-reminders')
+  async triggerAppointmentReminders(
+    @Query('businessId') businessId?: string,
+    @Query('locationId') locationId?: string,
+  ) {
+    return await this.appointmentRemindersJob.triggerManual(businessId, locationId);
+  }
+
   @Get('status')
   async getCronStatus() {
     return {
@@ -161,6 +171,11 @@ export class CronController {
           name: 'cleanup-old-messages',
           schedule: '0 0 * * 0',
           description: 'Cleanup old messages weekly'
+        },
+        {
+          name: 'appointment-reminders',
+          schedule: '0 * * * *',
+          description: 'Send appointment reminders every hour'
         },
         {
           name: 'cleanup-old-logs',

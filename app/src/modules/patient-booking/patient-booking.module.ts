@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PatientBookingController } from './patient-booking.controller';
 import { PatientBookingService } from './patient-booking.service';
+import { PatientAccessService } from './patient-access.service';
 import { ResourceEntity } from '../resources/entities/resource.entity';
 import { ResourceQueryService } from '../resources/services/resource-query.service';
 import { BusinessInfoModule } from '../business-info/business-info.module';
@@ -18,13 +19,14 @@ import { ExternalApiConfigService } from '../../services/external-api-config.ser
   ],
   controllers: [PatientBookingController],
   providers: [
-    PatientBookingService, 
+    PatientBookingService,
+    PatientAccessService,
     ResourceQueryService, 
     KinesisService,
     MessageAutomationService,
     ExternalApiConfigService
   ],
-  exports: [PatientBookingService],
+  exports: [PatientBookingService, PatientAccessService],
 })
 export class PatientBookingModule {}
 
