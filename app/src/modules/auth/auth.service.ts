@@ -288,7 +288,7 @@ export class AuthService {
    * Get all user roles across all businesses and locations
    * Searches directly by resource_id without requiring businessId
    */
-  async getAllUserRoles(cognitoUserId: string): Promise<Array<UserRole & { businessId: string }>> {
+  async getAllUserRoles(cognitoUserId: string): Promise<Array<UserRole & { businessId: string; businessName: string }>> {
     try {
       this.logger.debug(
         `Getting all roles for Cognito user ${cognitoUserId} across all businesses`,
@@ -308,7 +308,7 @@ export class AuthService {
         return [];
       }
 
-      const userRoles: Array<UserRole & { businessId: string }> = [];
+      const userRoles: Array<UserRole & { businessId: string; businessName: string }> = [];
 
       // Process each medic resource to extract role information
       for (const medicResource of medicResources) {
@@ -325,32 +325,41 @@ export class AuthService {
           const businessLocationId = medicResource.businessLocationId;
           const [businessId, locationId] = businessLocationId.split('-');
           
-          // Get location name from DynamoDB business-info
+          // Get business name and location name from DynamoDB business-info
+          let businessName = businessId; // fallback to businessId
           let locationName = locationId; // fallback to locationId
           try {
             const businessInfo = await this.businessInfoService.getBusinessInfo(businessId);
-            if (businessInfo && businessInfo.locations) {
-              const location = businessInfo.locations.find(loc => loc.id === locationId);
-              if (location) {
-                locationName = location.name;
+            if (businessInfo) {
+              // Get business name
+              if (businessInfo.businessName) {
+                businessName = businessInfo.businessName;
+              }
+              // Get location name
+              if (businessInfo.locations) {
+                const location = businessInfo.locations.find(loc => loc.id === locationId);
+                if (location) {
+                  locationName = location.name;
+                }
               }
             }
           } catch (error) {
             this.logger.warn(
-              `Failed to get location name for ${businessId}-${locationId}: ${error.message}`,
+              `Failed to get business/location info for ${businessId}-${locationId}: ${error.message}`,
             );
-            // Continue with locationId as fallback
+            // Continue with businessId/locationId as fallback
           }
 
           userRoles.push({
             businessId,
+            businessName,
             locationId,
             locationName,
             roleName,
           });
 
           this.logger.debug(
-            `Found role ${roleName} for user ${cognitoUserId} in business ${businessId}, location ${locationId} (${locationName})`,
+            `Found role ${roleName} for user ${cognitoUserId} in business ${businessId} (${businessName}), location ${locationId} (${locationName})`,
           );
         } catch (error) {
           this.logger.error(

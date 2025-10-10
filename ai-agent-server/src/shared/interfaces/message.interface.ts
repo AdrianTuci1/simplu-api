@@ -19,6 +19,11 @@ export interface AgentResponse {
     key: string;
     data: any;
   };
+  metadata?: { // Optional metadata for Bedrock integration
+    toolsUsed?: string[];
+    executionTime?: number;
+    [key: string]: any;
+  };
 }
 
 export interface AgentAction {

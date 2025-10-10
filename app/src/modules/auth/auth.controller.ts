@@ -39,15 +39,19 @@ export class AuthController {
       // Group roles by business
       const businessGroups = userRoles.reduce((acc, role) => {
         if (!acc[role.businessId]) {
-          acc[role.businessId] = [];
+          acc[role.businessId] = {
+            businessId: role.businessId,
+            businessName: role.businessName,
+            locations: [],
+          };
         }
-        acc[role.businessId].push({
+        acc[role.businessId].locations.push({
           locationId: role.locationId,
           locationName: role.locationName,
           role: role.roleName,
         });
         return acc;
-      }, {} as Record<string, Array<{ locationId: string; locationName: string; role: string }>>);
+      }, {} as Record<string, { businessId: string; businessName: string; locations: Array<{ locationId: string; locationName: string; role: string }> }>);
 
       return {
         success: true,
@@ -58,10 +62,7 @@ export class AuthController {
           name: user.name,
           firstName: user.firstName,
           lastName: user.lastName,
-          businesses: Object.entries(businessGroups).map(([businessId, locations]) => ({
-            businessId,
-            locations,
-          })),
+          businesses: Object.values(businessGroups),
         },
       };
     } catch (error) {

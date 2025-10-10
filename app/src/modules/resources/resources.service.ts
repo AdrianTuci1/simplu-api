@@ -6,7 +6,6 @@ import {
   ResourceAction,
 } from './types/base-resource';
 import {
-  PermissionService,
   AuthenticatedUser,
 } from './services/permission.service';
 import { MessageAutomationService, AppointmentData } from '../../services/message-automation.service';
@@ -38,7 +37,6 @@ export class ResourcesService {
 
   constructor(
     private readonly kinesisService: KinesisService,
-    private readonly permissionService: PermissionService,
     private readonly messageAutomationService: MessageAutomationService,
     private readonly externalApiConfigService: ExternalApiConfigService,
     private readonly businessInfoService: BusinessInfoService,
@@ -53,15 +51,9 @@ export class ResourcesService {
     // Validate request
     this.validateRequest(request);
 
-    // Check user permissions if user data is provided
-    if (request.user && request.resourceType) {
-      await this.permissionService.checkPermission(
-        request.user,
-        request.locationId,
-        request.resourceType,
-        request.operation,
-      );
-    }
+    // NOTE: Permission checks are performed in the controller before calling this method
+    // using checkPermissionFromMedic which queries the medic -> role -> permissions flow
+    // No need to check permissions here again
 
     // Create operation for stream
     const operation: ResourceOperation = {

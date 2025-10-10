@@ -138,13 +138,16 @@ export class PermissionService {
     try {
       // Query the 'resource' table for role permissions
       // Use businessId-locationId combination for the query
+      // Use customFilters to query nested JSONB fields
       const roleResources = await this.resourceQueryService.queryResources(
         businessId,
         locationId,
         {
           resourceType: 'role',
           filters: {
-            name: roleName,
+            customFilters: {
+              name: roleName,
+            },
           },
           limit: 1,
         },
@@ -152,25 +155,46 @@ export class PermissionService {
 
       if (roleResources.data.length > 0) {
         const roleResource = roleResources.data[0];
+        
+        // Log the size of the data field for debugging
+        const dataSize = JSON.stringify(roleResource.data).length;
+        this.logger.debug(
+          `Role resource data size: ${dataSize} bytes for ${roleName}`,
+        );
+        
         if (
           roleResource.data?.permissions &&
           Array.isArray(roleResource.data.permissions)
         ) {
           const permissions = roleResource.data.permissions as Permission[];
           this.logger.debug(
-            `Retrieved permissions for role ${roleName} from database: ${permissions.join(', ')}`,
+            `Retrieved ${permissions.length} permissions for role ${roleName} from database`,
           );
+          this.logger.verbose(
+            `Permissions for ${roleName}: ${permissions.join(', ')}`,
+          );
+          
+          // Log if permissions count seems low
+          if (permissions.length < 80 && roleName.toLowerCase() === 'administrator') {
+            this.logger.warn(
+              `Administrator role has only ${permissions.length} permissions - expected around 85+`,
+            );
+          }
+          
           return permissions;
+        } else {
+          this.logger.warn(
+            `Role ${roleName} found but permissions field is missing or not an array`,
+          );
         }
       }
 
-      // Fallback to default permissions if not found in database
-      const defaultPermissions = this.getDefaultPermissionsForRole(roleName);
-      this.logger.debug(
-        `Using default permissions for role ${roleName}: ${defaultPermissions.join(', ')}`,
+      // Role not found in database - return empty permissions
+      this.logger.warn(
+        `Role ${roleName} not found in database for ${businessId}/${locationId}. No permissions granted.`,
       );
 
-      return defaultPermissions;
+      return [];
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -178,13 +202,8 @@ export class PermissionService {
         `Error getting permissions for role ${roleName}: ${errorMessage}`,
       );
 
-      // Fallback to default permissions on error
-      const defaultPermissions = this.getDefaultPermissionsForRole(roleName);
-      this.logger.debug(
-        `Using default permissions for role ${roleName} due to error: ${defaultPermissions.join(', ')}`,
-      );
-
-      return defaultPermissions;
+      // On error, return empty permissions for security
+      return [];
     }
   }
 
@@ -228,14 +247,16 @@ export class PermissionService {
       this.logger.debug(`Found role ${roleName} for user ${cognitoUserId}`);
 
       // Step 2: Query resursa "roles" using role name
-      // For roles, we need to find by name, so we'll use queryResources with name filter
+      // For roles, we need to find by name, so we'll use queryResources with customFilters
       const roleResources = await this.resourceQueryService.queryResources(
         businessId,
         locationId,
         {
           resourceType: 'role',
           filters: {
-            name: roleName,
+            customFilters: {
+              name: roleName,
+            },
           },
           limit: 1,
         },
@@ -259,7 +280,10 @@ export class PermissionService {
       }
 
       this.logger.debug(
-        `Retrieved permissions for role ${roleName}: ${permissions.join(', ')}`,
+        `Retrieved ${permissions.length} permissions for role ${roleName}`,
+      );
+      this.logger.verbose(
+        `Permissions for ${roleName}: ${permissions.join(', ')}`,
       );
 
       return permissions as Permission[];

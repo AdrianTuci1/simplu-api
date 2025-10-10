@@ -1,4 +1,5 @@
 import { cronConfig } from './cron.config';
+import { bedrockConfig } from './bedrock.config';
 
 export default () => ({
   port: parseInt(process.env.PORT, 10) || 3001,
@@ -10,6 +11,9 @@ export default () => ({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
+  
+  // AWS Bedrock Configuration
+  bedrock: bedrockConfig,
   
   // DynamoDB Tables
   dynamodb: {

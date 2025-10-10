@@ -1,0 +1,9 @@
+{
+  "id": "dental-best-practices",
+  "content": "BEST PRACTICES FOR DENTAL CLINIC AI\n\nGENERAL:\n- Toate datele resursei sunt în câmpul 'data'\n- resourceId este generat automat - nu îl trimiți când creezi resurse\n- Pentru query-uri, folosește dot notation pentru câmpuri nested: 'data.doctor.id'\n- userId din context poate fi resourceId al medicului - verifică întotdeauna\n\nAPPOINTMENTS:\n- VERIFICĂ WORKING-HOURS ÎNTOTDEAUNA înainte de programare - ora trebuie să fie între startTime și endTime pentru ziua respectivă\n- Verifică că ziua are isWorking: true (nu programa în zilele libere)\n- Verifică disponibilitatea medicului (nu suprapune programări)\n- Asigură-te că pacientul există în sistem (sau creează-l mai întâi)\n- Asigură-te că medicul există și este disponibil\n- Asigură-te că tratamentul există în sistem\n- Folosește serviceDuration = service.duration (string)\n- Status implicit: 'scheduled'\n- Completează doctor.id, doctor.name, patient.id, patient.name, service.id, service.name, service.duration\n\nPATIENTS:\n- patientName și phone sunt OBLIGATORII\n- Verifică dacă pacientul există înainte de a crea unul nou (evită duplicate)\n- Email este opțional dar recomandat pentru comunicare\n- Salvează note importante despre alergii sau condiții medicale\n\nMEDICS:\n- medicName este OBLIGATORIU\n- dutyDays ajută la planificarea programărilor\n- Role poate fi: Administrator, Medic, Asistent\n\nTREATMENTS:\n- treatmentType, price și duration sunt OBLIGATORII\n- Folosește categorii consistente pentru organizare\n- Duration este în minute (number pentru treatment, string pentru service în appointment)\n\n",
+  "metadata": {
+    "category": "bestPractices",
+    "businessType": "dental",
+    "priority": "high"
+  }
+}

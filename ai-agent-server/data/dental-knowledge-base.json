@@ -1,0 +1,1160 @@
+{
+  "businessType": "dental",
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-10",
+  
+  "systemInstructions": {
+    "operator": {
+      "role": "operator",
+      "capabilities": {
+        "canAccessAllData": true,
+        "canModifyResources": true,
+        "canViewPersonalInfo": true,
+        "canManageAppointments": true,
+        "canManagePatients": true,
+        "canManageMedics": true,
+        "canManageTreatments": true
+      },
+      "communicationStyle": {
+        "tone": "professional_concise",
+        "maxWords": 50,
+        "language": "formal",
+        "terminology": "medical_correct"
+      },
+      "instructions": "Tu ești un asistent AI specializat pentru operatorii unei clinici dentare. Ai acces complet la toate datele din sistem.\n\nSTIL DE COMUNICARE:\n- Răspunsuri CONCISE (maxim 50 de cuvinte)\n- Profesional și direct\n- Folosește terminologie medicală corectă\n- Oferă informații clare și acționabile\n\nCAPACITĂȚI:\n- Accesezi și listezi toate programările, pacienții, medicii, tratamentele\n- Modifici resurse prin apeluri către funcții frontend\n- Creezi noi programări, pacienți, etc.\n- Gestionezi statusul programărilor și datele pacienților\n\nTOOLS DISPONIBILE:\n- query_app_server: pentru a CITI date (READ-ONLY)\n  * module: 'resources', action: 'list' sau 'get'\n  * resourceType: 'appointment', 'patient', 'medic', 'treatment', etc.\n- call_frontend_function: pentru a MODIFICA date (CREATE/UPDATE/DELETE)\n  * createResource, updateResource, deleteResource, submitForm\n- send_elixir_notification: pentru notificări către frontend\n- broadcast_websocket_message: pentru comunicare în timp real\n\nIMPORTANT:\n- Frontend trimite context când user deschide chat (ce editează, ce formular e deschis)\n- Folosește context-ul pentru modificări precise\n- NU crea drafts - execută acțiuni DIRECT prin call_frontend_function\n- Confirmă fiecare acțiune executată\n\nEXEMPLE:\nQ: \"Câte programări avem astăzi?\"\nA: [query_app_server(resources, list, appointment)] \"Astăzi: 12 programări (8 consultații, 3 tratamente, 1 implant). Prima la 9:00 cu Dr. Popescu.\"\n\nQ: \"Creează programare pentru Ion Popescu mâine la 14:00\"\nA: [call_frontend_function('createResource', {type: 'appointment', data: {...}})] \"Done! Programare creată pentru Ion Popescu, mâine 14:00 cu Dr. Ionescu. Confirmată!\""
+    },
+    "customer": {
+      "role": "customer",
+      "capabilities": {
+        "canAccessAllData": false,
+        "canModifyResources": false,
+        "canViewPersonalInfo": false,
+        "canViewPublicInfo": true,
+        "canRequestAppointments": true
+      },
+      "communicationStyle": {
+        "tone": "friendly_helpful",
+        "maxWords": 150,
+        "language": "informal_polite",
+        "terminology": "simple_accessible"
+      },
+      "instructions": "Tu ești un asistent AI pentru pacienții unei clinici dentare. Ajuți pacienții să găsească informații și să solicite programări.\n\nSTIL DE COMUNICARE:\n- Răspunsuri PRIETENOASE și ÎNCURAJATOARE\n- Limbaj simplu, fără termeni medicali complicați\n- Răbdător și empatic\n- Ghidează pas cu pas\n\nCAPACITĂȚI LIMITATE:\n- Poți oferi informații despre servicii și prețuri\n- Poți verifica disponibilitate\n- NU poți accesa date personale ale altor pacienți\n- Poți răspunde la întrebări generale despre tratamente\n\nTOOLS DISPONIBILE:\n- query_app_server: DOAR patient-booking module\n  * action: 'services', 'slots', 'history'\n  * NU ai acces la resources module\n- Customers NU pot modifica direct, doar solicită\n\nRESTRICȚII:\n- Nu dezvălui niciodată informații despre alți pacienți\n- Nu oferi diagnostice medicale\n- Pentru urgențe, recomandă să sune direct la clinică\n- Folosește DOAR patient-booking module, nu resources\n\nEXEMPLE:\nQ: \"Cât costă un implant?\"\nA: \"Bună ziua! Un implant dentar costă în medie 800 RON și durează aproximativ 2 ore. Include consultație, implantul și verificări ulterioare. Doriți să verificăm disponibilitatea?\"\n\nQ: \"Pot să vin astăzi?\"\nA: [query_app_server(patient-booking, slots)] \"Să verific... Din păcate, astăzi suntem complet programați. Cel mai apropiat loc liber este mâine la 14:00. Vă convine?\""
+    }
+  },
+
+  "resourceStructure": {
+    "baseResource": {
+      "description": "Toate resursele au această structură de bază",
+      "schema": {
+        "id": {
+          "type": "string",
+          "format": "{businessId}-{locationId}-{resourceId}",
+          "description": "ID compus format din businessId-locationId-resourceId",
+          "auto": true
+        },
+        "businessId": {
+          "type": "string",
+          "description": "ID-ul business-ului",
+          "auto": true
+        },
+        "locationId": {
+          "type": "string",
+          "description": "ID-ul locației",
+          "auto": true
+        },
+        "resourceType": {
+          "type": "string",
+          "description": "Tipul resursei (appointment, patient, medic, treatment, etc.)",
+          "required": true
+        },
+        "resourceId": {
+          "type": "string",
+          "description": "ID-ul unic al resursei (ex: apt_123, pa2508-00007, UUID pentru medici)",
+          "auto": true
+        },
+        "data": {
+          "type": "object",
+          "description": "DATELE REALE ale resursei - conținutul variază în funcție de resourceType",
+          "required": true
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        }
+      },
+      "note": "Când creezi/modifici o resursă, TOATE datele merg în câmpul 'data'. resourceId este generat automat de sistem."
+    }
+  },
+
+  "resourceTypes": {
+    "appointment": {
+      "displayName": "Programare",
+      "description": "Programări pentru consultații și tratamente",
+      "resourceIdFormat": "apt_XXXXX sau UUID",
+      "dataSchema": {
+        "date": {
+          "type": "string",
+          "format": "YYYY-MM-DD",
+          "required": true,
+          "description": "Data programării"
+        },
+        "time": {
+          "type": "string",
+          "format": "HH:mm",
+          "required": true,
+          "description": "Ora programării"
+        },
+        "doctor": {
+          "type": "object",
+          "required": true,
+          "properties": {
+            "id": {
+              "type": "string",
+              "required": true,
+              "description": "ID-ul medicului (UUID)"
+            },
+            "name": {
+              "type": "string",
+              "required": true,
+              "description": "Numele complet al medicului"
+            }
+          }
+        },
+        "patient": {
+          "type": "object",
+          "required": true,
+          "properties": {
+            "id": {
+              "type": "string",
+              "required": true,
+              "description": "ID-ul pacientului (format: pa2508-00007)"
+            },
+            "name": {
+              "type": "string",
+              "required": true,
+              "description": "Numele complet al pacientului"
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "required": true,
+          "properties": {
+            "id": {
+              "type": "string",
+              "required": true,
+              "description": "ID-ul serviciului/tratamentului (format: tr2508-00005)"
+            },
+            "name": {
+              "type": "string",
+              "required": true,
+              "description": "Numele tratamentului"
+            },
+            "duration": {
+              "type": "string",
+              "required": true,
+              "description": "Durata în minute (string)"
+            }
+          }
+        },
+        "price": {
+          "type": "number",
+          "required": false,
+          "default": 0,
+          "description": "Prețul programării"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["scheduled", "confirmed", "completed", "cancelled", "no_show"],
+          "default": "scheduled",
+          "description": "Statusul programării"
+        },
+        "serviceDuration": {
+          "type": "string",
+          "required": false,
+          "description": "Durata serviciului în minute (string, copie din service.duration)"
+        },
+        "prescription": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Prescripție medicală"
+        },
+        "postOperativeNotes": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Note post-operatorii"
+        },
+        "images": {
+          "type": "array",
+          "required": false,
+          "default": [],
+          "description": "Array cu imagini (URLs sau referințe)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true,
+          "description": "Data creării (auto-generated)"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true,
+          "description": "Data ultimei actualizări (auto-generated)"
+        }
+      },
+      "fullResourceExample": {
+        "id": "B0100001-L0100001-apt_12345",
+        "businessId": "B0100001",
+        "locationId": "L0100001",
+        "resourceType": "appointment",
+        "resourceId": "apt_12345",
+        "data": {
+          "date": "2025-10-01",
+          "time": "08:40",
+          "doctor": {
+            "id": "33948842-b061-7036-f02f-79b9c0b4225b",
+            "name": "Dr. George Bush"
+          },
+          "patient": {
+            "id": "pa2508-00007",
+            "name": "Cristi Geamanu"
+          },
+          "service": {
+            "id": "tr2508-00005",
+            "name": "Consultatie Ortodontica",
+            "duration": "15"
+          },
+          "price": 0,
+          "status": "scheduled",
+          "serviceDuration": "15",
+          "prescription": "",
+          "postOperativeNotes": "",
+          "images": [],
+          "createdAt": "2025-10-01T01:42:00.176Z",
+          "updatedAt": "2025-10-01T01:42:00.176Z"
+        },
+        "timestamp": "2025-10-01T01:42:00.176Z",
+        "lastUpdated": "2025-10-01T01:42:00.176Z"
+      },
+      "dataFieldExample": {
+        "date": "2025-10-01",
+        "time": "08:40",
+        "doctor": {
+          "id": "33948842-b061-7036-f02f-79b9c0b4225b",
+          "name": "Dr. George Bush"
+        },
+        "patient": {
+          "id": "pa2508-00007",
+          "name": "Cristi Geamanu"
+        },
+        "service": {
+          "id": "tr2508-00005",
+          "name": "Consultatie Ortodontica",
+          "duration": "15"
+        },
+        "price": 0,
+        "status": "scheduled",
+        "serviceDuration": "15",
+        "prescription": "",
+        "postOperativeNotes": "",
+        "images": []
+      },
+      "frontendFunctionExample": {
+        "description": "Când creezi o resursă prin call_frontend_function, trimiți DOAR câmpul 'data'",
+        "functionName": "createResource",
+        "parameters": {
+          "resourceType": "appointment",
+          "data": {
+            "date": "2025-10-20",
+            "time": "14:00",
+            "doctor": {
+              "id": "33948842-b061-7036-f02f-79b9c0b4225b",
+              "name": "Dr. Tucean"
+            },
+            "patient": {
+              "id": "pa2508-00007",
+              "name": "Ion Popescu"
+            },
+            "service": {
+              "id": "tr2508-00005",
+              "name": "Consultatie",
+              "duration": "30"
+            },
+            "price": 150,
+            "status": "scheduled",
+            "serviceDuration": "30"
+          }
+        }
+      }
+    },
+
+    "medic": {
+      "displayName": "Medic/Doctor",
+      "description": "Medici și doctori din clinică",
+      "resourceIdFormat": "UUID (ex: 33948842-b061-7036-f02f-79b9c0b4225b)",
+      "note": "IMPORTANT: resourceId pentru medic este același cu userId din conversație dacă operatorul este medic!",
+      "dataSchema": {
+        "medicName": {
+          "type": "string",
+          "required": true,
+          "description": "Numele medicului"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "required": false,
+          "description": "Email medic"
+        },
+        "phone": {
+          "type": "string",
+          "required": false,
+          "description": "Telefon medic"
+        },
+        "role": {
+          "type": "string",
+          "required": false,
+          "description": "Rol în clinică (Administrator, Medic, etc.)"
+        },
+        "dutyDays": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "description": "Zilele în care medicul este disponibil (Luni, Marți, etc.)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        }
+      },
+      "fullResourceExample": {
+        "id": "B0100001-L0100001-33948842-b061-7036-f02f-79b9c0b4225b",
+        "businessId": "B0100001",
+        "locationId": "L0100001",
+        "resourceType": "medic",
+        "resourceId": "33948842-b061-7036-f02f-79b9c0b4225b",
+        "data": {
+          "medicName": "Tucean",
+          "email": "tucean@test.com",
+          "phone": "0736999960",
+          "role": "Administrator",
+          "dutyDays": ["Luni", "Miercuri", "Vineri"],
+          "createdAt": "2025-10-01T02:13:30.045Z",
+          "updatedAt": "2025-10-01T02:13:30.045Z"
+        },
+        "timestamp": "2025-10-01T02:13:30.045Z",
+        "lastUpdated": "2025-10-01T02:13:30.045Z"
+      },
+      "dataFieldExample": {
+        "medicName": "Tucean",
+        "email": "tucean@test.com",
+        "phone": "0736999960",
+        "role": "Administrator",
+        "dutyDays": ["Luni", "Miercuri", "Vineri"]
+      },
+      "frontendFunctionExample": {
+        "functionName": "createResource",
+        "parameters": {
+          "resourceType": "medic",
+          "data": {
+            "medicName": "Dr. Ionescu",
+            "email": "ionescu@clinica.ro",
+            "phone": "0721234567",
+            "role": "Medic",
+            "dutyDays": ["Luni", "Marți", "Joi", "Vineri"]
+          }
+        }
+      }
+    },
+
+    "patient": {
+      "displayName": "Pacient",
+      "description": "Pacienți ai clinicii",
+      "resourceIdFormat": "paYYMM-XXXXX (ex: pa2508-00007)",
+      "dataSchema": {
+        "patientName": {
+          "type": "string",
+          "required": true,
+          "description": "Numele complet al pacientului"
+        },
+        "phone": {
+          "type": "string",
+          "required": true,
+          "description": "Număr de telefon"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "required": false,
+          "description": "Email pacient"
+        },
+        "gender": {
+          "type": "string",
+          "enum": ["male", "female", "other"],
+          "required": false,
+          "description": "Gen pacient"
+        },
+        "birthYear": {
+          "type": "number",
+          "required": false,
+          "description": "Anul nașterii (ex: 1994)"
+        },
+        "address": {
+          "type": "string",
+          "required": false,
+          "description": "Adresa pacientului"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "inactive"],
+          "default": "active",
+          "description": "Status pacient"
+        },
+        "notes": {
+          "type": "string",
+          "required": false,
+          "default": null,
+          "description": "Note despre pacient"
+        },
+        "tags": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "default": [],
+          "description": "Tag-uri pentru organizare"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        }
+      },
+      "fullResourceExample": {
+        "id": "B0100001-L0100001-pa2508-00007",
+        "businessId": "B0100001",
+        "locationId": "L0100001",
+        "resourceType": "patient",
+        "resourceId": "pa2508-00007",
+        "data": {
+          "patientName": "Drobre Ioana",
+          "phone": "07999999999",
+          "email": "dobre.io@test.com",
+          "gender": "female",
+          "birthYear": 1994,
+          "address": "Iasi",
+          "status": "active",
+          "notes": null,
+          "tags": [],
+          "createdAt": "2025-08-27T21:22:03.358Z",
+          "updatedAt": "2025-08-27T21:22:03.358Z"
+        },
+        "timestamp": "2025-08-27T21:22:03.358Z",
+        "lastUpdated": "2025-08-27T21:22:03.358Z"
+      },
+      "dataFieldExample": {
+        "patientName": "Drobre Ioana",
+        "phone": "07999999999",
+        "email": "dobre.io@test.com",
+        "gender": "female",
+        "birthYear": 1994,
+        "address": "Iasi",
+        "status": "active",
+        "notes": null,
+        "tags": []
+      },
+      "frontendFunctionExample": {
+        "functionName": "createResource",
+        "parameters": {
+          "resourceType": "patient",
+          "data": {
+            "patientName": "Ion Popescu",
+            "phone": "0712345678",
+            "email": "ion.popescu@email.com",
+            "gender": "male",
+            "birthYear": 1985,
+            "address": "București, Sector 1",
+            "status": "active",
+            "notes": "Alergie la penicilină",
+            "tags": ["urgent", "vip"]
+          }
+        }
+      }
+    },
+
+    "treatment": {
+      "displayName": "Tratament/Serviciu",
+      "description": "Tratamente și servicii oferite de clinică",
+      "resourceIdFormat": "trYYMM-XXXXX (ex: tr2508-00005)",
+      "dataSchema": {
+        "treatmentType": {
+          "type": "string",
+          "required": true,
+          "description": "Tipul/numele tratamentului"
+        },
+        "price": {
+          "type": "number",
+          "required": true,
+          "description": "Prețul tratamentului în RON"
+        },
+        "duration": {
+          "type": "number",
+          "required": true,
+          "description": "Durata în minute (number)"
+        },
+        "category": {
+          "type": "string",
+          "required": false,
+          "description": "Categoria tratamentului (ex: Tratamente conservatoare, Chirurgie, etc.)"
+        },
+        "description": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Descriere tratament"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        }
+      },
+      "fullResourceExample": {
+        "id": "B0100001-L0100001-tr2508-00005",
+        "businessId": "B0100001",
+        "locationId": "L0100001",
+        "resourceType": "treatment",
+        "resourceId": "tr2508-00005",
+        "data": {
+          "treatmentType": "Gutieră de protecție",
+          "price": 200,
+          "duration": 15,
+          "category": "Tratamente conservatoare",
+          "description": "",
+          "createdAt": "2025-10-01T02:34:21.010Z",
+          "updatedAt": "2025-10-01T02:34:21.010Z"
+        },
+        "timestamp": "2025-10-01T02:34:21.010Z",
+        "lastUpdated": "2025-10-01T02:34:21.010Z"
+      },
+      "dataFieldExample": {
+        "treatmentType": "Gutieră de protecție",
+        "price": 200,
+        "duration": 15,
+        "category": "Tratamente conservatoare",
+        "description": ""
+      },
+      "commonTreatments": [
+        {
+          "treatmentType": "Consultație",
+          "price": 150,
+          "duration": 30,
+          "category": "Consultații"
+        },
+        {
+          "treatmentType": "Consultație Ortodontică",
+          "price": 200,
+          "duration": 30,
+          "category": "Ortodonție"
+        },
+        {
+          "treatmentType": "Detartraj",
+          "price": 200,
+          "duration": 45,
+          "category": "Igienă dentară"
+        },
+        {
+          "treatmentType": "Tratament endodontic",
+          "price": 400,
+          "duration": 90,
+          "category": "Endodonție"
+        },
+        {
+          "treatmentType": "Implant dentar",
+          "price": 1200,
+          "duration": 120,
+          "category": "Chirurgie"
+        },
+        {
+          "treatmentType": "Albire dentară",
+          "price": 600,
+          "duration": 60,
+          "category": "Estetică"
+        }
+      ],
+      "frontendFunctionExample": {
+        "functionName": "createResource",
+        "parameters": {
+          "resourceType": "treatment",
+          "data": {
+            "treatmentType": "Consultație generală",
+            "price": 150,
+            "duration": 30,
+            "category": "Consultații",
+            "description": "Consultație stomatologică generală cu examinare completă"
+          }
+        }
+      }
+    },
+
+    "setting": {
+      "displayName": "Setări",
+      "description": "Setări și configurații pentru clinică",
+      "resourceIdFormat": "UUID sau string descriptiv",
+      "note": "Resursa setting poate avea multiple tipuri (settingType). Cel mai important: working-hours",
+      "dataSchema": {
+        "settingType": {
+          "type": "string",
+          "required": true,
+          "description": "Tipul setării (working-hours, clinic-info, etc.)",
+          "examples": ["working-hours", "clinic-info", "notification-settings"]
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "Numele setării"
+        },
+        "isActive": {
+          "type": "boolean",
+          "default": true,
+          "description": "Dacă setarea este activă"
+        },
+        "days": {
+          "type": "array",
+          "required": "pentru working-hours",
+          "description": "Program pe zile (pentru working-hours)",
+          "items": {
+            "key": "string (monday, tuesday, etc.)",
+            "name": "string (Luni, Marți, etc.)",
+            "startTime": "string (HH:mm)",
+            "endTime": "string (HH:mm)",
+            "isWorking": "boolean"
+          }
+        },
+        "locationDetails": {
+          "type": "object",
+          "required": false,
+          "description": "Detalii despre locație (pentru working-hours)",
+          "properties": {
+            "name": "string - Numele clinicii",
+            "email": "string - Email contact",
+            "phone": "string - Telefon contact",
+            "address": "string - Adresa completă",
+            "description": "string - Descriere clinică"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        }
+      },
+      "fullResourceExample": {
+        "id": "B0100001-L0100001-st-001",
+        "businessId": "B0100001",
+        "locationId": "L0100001",
+        "resourceType": "setting",
+        "resourceId": "st-001",
+        "data": {
+          "settingType": "working-hours",
+          "name": "Program de funcționare",
+          "isActive": true,
+          "days": [
+            {
+              "key": "monday",
+              "name": "Luni",
+              "startTime": "09:00",
+              "endTime": "17:00",
+              "isWorking": true
+            },
+            {
+              "key": "tuesday",
+              "name": "Marți",
+              "startTime": "09:00",
+              "endTime": "17:00",
+              "isWorking": true
+            },
+            {
+              "key": "wednesday",
+              "name": "Miercuri",
+              "startTime": "09:00",
+              "endTime": "17:00",
+              "isWorking": true
+            },
+            {
+              "key": "thursday",
+              "name": "Joi",
+              "startTime": "09:00",
+              "endTime": "17:00",
+              "isWorking": true
+            },
+            {
+              "key": "friday",
+              "name": "Vineri",
+              "startTime": "09:00",
+              "endTime": "17:00",
+              "isWorking": true
+            },
+            {
+              "key": "saturday",
+              "name": "Sâmbătă",
+              "startTime": "09:00",
+              "endTime": "17:00",
+              "isWorking": false
+            },
+            {
+              "key": "sunday",
+              "name": "Duminică",
+              "startTime": "09:00",
+              "endTime": "17:00",
+              "isWorking": false
+            }
+          ],
+          "locationDetails": {
+            "name": "Cabinet Medical Dr. Popescu",
+            "email": "contact@cabinet.ro",
+            "phone": "+40 21 123 4567",
+            "address": "Str. Mihai Viteazu nr. 10, București",
+            "description": "Cabinet medical specializat în stomatologie generală și estetică"
+          },
+          "createdAt": "2025-10-01T02:00:00.000Z",
+          "updatedAt": "2025-10-01T02:00:00.000Z"
+        },
+        "timestamp": "2025-10-01T02:00:00.000Z",
+        "lastUpdated": "2025-10-01T02:00:00.000Z"
+      },
+      "dataFieldExample": {
+        "settingType": "working-hours",
+        "name": "Program de funcționare",
+        "isActive": true,
+        "days": [
+          {"key": "monday", "name": "Luni", "startTime": "09:00", "endTime": "17:00", "isWorking": true},
+          {"key": "tuesday", "name": "Marți", "startTime": "09:00", "endTime": "17:00", "isWorking": true},
+          {"key": "wednesday", "name": "Miercuri", "startTime": "09:00", "endTime": "17:00", "isWorking": true},
+          {"key": "thursday", "name": "Joi", "startTime": "09:00", "endTime": "17:00", "isWorking": true},
+          {"key": "friday", "name": "Vineri", "startTime": "09:00", "endTime": "17:00", "isWorking": true},
+          {"key": "saturday", "name": "Sâmbătă", "startTime": "09:00", "endTime": "17:00", "isWorking": false},
+          {"key": "sunday", "name": "Duminică", "startTime": "09:00", "endTime": "17:00", "isWorking": false}
+        ],
+        "locationDetails": {
+          "name": "Cabinet Medical Dr. Popescu",
+          "email": "contact@cabinet.ro",
+          "phone": "+40 21 123 4567",
+          "address": "Str. Mihai Viteazu nr. 10, București",
+          "description": "Cabinet medical specializat în stomatologie generală și estetică"
+        }
+      },
+      "usageInstructions": {
+        "purpose": "Setting-ul working-hours este CRUCIAL pentru verificarea disponibilității și programări",
+        "whenToQuery": [
+          "Când pacient/operator întreabă 'La ce oră deschideți?'",
+          "Când verifici dacă o oră este în programul de lucru",
+          "Când creezi o programare nouă - verifică că ora e în interval",
+          "Când răspunzi la întrebări despre program"
+        ],
+        "howToQuery": {
+          "tool": "query_app_server",
+          "parameters": {
+            "module": "resources",
+            "action": "list",
+            "resourceType": "setting",
+            "params": {
+              "data.settingType": "working-hours"
+            }
+          }
+        },
+        "examples": [
+          {
+            "query": "La ce oră deschideți luni?",
+            "steps": [
+              "1. Query setting cu settingType: 'working-hours'",
+              "2. Găsește ziua 'monday' în array-ul days",
+              "3. Verifică isWorking: true/false",
+              "4. Returnează startTime și endTime"
+            ],
+            "response": "Luni deschidem de la 09:00 până la 17:00."
+          },
+          {
+            "query": "Putem programa sâmbătă?",
+            "steps": [
+              "1. Query working-hours",
+              "2. Găsește 'saturday'",
+              "3. Verifică isWorking: false"
+            ],
+            "response": "Din păcate, sâmbăta nu lucrăm. Suntem deschiși Luni-Vineri 09:00-17:00. Vă convine o altă zi?"
+          },
+          {
+            "query": "Programare astăzi la 18:00",
+            "steps": [
+              "1. Identifică ziua curentă",
+              "2. Query working-hours",
+              "3. Verifică că 18:00 > endTime (17:00)",
+              "4. Respinge - în afara programului"
+            ],
+            "response": "Din păcate, ora 18:00 este în afara programului nostru de lucru (09:00-17:00). Avem disponibil mâine la 14:00. Vă convine?"
+          }
+        ]
+      },
+      "frontendFunctionExample": {
+        "note": "Setting-uri sunt de obicei gestionate de administratori, rar modificate prin AI",
+        "functionName": "updateResource",
+        "parameters": {
+          "resourceType": "setting",
+          "resourceId": "working-hours-001",
+          "data": {
+            "days": [
+              {"key": "monday", "name": "Luni", "startTime": "08:00", "endTime": "18:00", "isWorking": true}
+            ]
+          }
+        }
+      }
+    }
+  },
+
+  "contextUsage": {
+    "userId": {
+      "description": "userId din conversație identifică cine vorbește cu AI-ul",
+      "usage": [
+        "Dacă userId este un UUID, probabil este un medic (resourceId la medic)",
+        "Poate identifica medicul curent pentru query-uri personalizate",
+        "Folosește userId pentru a găsi informații despre operatorul curent"
+      ],
+      "examples": [
+        {
+          "scenario": "Operator (care este medic) întreabă 'Când am următorul loc pentru implant?'",
+          "steps": [
+            "1. Extrage userId din context (ex: 33948842-b061-7036-f02f-79b9c0b4225b)",
+            "2. Caută medic cu resourceId === userId",
+            "3. Confirmă că este medic: query_app_server(resources, get, medic, {resourceId: userId})",
+            "4. Caută programări viitoare: query_app_server(resources, list, appointment, {params: {doctor.id: userId, date: future, status: scheduled}})",
+            "5. Găsește prima programare de tip 'implant' în lista sortată"
+          ],
+          "response": "Următorul implant este pe 25 octombrie la 10:00 cu pacientul Ion Popescu."
+        },
+        {
+          "scenario": "Operator întreabă 'Câte programări am astăzi?'",
+          "steps": [
+            "1. Extrage userId din context",
+            "2. Verifică dacă userId corespunde unui medic",
+            "3. Query programări pentru medicul respectiv: params: {date: today, 'data.doctor.id': userId}",
+            "4. Numără rezultatele"
+          ],
+          "response": "Astăzi ai 8 programări: 5 consultații, 2 tratamente endodontice, 1 implant."
+        },
+        {
+          "scenario": "Operator (non-medic) întreabă 'Câte programări avem astăzi?'",
+          "steps": [
+            "1. userId nu corespunde unui medic",
+            "2. Query toate programările: params: {date: today}",
+            "3. Numără rezultatele"
+          ],
+          "response": "Astăzi clinica are 23 programări în total."
+        }
+      ]
+    },
+    "frontendContext": {
+      "description": "Frontend trimite context suplimentar când user deschide chat",
+      "possibleFields": [
+        "editingResource: {type, resourceId}",
+        "openForm: string",
+        "selectedDate: string",
+        "currentView: string"
+      ],
+      "usage": "Folosește context-ul pentru a identifica ce resursă editează user-ul și pentru a face modificări precise"
+    }
+  },
+
+  "queryExamples": {
+    "listAppointmentsToday": {
+      "description": "Listează toate programările de astăzi",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "appointment",
+        "params": {
+          "startDate": "{{today}}",
+          "endDate": "{{today}}"
+        }
+      }
+    },
+    "searchPatient": {
+      "description": "Caută pacient după nume",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "patient",
+        "params": {
+          "name": "{{searchTerm}}"
+        }
+      }
+    },
+    "listMedics": {
+      "description": "Listează toți medicii",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "medic"
+      }
+    },
+    "getTreatments": {
+      "description": "Obține toate tratamentele disponibile",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "treatment"
+      }
+    },
+    "getMyAppointments": {
+      "description": "Obține programările medicului curent (userId din context)",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "appointment",
+        "params": {
+          "data.doctor.id": "{{userId}}",
+          "startDate": "{{today}}",
+          "endDate": "{{today}}"
+        }
+      },
+      "note": "Folosește userId din context ca data.doctor.id pentru filtrare"
+    },
+    "getMedicByUserId": {
+      "description": "Identifică medicul curent bazat pe userId",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "get",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "medic",
+        "resourceId": "{{userId}}"
+      },
+      "note": "userId din context === resourceId pentru medic"
+    },
+    "getWorkingHours": {
+      "description": "Obține programul de funcționare al clinicii",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "setting",
+        "params": {
+          "data.settingType": "working-hours"
+        }
+      },
+      "note": "FOARTE IMPORTANT: Verifică working-hours înainte de a crea programări sau când răspunzi la întrebări despre program",
+      "usage": "Pentru a verifica dacă o oră e în programul de lucru, parsează array-ul days și verifică startTime/endTime pentru ziua respectivă"
+    }
+  },
+
+  "conversationPatterns": {
+    "createAppointment": {
+      "scenario": "User vrea să creeze o programare nouă",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Identifică pacientul",
+          "question": "Pentru cine este programarea? (nume pacient)"
+        },
+        {
+          "step": 2,
+          "action": "Caută pacient în sistem",
+          "tool": "query_app_server",
+          "note": "Dacă nu există, sugerează crearea pacientului mai întâi"
+        },
+        {
+          "step": 3,
+          "action": "Identifică tratamentul",
+          "question": "Ce tratament doriți? (consultație, detartraj, etc.)"
+        },
+        {
+          "step": 4,
+          "action": "Verifică disponibilitate",
+          "tool": "query_app_server",
+          "note": "Listează programările existente pentru data dorită"
+        },
+        {
+          "step": 5,
+          "action": "Selectează medicul",
+          "question": "Cu ce doctor? (sau sugerează pe baza disponibilității)"
+        },
+        {
+          "step": 6,
+          "action": "Creează programarea",
+          "tool": "call_frontend_function",
+          "function": "createResource",
+          "note": "Folosește toate datele colectate"
+        },
+        {
+          "step": 7,
+          "action": "Confirmă crearea",
+          "tool": "send_elixir_notification",
+          "note": "Trimite notificare de succes"
+        }
+      ],
+      "example": "User: 'Programare pentru Ion Popescu mâine la 14:00'\nAI: [caută pacient Ion Popescu] → [găsește] → [verifică disponibilitate mâine 14:00] → [liber] → 'Pentru ce tratament? Avem: consultație (30 min, 150 RON), detartraj (45 min, 200 RON)'\nUser: 'Consultație'\nAI: [call_frontend_function createResource cu toate datele] → 'Perfect! Programare creată pentru Ion Popescu, mâine 20 oct 2025 la 14:00, consultație cu Dr. Tucean. Confirmată!'"
+    },
+    "updateAppointment": {
+      "scenario": "User editează o programare existentă",
+      "context": "Frontend trimite appointmentId în context când user deschide edit form",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Identifică ce să modifice",
+          "examples": ["Schimbă ora la 15:00", "Modifică doctorul", "Schimbă data"]
+        },
+        {
+          "step": 2,
+          "action": "Verifică context din frontend",
+          "note": "appointmentId vine din context"
+        },
+        {
+          "step": 3,
+          "action": "Actualizează programarea",
+          "tool": "call_frontend_function",
+          "function": "updateResource",
+          "note": "Trimite doar câmpurile modificate"
+        },
+        {
+          "step": 4,
+          "action": "Confirmă modificarea",
+          "tool": "send_elixir_notification"
+        }
+      ],
+      "example": "Context: {appointmentId: 'apt_123', editing: 'appointment'}\nUser: 'Schimbă ora la 15:00'\nAI: [call_frontend_function('updateResource', {type: 'appointment', id: 'apt_123', data: {time: '15:00'}})] → 'Done! Programarea e acum la 15:00.'"
+    },
+    "searchAndDisplay": {
+      "scenario": "User caută informații",
+      "examples": [
+        {
+          "query": "Câte programări avem astăzi?",
+          "action": "query_app_server(resources, list, appointment, {date: today})",
+          "response": "Astăzi: 12 programări. 8 consultații, 3 tratamente, 1 implant. Prima la 9:00."
+        },
+        {
+          "query": "Cine este programat mâine cu Dr. Tucean?",
+          "action": "query_app_server(resources, list, appointment, {date: tomorrow, medicId: '...'})",
+          "response": "Mâine Dr. Tucean are 8 pacienți: Ion Popescu (9:00), Maria Ionescu (10:00), ..."
+        },
+        {
+          "query": "Arată-mi pacienții cu numele Popescu",
+          "action": "query_app_server(resources, list, patient, {name: 'Popescu'})",
+          "response": "Am găsit 3 pacienți: 1) Ion Popescu (0712...), 2) Maria Popescu (0723...), 3) ..."
+        }
+      ]
+    }
+  },
+
+  "terminology": {
+    "medical": {
+      "consultație": "Examinare stomatologică generală",
+      "detartraj": "Curățare profesională a dinților, îndepărtare tartru",
+      "tratament endodontic": "Tratament de canal radicular",
+      "implant": "Implant dentar pentru înlocuirea dinților lipsă",
+      "coroană": "Capsulă dentară pentru acoperirea dintelui",
+      "extracție": "Scoaterea unui dinte",
+      "obturație": "Plombă dentară",
+      "albire": "Albire profesională a dinților",
+      "proteza": "Dinte artificial, preteză dentară",
+      "gutieră": "Aparat de protecție pentru dinți",
+      "ortodonție": "Tratamente pentru alinierea dinților (aparate dentare)"
+    },
+    "status": {
+      "scheduled": "Programat - programarea este planificată",
+      "confirmed": "Confirmat - pacientul a confirmat prezența",
+      "completed": "Finalizat - tratamentul a fost efectuat",
+      "cancelled": "Anulat - programarea a fost anulată",
+      "no_show": "Nu s-a prezentat - pacientul nu a venit"
+    }
+  },
+
+    "dataFieldStructure": {
+      "important": "TOATE datele resursei merg în câmpul 'data'. resourceId este generat automat de sistem.",
+      "whenCreating": "call_frontend_function('createResource', {resourceType: '...', data: {...}})",
+      "whenUpdating": "call_frontend_function('updateResource', {resourceType: '...', resourceId: '...', data: {...}})",
+      "whenQuerying": "Filtrezi după câmpuri din 'data' folosind dot notation: 'data.doctor.id', 'data.patientName', etc.",
+      "note": "Nu trimiți businessId, locationId, resourceId, timestamp când creezi - acestea sunt auto-generate"
+    },
+
+  "bestPractices": {
+    "general": [
+      "Toate datele resursei sunt în câmpul 'data'",
+      "resourceId este generat automat - nu îl trimiți când creezi resurse",
+      "Pentru query-uri, folosește dot notation pentru câmpuri nested: 'data.doctor.id'",
+      "userId din context poate fi resourceId al medicului - verifică întotdeauna"
+    ],
+    "appointments": [
+      "VERIFICĂ WORKING-HOURS ÎNTOTDEAUNA înainte de programare - ora trebuie să fie între startTime și endTime pentru ziua respectivă",
+      "Verifică că ziua are isWorking: true (nu programa în zilele libere)",
+      "Verifică disponibilitatea medicului (nu suprapune programări)",
+      "Asigură-te că pacientul există în sistem (sau creează-l mai întâi)",
+      "Asigură-te că medicul există și este disponibil",
+      "Asigură-te că tratamentul există în sistem",
+      "Folosește serviceDuration = service.duration (string)",
+      "Status implicit: 'scheduled'",
+      "Completează doctor.id, doctor.name, patient.id, patient.name, service.id, service.name, service.duration"
+    ],
+    "patients": [
+      "patientName și phone sunt OBLIGATORII",
+      "Verifică dacă pacientul există înainte de a crea unul nou (evită duplicate)",
+      "Email este opțional dar recomandat pentru comunicare",
+      "Salvează note importante despre alergii sau condiții medicale"
+    ],
+    "medics": [
+      "medicName este OBLIGATORIU",
+      "dutyDays ajută la planificarea programărilor",
+      "Role poate fi: Administrator, Medic, Asistent"
+    ],
+    "treatments": [
+      "treatmentType, price și duration sunt OBLIGATORII",
+      "Folosește categorii consistente pentru organizare",
+      "Duration este în minute (number pentru treatment, string pentru service în appointment)"
+    ]
+  }
+}
+

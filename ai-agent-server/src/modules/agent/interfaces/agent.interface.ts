@@ -1,67 +1,12 @@
-// UserCapabilities interface removed - not used in current implementation
+/**
+ * Agent Module Interfaces
+ * 
+ * Interfețe folosite de Agent Service pentru orchestrarea Bedrock Agent
+ */
 
-export interface AgentState {
-  // Core Input
-  businessId: string;
-  locationId: string;
-  userId: string;
-  message: string;
-  sessionId: string;
-  source: 'websocket' | 'webhook' | 'cron';
-  clientSource?: 'meta' | 'twilio' | 'email' | 'web' | 'unknown';
-  role: 'operator' | 'customer';
-  businessType: 'dental' | 'gym' | 'hotel';
-  // Context
-  businessInfo: BusinessInfo | null;
-  sessionMessages?: Array<{
-    content: string;
-    type: 'user' | 'agent' | 'system';
-    timestamp: string;
-  }>;
-  timeContext?: {
-    currentTimestamp: string;
-    currentDate: string;
-    currentTime: string;
-    timezone: string;
-    dayOfWeek: string;
-    isWeekend: boolean;
-    isBusinessHours: boolean;
-  };
-
-  // Operator-specific properties
-  needsFrontendInteraction?: boolean;
-  frontendQueries?: any[];
-  frontendQueryResults?: any[];
-  waitingForFrontendResults?: boolean;
-  drafts?: any[];
-  draft?: any; // Single draft for response
-  needsDraftCreation?: boolean;
-
-  // Customer-specific properties
-  needsAppServerData?: boolean;
-  appServerData?: any;
-  needsDatabaseQuery?: boolean;
-  databaseQueryResults?: any[];
-  needsBookingGuidance?: boolean;
-  bookingGuidance?: any;
-  // Platform-specific user IDs for customer recognition
-  metaUserId?: string;
-  twilioUserId?: string;
-  emailUserId?: string;
-
-  // Output
-  response: string;
-  actions: AgentAction[];
-}
-
-export interface Intent {
-  action: 'rezervare' | 'servicii' | 'clienti' | 'membrii' | 'stock-uri' | 'analiza_date' | 'sms' | 'email' | 'whatsapp';
-  category: 'booking' | 'customer_service' | 'inventory' | 'analysis' | 'communication';
-  confidence: number;
-  canHandleAutonomously: boolean;
-  requiresHumanApproval: boolean;
-}
-
+/**
+ * Webhook Data - date primite de la webhooks externe (Meta, Twilio, Email)
+ */
 export interface WebhookData {
   businessId: string;
   locationId: string;
@@ -72,6 +17,9 @@ export interface WebhookData {
   sessionId?: string;
 }
 
+/**
+ * Autonomous Action Result - rezultatul procesării autonome pentru clienți
+ */
 export interface AutonomousActionResult {
   success: boolean;
   workflowResults: WorkflowStepResult[];
@@ -80,6 +28,9 @@ export interface AutonomousActionResult {
   response?: string;
 }
 
+/**
+ * Workflow Step Result - rezultatul unui pas din workflow
+ */
 export interface WorkflowStepResult {
   step: number;
   action: string;
@@ -88,13 +39,9 @@ export interface WorkflowStepResult {
   timestamp: string;
 }
 
-export interface WorkflowContext {
-  webhookData: WebhookData;
-  businessInfo: BusinessInfo;
-  locationInfo: LocationInfo;
-  intent: Intent;
-}
-
+/**
+ * Business Info - informații despre business
+ */
 export interface BusinessInfo {
   businessId: string;
   businessName: string;
@@ -106,6 +53,9 @@ export interface BusinessInfo {
   updatedAt: string;
 }
 
+/**
+ * Location Info - informații despre o locație
+ */
 export interface LocationInfo {
   locationId: string;
   name: string;
@@ -116,10 +66,12 @@ export interface LocationInfo {
   isActive: boolean;
 }
 
-// RagResult, ResourceOperation, ExternalApiResult interfaces removed - not used in current implementation
-
+/**
+ * Agent Action - acțiune sugerată de agent
+ * Note: Folosit în AgentResponse din message.interface.ts
+ */
 export interface AgentAction {
   type: string;
   status: 'success' | 'failed' | 'pending';
   details: any;
-} 
+}

@@ -649,6 +649,60 @@ export class ResourceQueryService {
 
       this.logger.log(`Found ${resources.length} resources`);
 
+      // Log data size for debugging (especially for roles)
+      for (const resource of resources) {
+        if (resource.resourceType === 'role') {
+          const dataSize = JSON.stringify(resource.data).length;
+          const permissionsCount = Array.isArray(resource.data?.permissions) 
+            ? resource.data.permissions.length 
+            : 0;
+          this.logger.debug(
+            `Role resource extracted from DB (TypeORM): ${resource.data?.name}, data size: ${dataSize} bytes, permissions count: ${permissionsCount}`,
+          );
+
+          // Also run a raw SQL query to compare
+          try {
+            const rawResult = await this.resourceRepository.query(
+              `SELECT 
+                data, 
+                jsonb_array_length(data->'permissions') as permissions_count,
+                octet_length(data::text) as data_size_bytes
+              FROM resources 
+              WHERE business_location_id = $1 
+                AND resource_type = $2 
+                AND resource_id = $3`,
+              [resource.businessLocationId, resource.resourceType, resource.resourceId]
+            );
+            
+            if (rawResult && rawResult.length > 0) {
+              const rawData = rawResult[0];
+              const rawPermissionsCount = rawData.permissions_count;
+              const rawDataSize = rawData.data_size_bytes;
+              const actualPermissionsInRaw = Array.isArray(rawData.data?.permissions) 
+                ? rawData.data.permissions.length 
+                : 0;
+              
+              this.logger.debug(
+                `Role resource via RAW SQL: ${resource.data?.name}, ` +
+                `data size: ${rawDataSize} bytes, ` +
+                `permissions count (jsonb_array_length): ${rawPermissionsCount}, ` +
+                `permissions count (JS array): ${actualPermissionsInRaw}`,
+              );
+
+              if (rawPermissionsCount !== permissionsCount) {
+                this.logger.warn(
+                  `⚠️  PERMISSION COUNT MISMATCH for role ${resource.data?.name}: ` +
+                  `TypeORM extracted ${permissionsCount} but DB has ${rawPermissionsCount}! ` +
+                  `This indicates a data extraction issue.`,
+                );
+              }
+            }
+          } catch (rawError) {
+            this.logger.error(`Error running raw SQL query for comparison: ${rawError.message}`);
+          }
+        }
+      }
+
       // Convert ResourceEntity to ResourceRecord
       return resources.map((resource) => ({
         id: resource.id,
@@ -1006,9 +1060,9 @@ export class ResourceQueryService {
    * Add filter for generic data fields (exact match)
    */
   private addGenericDataFieldFilter(queryBuilder: any, filterKey: string, filterValue: any): void {
-    queryBuilder.andWhere(`resource.data->>:${filterKey} = :${filterKey}Value`, {
-      [filterKey]: filterKey,
-      [`${filterKey}Value`]: filterValue
+    const paramName = `${filterKey}_value`;
+    queryBuilder.andWhere(`resource.data->>'${filterKey}' = :${paramName}`, {
+      [paramName]: filterValue
     });
   }
 

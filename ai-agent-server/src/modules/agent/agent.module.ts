@@ -1,19 +1,17 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { AgentController } from './agent.controller';
-import { SimplifiedRagService } from './rag/simplified-rag.service';
-import { ResourceRagService } from './rag/resource-rag.service';
 import { BusinessInfoModule } from '../business-info/business-info.module';
+import { ToolsModule } from '../tools/tools.module';
 
 @Module({
   imports: [
     BusinessInfoModule,
+    ToolsModule,
   ],
   controllers: [AgentController],
   providers: [
     AgentService,
-    SimplifiedRagService,
-    ResourceRagService,
   ],
   exports: [AgentService],
 })

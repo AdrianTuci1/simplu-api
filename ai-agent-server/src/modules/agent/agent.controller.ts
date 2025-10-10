@@ -27,18 +27,7 @@ export class AgentController {
     return {
       status: 'healthy',
       timestamp: new Date().toISOString(),
-      service: 'Agent Service'
-    };
-  }
-
-  @Get('test-intent/:message')
-  async testIntent(@Param('message') message: string) {
-    // Test endpoint pentru analiza intențiilor
-    const intent = await (this.agentService as any).analyzeIntent(message, 'dental');
-    return {
-      message,
-      intent,
-      timestamp: new Date().toISOString()
+      service: 'Agent Service - Bedrock Integration'
     };
   }
 } 

@@ -24,9 +24,6 @@ export class ElixirHttpService {
     this.logger.log(`Context: ${JSON.stringify(context)}`);
     this.logger.log(`Draft: ${draft ? JSON.stringify(draft) : 'none'}`);
     this.logger.log(`Target URL: ${this.notificationHubUrl}/api/ai-responses`);
-
-    // Process context to extract actions and queries
-    const processedContext = this.processContextForElixir(context);
     
     const requestBody = {
       tenant_id: tenantId,
@@ -34,7 +31,7 @@ export class ElixirHttpService {
       session_id: sessionId,
       message_id: messageId,
       content: content,
-      context: processedContext,
+      context: context || {},
       draft: draft, // Include draft if available
       timestamp: new Date().toISOString(),
       type: 'agent.response'
@@ -66,75 +63,14 @@ export class ElixirHttpService {
       
     } catch (error) {
       this.logger.error('=== Error Sending AI Response ===');
-      this.logger.error(`Message ID: ${messageId}`);
-      this.logger.error(`Error type: ${error.constructor.name}`);
-      this.logger.error(`Error message: ${error.message}`);
       
       if (error.response) {
         this.logger.error(`HTTP Status: ${error.response.status}`);
-        this.logger.error(`Response headers: ${JSON.stringify(error.response.headers)}`);
-        this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
       } else if (error.request) {
         this.logger.error(`Request details: ${JSON.stringify(error.request)}`);
         this.logger.error('No response received from Notification Hub');
       } else {
         this.logger.error(`Error stack: ${error.stack}`);
-      }
-      
-      // Nu aruncăm eroarea pentru că aceasta nu este critică pentru fluxul principal
-      this.logger.warn('Continuing without throwing error - non-critical for main flow');
-    }
-  }
-
-  // Trimite query-uri frontend către Elixir pentru procesare
-  async sendFrontendQueries(tenantId: string, userId: string, sessionId: string, queries: any[], locationId: string = 'default'): Promise<void> {
-    this.logger.log('=== Sending Frontend Queries to Elixir ===');
-    this.logger.log(`Tenant ID: ${tenantId}`);
-    this.logger.log(`User ID: ${userId}`);
-    this.logger.log(`Session ID: ${sessionId}`);
-    this.logger.log(`Location ID: ${locationId}`);
-    this.logger.log(`Queries: ${JSON.stringify(queries)}`);
-    this.logger.log(`Target URL: ${this.notificationHubUrl}/api/frontend-queries`);
-
-    const requestBody = {
-      tenant_id: tenantId,
-      user_id: userId,
-      session_id: sessionId,
-      location_id: locationId,
-      queries: queries,
-      timestamp: new Date().toISOString(),
-      type: 'action' // Simplified to single topic
-    };
-
-    this.logger.log(`Request body: ${JSON.stringify(requestBody)}`);
-
-    try {
-      const startTime = Date.now();
-      
-      const response = await firstValueFrom(
-        this.httpService.post(`${this.notificationHubUrl}/api/frontend-queries`, requestBody, {
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'AI-Agent-Server/1.0'
-          },
-          timeout: 10000 // 10 seconds timeout
-        })
-      );
-      
-      const duration = Date.now() - startTime;
-      
-      this.logger.log('=== Frontend Queries Sent Successfully ===');
-      this.logger.log(`Response status: ${response.status}`);
-      this.logger.log(`Response data: ${JSON.stringify(response.data)}`);
-      this.logger.log(`Request duration: ${duration}ms`);
-      
-    } catch (error) {
-      this.logger.error('=== Error Sending Frontend Queries ===');
-      this.logger.error(`Error: ${error.message}`);
-      
-      if (error.response) {
-        this.logger.error(`HTTP Status: ${error.response.status}`);
-        this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
       }
       
       // Nu aruncăm eroarea pentru că aceasta nu este critică pentru fluxul principal
@@ -214,65 +150,4 @@ export class ElixirHttpService {
       };
     }
   }
-
-  private processContextForElixir(context: any): any {
-    try {
-      // Extract actions from context
-      const actions = context.actions || [];
-      
-      // Process each action to extract relevant data
-      const processedActions = actions.map(action => {
-        switch (action.type) {
-          case 'view_data':
-            return {
-              type: 'view_data',
-              title: action.title,
-              data: action.data || []
-            };
-          case 'work_with_drafts':
-            return {
-              type: 'work_with_drafts',
-              title: action.title,
-              data: action.data || []
-            };
-          case 'modify_queries':
-            return {
-              type: 'modify_queries',
-              title: action.title,
-              data: action.data || []
-            };
-          default:
-            return {
-              type: action.type || 'unknown',
-              title: action.title || 'Unknown Action',
-              data: action.data || []
-            };
-        }
-      });
-
-      // Return processed context
-      return {
-        actions: processedActions,
-        aiProcessing: context.aiProcessing || false,
-        source: context.source || 'websocket',
-        businessId: context.businessId,
-        locationId: context.locationId,
-        sessionId: context.sessionId,
-        userId: context.userId,
-        timestamp: context.timestamp || new Date().toISOString()
-      };
-    } catch (error) {
-      this.logger.error('Error processing context for Elixir:', error);
-      return {
-        actions: [],
-        aiProcessing: false,
-        source: 'websocket',
-        businessId: context.businessId,
-        locationId: context.locationId,
-        sessionId: context.sessionId,
-        userId: context.userId,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-} 
+}

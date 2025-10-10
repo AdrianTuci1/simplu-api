@@ -216,6 +216,13 @@ services:
       - RDS_SYNCHRONIZE=${RDS_SYNCHRONIZE:-true}
       - RDS_LOGGING=${RDS_LOGGING:-true}
 
+      # AWS Bedrock Configuration
+      - BEDROCK_AGENT_ID=${BEDROCK_AGENT_ID}
+      - BEDROCK_AGENT_ALIAS_ID=${BEDROCK_AGENT_ALIAS_ID}
+      - BEDROCK_KNOWLEDGE_BASE_ID=${BEDROCK_KNOWLEDGE_BASE_ID}
+      - AWS_BEDROCK_REGION=${AWS_BEDROCK_REGION:-us-east-1}
+      - BEDROCK_ENABLE_TRACE=${BEDROCK_ENABLE_TRACE:-true}
+
       
       # Logging Configuration
       - LOG_LEVEL=${LOG_LEVEL:-info}
