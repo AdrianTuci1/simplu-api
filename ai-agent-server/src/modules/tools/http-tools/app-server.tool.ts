@@ -26,23 +26,34 @@ export class AppServerTool implements ToolExecutor {
   getDefinition(): ToolDefinition {
     return {
       name: 'query_app_server',
-      description: `READ-ONLY queries to app server. For modifications use call_frontend_function instead.
+      description: `READ-ONLY queries to app server for real-time business data. For modifications use call_frontend_function.
+
+USE THIS TOOL FOR:
+- Services and treatments information
+- Appointments (list, get details)
+- Patients data
+- Medics/doctors information
+- Available time slots
+- Appointment history
+
+MODULES:
 
 1. PATIENT-BOOKING (for customers/patients):
-   - Get available services (treatments offered)
-   - Check time slots availability for specific date
-   - View appointment history (requires access code)
-   Routes: /patient-booking/services, /slots/:date, /appointments/history
-   Note: For detailed medic/treatment info, use resources module with resourceType
+   - Check time slots for a specific date
+   Actions: services, slots, history
 
 2. RESOURCES (for operators):
-   - List resources (appointments, patients, treatments, medics, etc.)
-   - Get specific resource details
-   - Requires X-Resource-Type header
-   - Requires authentication
-   Routes: /resources/{businessId}-{locationId}
-   
-IMPORTANT: This tool is READ-ONLY. Use call_frontend_function for create/update/delete operations.`,
+   - List any resource type (appointment, patient, treatment, medic, service, etc.)
+   - Get specific resource details by ID
+   - Requires resourceType parameter
+   Actions: list, get
+
+EXAMPLES:
+- "What services do we offer?" → module: "resources", action: "treatment", resourceType: "treatment"
+- "List appointments" → module: "resources", action: "list", resourceType: "appointment"
+- "Get patient details" → module: "resources", action: "get", resourceType: "patient", resourceId: "123"
+
+IMPORTANT: This is READ-ONLY. Use call_frontend_function for create/update/delete.`,
       inputSchema: {
         json: {
           type: 'object',
@@ -89,6 +100,10 @@ IMPORTANT: This tool is READ-ONLY. Use call_frontend_function for create/update/
 
   async execute(input: ToolInput): Promise<ToolResult> {
     const { parameters, context } = input;
+    
+    this.logger.log(`📋 AppServerTool received parameters: ${JSON.stringify(parameters, null, 2)}`);
+    this.logger.log(`📋 AppServerTool context: ${JSON.stringify(context, null, 2)}`);
+    
     const { 
       module, 
       action, 
@@ -103,6 +118,8 @@ IMPORTANT: This tool is READ-ONLY. Use call_frontend_function for create/update/
     try {
       const targetBusinessId = businessId || context.businessId;
       const targetLocationId = locationId || context.locationId;
+      
+      this.logger.log(`📋 Target businessId: ${targetBusinessId}, locationId: ${targetLocationId}`);
 
       // Build URL based on module
       let url: string;
@@ -185,19 +202,47 @@ IMPORTANT: This tool is READ-ONLY. Use call_frontend_function for create/update/
         };
       }
 
-      this.logger.log(`📡 Querying ${module}: ${method} ${url}`);
+      // Build query string manually with correct order (startDate first, then endDate)
+      let finalUrl = url;
+      if (params && Object.keys(params).length > 0) {
+        const queryParts: string[] = [];
+        
+        // startDate must be first if present
+        if (params.startDate !== undefined && params.startDate !== null) {
+          queryParts.push(`startDate=${encodeURIComponent(String(params.startDate))}`);
+        }
+        
+        // endDate must be second if present
+        if (params.endDate !== undefined && params.endDate !== null) {
+          queryParts.push(`endDate=${encodeURIComponent(String(params.endDate))}`);
+        }
+        
+        // Add all other params
+        for (const [key, value] of Object.entries(params)) {
+          if (key !== 'startDate' && key !== 'endDate' && value !== undefined && value !== null) {
+            queryParts.push(`${key}=${encodeURIComponent(String(value))}`);
+          }
+        }
+        
+        if (queryParts.length > 0) {
+          finalUrl += '?' + queryParts.join('&');
+        }
+      }
+
+      this.logger.log(`📡 Querying ${module}: ${method} ${finalUrl}`);
+      this.logger.log(`📋 Query params: ${JSON.stringify(params)}`);
 
       const config = {
         method: 'get', // Always GET (read-only)
-        url,
+        url: finalUrl,
         headers,
-        params: params || undefined,
         timeout: 30000,
       };
 
       const response = await axios(config);
 
       this.logger.log(`✅ App server query successful: ${response.status}`);
+      this.logger.log(`📊 Response data size: ${JSON.stringify(response.data).length} chars`);
 
       return {
         success: true,

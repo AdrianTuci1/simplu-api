@@ -1,0 +1,90 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Frontend Interaction Tools API",
+    "version": "1.0.0",
+    "description": "Tools for calling frontend functions that handle API operations"
+  },
+  "paths": {
+    "/call_frontend_function": {
+      "post": {
+        "summary": "Call JavaScript functions in the frontend",
+        "description": "Call JavaScript functions in the frontend that handle API operations. The frontend sends context with each message (current menu, edited resource). Based on conversation, AI calls frontend functions to complete actions. Common functions: createResource, updateResource, deleteResource, submitForm, navigateTo, selectResource, closeModal",
+        "operationId": "call_frontend_function",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "functionName"
+                ],
+                "properties": {
+                  "functionName": {
+                    "type": "string",
+                    "description": "Function to call in frontend (createResource, updateResource, deleteResource, submitForm, navigateTo, selectResource, closeModal, etc.)"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "description": "Parameters to pass to the function",
+                    "properties": {
+                      "resourceType": {
+                        "type": "string",
+                        "description": "Resource type (appointment, patient, treatment, medic, service, etc.)"
+                      },
+                      "resourceId": {
+                        "type": "string",
+                        "description": "Resource ID (for update, delete, select)"
+                      },
+                      "data": {
+                        "type": "object",
+                        "description": "Data to create or update (resource fields)"
+                      },
+                      "view": {
+                        "type": "string",
+                        "description": "View to navigate to (appointments, patients, calendar, etc.)"
+                      }
+                    }
+                  },
+                  "businessId": {
+                    "type": "string",
+                    "description": "Business ID"
+                  },
+                  "locationId": {
+                    "type": "string",
+                    "description": "Location ID"
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "description": "Session ID"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Function call sent to frontend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

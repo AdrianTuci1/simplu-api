@@ -29,9 +29,10 @@ async function prepareDentalKnowledgeBase() {
     // 1. System Instructions (operator & customer)
     console.log('📝 Processing System Instructions...');
     if (data.systemInstructions) {
-      const operatorDoc = await createDocument(
+      const operatorContent = formatSystemInstructions('operator', data.systemInstructions.operator);
+      await createDocument(
         'dental-operator-instructions',
-        data.systemInstructions.operator.instructions,
+        operatorContent,
         {
           category: 'systemInstructions',
           businessType: 'dental',
@@ -41,9 +42,10 @@ async function prepareDentalKnowledgeBase() {
       );
       totalDocs++;
 
-      const customerDoc = await createDocument(
+      const customerContent = formatSystemInstructions('customer', data.systemInstructions.customer);
+      await createDocument(
         'dental-customer-instructions',
-        data.systemInstructions.customer.instructions,
+        customerContent,
         {
           category: 'systemInstructions',
           businessType: 'dental',
@@ -56,7 +58,41 @@ async function prepareDentalKnowledgeBase() {
       console.log(`✅ Created 2 System Instruction documents`);
     }
 
-    // 2. Resource Schemas
+    // 2. Resource Structure (Base Resource)
+    console.log('\n📝 Processing Resource Structure...');
+    if (data.resourceStructure) {
+      const structureContent = formatResourceStructure(data.resourceStructure);
+      await createDocument(
+        'dental-resource-structure',
+        structureContent,
+        {
+          category: 'resourceStructure',
+          businessType: 'dental',
+          priority: 'critical'
+        }
+      );
+      totalDocs++;
+      console.log(`✅ Created Resource Structure document`);
+    }
+
+    // 3. Data Field Structure
+    console.log('\n📝 Processing Data Field Structure...');
+    if (data.dataFieldStructure) {
+      const dataFieldContent = formatDataFieldStructure(data.dataFieldStructure);
+      await createDocument(
+        'dental-data-field-structure',
+        dataFieldContent,
+        {
+          category: 'dataFieldStructure',
+          businessType: 'dental',
+          priority: 'critical'
+        }
+      );
+      totalDocs++;
+      console.log(`✅ Created Data Field Structure document`);
+    }
+
+    // 4. Resource Schemas
     console.log('\n📝 Processing Resource Schemas...');
     if (data.resourceTypes) {
       for (const [resourceType, schema] of Object.entries(data.resourceTypes)) {
@@ -76,7 +112,7 @@ async function prepareDentalKnowledgeBase() {
       console.log(`✅ Created ${Object.keys(data.resourceTypes).length} Resource Schema documents`);
     }
 
-    // 3. Context Usage
+    // 5. Context Usage
     console.log('\n📝 Processing Context Usage...');
     if (data.contextUsage) {
       const contextContent = formatContextUsage(data.contextUsage);
@@ -93,7 +129,7 @@ async function prepareDentalKnowledgeBase() {
       console.log(`✅ Created Context Usage document`);
     }
 
-    // 4. Query Examples
+    // 6. Query Examples
     console.log('\n📝 Processing Query Examples...');
     if (data.queryExamples) {
       const queryContent = formatQueryExamples(data.queryExamples);
@@ -110,7 +146,7 @@ async function prepareDentalKnowledgeBase() {
       console.log(`✅ Created Query Examples document`);
     }
 
-    // 5. Conversation Patterns
+    // 7. Conversation Patterns
     console.log('\n📝 Processing Conversation Patterns...');
     if (data.conversationPatterns) {
       const patternContent = formatConversationPatterns(data.conversationPatterns);
@@ -127,7 +163,7 @@ async function prepareDentalKnowledgeBase() {
       console.log(`✅ Created Conversation Patterns document`);
     }
 
-    // 6. Terminology
+    // 8. Terminology
     console.log('\n📝 Processing Terminology...');
     if (data.terminology) {
       const termContent = formatTerminology(data.terminology);
@@ -144,7 +180,7 @@ async function prepareDentalKnowledgeBase() {
       console.log(`✅ Created Terminology document`);
     }
 
-    // 7. Best Practices
+    // 9. Best Practices
     console.log('\n📝 Processing Best Practices...');
     if (data.bestPractices) {
       const practicesContent = formatBestPractices(data.bestPractices);
@@ -204,6 +240,83 @@ async function createDocument(id, content, metadata) {
 }
 
 /**
+ * Format system instructions to text
+ */
+function formatSystemInstructions(role, data) {
+  let content = `SYSTEM INSTRUCTIONS FOR: ${role.toUpperCase()}\n\n`;
+  
+  if (data.role) {
+    content += `Role: ${data.role}\n\n`;
+  }
+
+  if (data.capabilities) {
+    content += `CAPABILITIES:\n`;
+    content += JSON.stringify(data.capabilities, null, 2);
+    content += `\n\n`;
+  }
+
+  if (data.communicationStyle) {
+    content += `COMMUNICATION STYLE:\n`;
+    content += JSON.stringify(data.communicationStyle, null, 2);
+    content += `\n\n`;
+  }
+
+  if (data.instructions) {
+    content += `INSTRUCTIONS:\n${data.instructions}\n`;
+  }
+
+  return content;
+}
+
+/**
+ * Format resource structure to text
+ */
+function formatResourceStructure(resourceStructure) {
+  let content = `BASE RESOURCE STRUCTURE\n\n`;
+  
+  if (resourceStructure.baseResource) {
+    content += `Description: ${resourceStructure.baseResource.description}\n\n`;
+    content += `SCHEMA:\n`;
+    content += JSON.stringify(resourceStructure.baseResource.schema, null, 2);
+    
+    if (resourceStructure.baseResource.note) {
+      content += `\n\nIMPORTANT NOTE:\n${resourceStructure.baseResource.note}\n`;
+    }
+  }
+
+  return content;
+}
+
+/**
+ * Format data field structure to text
+ */
+function formatDataFieldStructure(dataFieldStructure) {
+  let content = `DATA FIELD STRUCTURE GUIDE\n\n`;
+  
+  if (dataFieldStructure.important) {
+    content += `IMPORTANT: ${dataFieldStructure.important}\n\n`;
+  }
+
+  if (dataFieldStructure.whenCreating) {
+    content += `WHEN CREATING:\n${dataFieldStructure.whenCreating}\n\n`;
+  }
+
+  if (dataFieldStructure.whenUpdating) {
+    content += `WHEN UPDATING:\n${dataFieldStructure.whenUpdating}\n\n`;
+  }
+
+  if (dataFieldStructure.whenQuerying) {
+    content += `WHEN QUERYING:\n${dataFieldStructure.whenQuerying}\n\n`;
+  }
+
+  if (dataFieldStructure.note) {
+    content += `NOTE:\n${dataFieldStructure.note}\n`;
+  }
+
+  return content;
+}
+
+/**
  * Format resource schema to text
  */
 function formatResourceSchema(resourceType, schema) {
@@ -228,6 +341,11 @@ function formatResourceSchema(resourceType, schema) {
   if (schema.commonTreatments) {
     content += `\n\nCOMMON TREATMENTS:\n`;
     content += JSON.stringify(schema.commonTreatments, null, 2);
+  }
+  
+  if (schema.usageInstructions) {
+    content += `\n\nUSAGE INSTRUCTIONS:\n`;
+    content += JSON.stringify(schema.usageInstructions, null, 2);
   }
 
   return content;
@@ -373,6 +491,8 @@ async function createMetadataFile(totalDocs) {
     totalDocuments: totalDocs,
     categories: [
       'systemInstructions',
+      'resourceStructure',
+      'dataFieldStructure',
       'resourceSchemas', 
       'contextUsage',
       'queryExamples',

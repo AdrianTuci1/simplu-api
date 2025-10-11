@@ -55,13 +55,15 @@ export class ToolsService implements OnModuleInit {
 
   /**
    * Procesează un mesaj prin Bedrock Agent
+   * @param previousSessionState - State-ul Bedrock din apelul anterior (pentru multi-turn conversations)
    */
   async processMessage(
     message: string,
     context: ToolContext,
     sessionId?: string,
+    previousSessionState?: any,
   ): Promise<BedrockInvocationResult> {
-    return this.bedrockAgentService.invokeAgent(message, context, sessionId);
+    return this.bedrockAgentService.invokeAgent(message, context, sessionId, previousSessionState);
   }
 
   /**

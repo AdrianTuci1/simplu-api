@@ -1,0 +1,9 @@
+{
+  "id": "dental-data-field-structure",
+  "content": "DATA FIELD STRUCTURE GUIDE\n\nIMPORTANT: TOATE datele resursei merg în câmpul 'data'. resourceId este generat automat de sistem.\n\nWHEN CREATING:\ncall_frontend_function('createResource', {resourceType: '...', data: {...}})\n\nWHEN UPDATING:\ncall_frontend_function('updateResource', {resourceType: '...', resourceId: '...', data: {...}})\n\nWHEN QUERYING:\nFiltrezi după câmpuri din 'data' folosind dot notation: 'data.doctor.id', 'data.patientName', etc.\n\nNOTE:\nNu trimiți businessId, locationId, resourceId, timestamp când creezi - acestea sunt auto-generate\n",
+  "metadata": {
+    "category": "dataFieldStructure",
+    "businessType": "dental",
+    "priority": "critical"
+  }
+}

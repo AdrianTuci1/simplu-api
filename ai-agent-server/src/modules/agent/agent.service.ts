@@ -6,6 +6,7 @@ import {
 import { MessageDto, AgentResponse } from '@/shared/interfaces/message.interface';
 import { BusinessInfoService } from '../business-info/business-info.service';
 import { ToolsService } from '../tools/tools.service';
+import { SessionService } from '../session/session.service';
 import { ToolContext } from '../tools/interfaces';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class AgentService {
   constructor(
     private readonly businessInfoService: BusinessInfoService,
     private readonly toolsService: ToolsService,
+    private readonly sessionService: SessionService,
   ) {
     this.logger.log('🤖 Agent Service starting - AWS Bedrock with Tools Architecture');
   }
@@ -40,11 +42,15 @@ export class AgentService {
 
       this.logger.log(`📨 Processing operator message for session: ${toolContext.sessionId}`);
 
+      // Retrieve previous Bedrock session state (for multi-turn conversations)
+      const previousSessionState = await this.sessionService.getBedrockSessionState(toolContext.sessionId);
+
       // Invoke Bedrock Agent with the message
       const bedrockResult = await this.toolsService.processMessage(
         data.message,
         toolContext,
         toolContext.sessionId,
+        previousSessionState, // Pass previous state for context continuity
       );
 
       const executionTime = Date.now() - startTime;
@@ -60,6 +66,14 @@ export class AgentService {
           timestamp: new Date().toISOString(),
           sessionId: toolContext.sessionId,
         };
+      }
+
+      // Save updated session state from Bedrock for next invocation
+      if (bedrockResult.sessionState) {
+        await this.sessionService.updateBedrockSessionState(
+          toolContext.sessionId,
+          bedrockResult.sessionState
+        );
       }
 
       return {
@@ -107,11 +121,15 @@ export class AgentService {
 
       this.logger.log(`📨 Processing customer webhook message for session: ${toolContext.sessionId}`);
 
+      // Retrieve previous Bedrock session state (for multi-turn conversations)
+      const previousSessionState = await this.sessionService.getBedrockSessionState(toolContext.sessionId);
+
       // Invoke Bedrock Agent with the message
       const bedrockResult = await this.toolsService.processMessage(
         webhookData.message,
         toolContext,
         toolContext.sessionId,
+        previousSessionState, // Pass previous state for context continuity
       );
 
       const executionTime = Date.now() - startTime;
@@ -133,6 +151,14 @@ export class AgentService {
           shouldRespond: true,
           response: 'Ne pare rău, am întâmpinat o problemă tehnică. Te rugăm să încerci din nou.'
         };
+      }
+
+      // Save updated session state from Bedrock for next invocation
+      if (bedrockResult.sessionState) {
+        await this.sessionService.updateBedrockSessionState(
+          toolContext.sessionId,
+          bedrockResult.sessionState
+        );
       }
 
       return {

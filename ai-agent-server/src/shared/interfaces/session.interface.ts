@@ -10,6 +10,7 @@ export interface Session {
   metadata: {
     businessType: string;
     context: any;
+    bedrockSessionState?: any;  // State returnat de Bedrock Agent pentru persistență
   };
 }
 

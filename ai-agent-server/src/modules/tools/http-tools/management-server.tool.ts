@@ -19,7 +19,25 @@ export class ManagementServerTool implements ToolExecutor {
   getDefinition(): ToolDefinition {
     return {
       name: 'query_management_server',
-      description: 'Queries the management server for business configuration, settings, subscriptions, invitations, and administrative data. Use this when you need to access or modify business-level settings.',
+      description: `Query management server for business CONFIGURATION and SETTINGS only.
+
+DO NOT USE THIS FOR:
+- Services/treatments (use query_app_server with module: patient-booking)
+- Appointments (use query_app_server with module: resources, resourceType: appointment)
+- Patients (use query_app_server)
+- Medics (use query_app_server)
+
+USE THIS ONLY FOR:
+- Business configuration and settings
+- Subscription information
+- User invitations
+- Administrative data
+- Business hours and policies
+
+EXAMPLES:
+- "What are the business settings?" → endpoint: "/api/businesses/{id}"
+- "Check subscription status" → endpoint: "/api/subscriptions"
+- "Get invited users" → endpoint: "/api/invitations"`,
       inputSchema: {
         json: {
           type: 'object',

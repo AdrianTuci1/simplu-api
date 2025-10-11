@@ -177,6 +177,59 @@ export class SessionService {
     });
   }
 
+  /**
+   * Update Bedrock session state pentru persistență între apeluri
+   */
+  async updateBedrockSessionState(
+    sessionId: string,
+    bedrockSessionState: any
+  ): Promise<void> {
+    try {
+      console.log(`🔧 SessionService: Updating Bedrock session state for ${sessionId}`);
+      
+      const session = await this.getSession(sessionId);
+      if (!session) {
+        console.warn(`⚠️ SessionService: Session ${sessionId} not found, skipping state update`);
+        return;
+      }
+
+      // Update metadata with new bedrockSessionState
+      const updatedMetadata = {
+        ...session.metadata,
+        bedrockSessionState,
+      };
+
+      await this.updateSession(sessionId, {
+        metadata: updatedMetadata,
+        updatedAt: new Date().toISOString(),
+      });
+
+      console.log(`✅ SessionService: Bedrock session state updated for ${sessionId}`);
+    } catch (error) {
+      console.error('❌ SessionService: Error updating Bedrock session state:', error);
+      // Don't throw - this shouldn't break the conversation flow
+    }
+  }
+
+  /**
+   * Retrieve Bedrock session state pentru next apel
+   */
+  async getBedrockSessionState(sessionId: string): Promise<any | null> {
+    try {
+      const session = await this.getSession(sessionId);
+      if (!session?.metadata?.bedrockSessionState) {
+        console.log(`🔧 SessionService: No Bedrock session state found for ${sessionId}`);
+        return null;
+      }
+
+      console.log(`✅ SessionService: Retrieved Bedrock session state for ${sessionId}`);
+      return session.metadata.bedrockSessionState;
+    } catch (error) {
+      console.error('❌ SessionService: Error retrieving Bedrock session state:', error);
+      return null;
+    }
+  }
+
   async saveMessage(message: Message): Promise<void> {
     try {
       console.log(`🔧 SessionService: Saving message to DynamoDB table: ${tableNames.messages}`);
