@@ -6,6 +6,14 @@ import { Pool } from 'pg';
 export class ResourceIdService {
     private readonly logger = new Logger(ResourceIdService.name);
 
+    // Explicit mapping only for resource types that would conflict
+    // e.g., "invoice" and "invoice-client" would both be "in" without this
+    // Default behavior: first 2 chars of resource type
+    private readonly TYPE_PREFIX_MAP: Record<string, string> = {
+        'invoice-client': 'ic',
+        'invoice-supplier': 'is',
+    };
+
     constructor(private readonly configService: ConfigService) {}
 
     /**
@@ -27,8 +35,8 @@ export class ResourceIdService {
         const year = now.getFullYear().toString().slice(-2); // Last 2 digits
         const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Month with leading zero
         
-        // Get first 2 letters of resource type (or first letter if only 1 character)
-        const typePrefix = resourceType.slice(0, 2).toLowerCase();
+        // Get type prefix using mapping or fallback strategy
+        const typePrefix = this.getTypePrefix(resourceType);
         
         // Base ID pattern
         const baseId = `${typePrefix}${year}${month}`;
@@ -50,6 +58,20 @@ export class ResourceIdService {
         this.logger.log(`Generated resource ID: ${resourceId} for type: ${resourceType}`);
         
         return resourceId;
+    }
+
+    /**
+     * Get the type prefix for a resource type.
+     * Checks the explicit mapping first, otherwise uses first 2 chars.
+     */
+    private getTypePrefix(resourceType: string): string {
+        // Check if there's an explicit mapping
+        if (this.TYPE_PREFIX_MAP[resourceType]) {
+            return this.TYPE_PREFIX_MAP[resourceType];
+        }
+        
+        // Default: first 2 characters
+        return resourceType.slice(0, 2).toLowerCase();
     }
 
     /**
@@ -130,7 +152,7 @@ export class ResourceIdService {
             }
             
             // Validate type prefix matches resource type
-            const expectedPrefix = resourceType.slice(0, 2).toLowerCase();
+            const expectedPrefix = this.getTypePrefix(resourceType);
             if (typePrefix !== expectedPrefix) {
                 return false;
             }

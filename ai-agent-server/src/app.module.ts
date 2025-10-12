@@ -11,6 +11,7 @@ import { ExternalApisModule } from './modules/external-apis/external-apis.module
 import { CredentialsModule } from './modules/external-apis/credentials/credentials.module';
 import { CronModule } from './modules/cron/cron.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { RatingModule } from './modules/rating/rating.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -29,6 +30,7 @@ import configuration from './config/configuration';
     CredentialsModule,
     CronModule,
     MessagesModule,
+    RatingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

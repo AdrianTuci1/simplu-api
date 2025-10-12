@@ -48,14 +48,16 @@ export class PatientBookingController {
   @ApiQuery({ name: 'from', required: true, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'to', required: true, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'serviceId', required: false })
+  @ApiQuery({ name: 'medicId', required: false })
   async getAvailableDates(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('serviceId') serviceId?: string,
+    @Query('medicId') medicId?: string,
   ) {
-    return this.bookingService.getAvailableDates(businessId, locationId, from, to, serviceId);
+    return this.bookingService.getAvailableDates(businessId, locationId, from, to, serviceId, medicId);
   }
 
   @Get('day-slots/:businessId-:locationId/:date')
@@ -65,13 +67,15 @@ export class PatientBookingController {
   @ApiParam({ name: 'locationId' })
   @ApiParam({ name: 'date', description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'serviceId', required: false })
+  @ApiQuery({ name: 'medicId', required: false })
   async getDaySlots(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Param('date') date: string,
     @Query('serviceId') serviceId?: string,
+    @Query('medicId') medicId?: string,
   ) {
-    return this.bookingService.getDaySlots(businessId, locationId, date, serviceId);
+    return this.bookingService.getDaySlots(businessId, locationId, date, serviceId, medicId);
   }
 
   @Post('reserve/:businessId-:locationId')
@@ -197,6 +201,63 @@ export class PatientBookingController {
     },
   ) {
     return this.bookingService.modifyScheduledAppointment(businessId, locationId, appointmentId, payload);
+  }
+
+  @Get('rating/:businessId-:locationId/:token')
+  @Public()
+  @ApiOperation({ summary: 'Verify rating token and get appointment details' })
+  @ApiParam({ name: 'businessId' })
+  @ApiParam({ name: 'locationId' })
+  @ApiParam({ name: 'token' })
+  async verifyRatingToken(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('token') token: string,
+  ) {
+    return this.bookingService.verifyRatingToken(businessId, locationId, token);
+  }
+
+  @Post('rating/:businessId-:locationId/:token/submit')
+  @Public()
+  @ApiOperation({ summary: 'Submit rating for completed appointment' })
+  @ApiParam({ name: 'businessId' })
+  @ApiParam({ name: 'locationId' })
+  @ApiParam({ name: 'token' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        score: { type: 'number', minimum: 1, maximum: 5, description: 'Rating score (1-5 stars)' },
+        comment: { type: 'string', description: 'Optional comment' },
+        categories: {
+          type: 'object',
+          properties: {
+            service: { type: 'number', minimum: 1, maximum: 5 },
+            cleanliness: { type: 'number', minimum: 1, maximum: 5 },
+            staff: { type: 'number', minimum: 1, maximum: 5 },
+            waitTime: { type: 'number', minimum: 1, maximum: 5 },
+          },
+        },
+      },
+      required: ['score'],
+    },
+  })
+  async submitRating(
+    @Param('businessId') businessId: string,
+    @Param('locationId') locationId: string,
+    @Param('token') token: string,
+    @Body() ratingData: {
+      score: number;
+      comment?: string;
+      categories?: {
+        service?: number;
+        cleanliness?: number;
+        staff?: number;
+        waitTime?: number;
+      };
+    },
+  ) {
+    return this.bookingService.submitRating(businessId, locationId, token, ratingData);
   }
 
   @Get('plan/:businessId-:locationId')

@@ -20,6 +20,13 @@ export interface ExternalApiConfig {
     reminderTiming: 'day_before' | 'same_day' | 'both';
     serviceType: 'gmail' | 'smtp';
   };
+  rating?: {
+    enabled: boolean;
+    sendOnCompletion: boolean;
+    defaultTemplate: string;
+    templates: any[];
+    allowAnonymous: boolean;
+  };
   createdAt: string;
   updatedAt: string;
   version: number;

@@ -27,6 +27,7 @@ export const VALID_RESOURCE_TYPES = [
   'setting', // Settings
   'invoice-client',
   'invoice',
+  'rating', // Appointment ratings
 
   // Statistics resource types
   'statistics', // General business statistics

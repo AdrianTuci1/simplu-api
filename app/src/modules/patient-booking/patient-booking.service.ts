@@ -53,10 +53,22 @@ export class PatientBookingService {
     from: string,
     to: string,
     serviceId?: string,
+    medicId?: string,
   ) {
     const businessLocationId = `${businessId}-${locationId}`;
     
-    this.logger.debug(`Getting available dates for ${businessLocationId} from ${from} to ${to}, serviceId: ${serviceId}`);
+    this.logger.debug(`Getting available dates for ${businessLocationId} from ${from} to ${to}, serviceId: ${serviceId}, medicId: ${medicId}`);
+
+    // Build medic query
+    const medicQuery = this.resourceRepo
+      .createQueryBuilder('resource')
+      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+      .andWhere('resource.resourceType = :type', { type: 'medic' });
+    
+    // Filter by specific medic if provided
+    if (medicId) {
+      medicQuery.andWhere('resource.resourceId = :medicId', { medicId });
+    }
 
     // Fetch all required data in parallel for better performance
     const [workingHoursSettings, medics, appointments, service] = await Promise.all([
@@ -68,15 +80,11 @@ export class PatientBookingService {
         .andWhere("resource.data->>'settingType' = 'working-hours'")
         .getOne(),
       
-      // Get all medics with duty days
-      this.resourceRepo
-        .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'medic' })
-        .getMany(),
+      // Get all medics (or specific medic) with duty days
+      medicQuery.getMany(),
       
       // Fetch appointments for date range
-      this.getAppointmentsInRange(businessLocationId, from, to, serviceId),
+      this.getAppointmentsInRange(businessLocationId, from, to, serviceId, medicId),
       
       // Get service details if serviceId provided
       serviceId ? this.getServiceDetails(businessLocationId, serviceId) : Promise.resolve(null)
@@ -162,10 +170,34 @@ export class PatientBookingService {
     locationId: string,
     date: string,
     serviceId?: string,
+    medicId?: string,
   ) {
     const businessLocationId = `${businessId}-${locationId}`;
     const day = new Date(date + 'T00:00:00Z');
     const weekday = this.getWeekdayKey(day);
+
+    // Build medic query
+    const medicQuery = this.resourceRepo
+      .createQueryBuilder('resource')
+      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+      .andWhere('resource.resourceType = :type', { type: 'medic' });
+    
+    // Filter by specific medic if provided
+    if (medicId) {
+      medicQuery.andWhere('resource.resourceId = :medicId', { medicId });
+    }
+
+    // Build appointment query
+    const appointmentQuery = this.resourceRepo
+      .createQueryBuilder('resource')
+      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+      .andWhere('resource.resourceType = :type', { type: 'appointment' })
+      .andWhere('resource.startDate = :date', { date });
+    
+    // Filter by specific medic if provided
+    if (medicId) {
+      appointmentQuery.andWhere("resource.data->>'medicId' = :medicId", { medicId });
+    }
 
     // Fetch all required data in parallel
     const [workingHoursSettings, medics, appointments, service] = await Promise.all([
@@ -177,20 +209,11 @@ export class PatientBookingService {
         .andWhere("resource.data->>'settingType' = 'working-hours'")
         .getOne(),
       
-      // Get all medics with duty days
-      this.resourceRepo
-        .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'medic' })
-        .getMany(),
+      // Get all medics (or specific medic) with duty days
+      medicQuery.getMany(),
       
       // Fetch appointments for the specific day
-      this.resourceRepo
-        .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'appointment' })
-        .andWhere('resource.startDate = :date', { date })
-        .getMany(),
+      appointmentQuery.getMany(),
       
       // Get service details if serviceId provided
       serviceId ? this.getServiceDetails(businessLocationId, serviceId) : Promise.resolve(null)
@@ -385,6 +408,7 @@ export class PatientBookingService {
           email: payload.customer.email,
           name: payload.customer.name 
         },
+        
       },
       timestamp: new Date().toISOString(),
       requestId: Date.now().toString(),
@@ -719,7 +743,8 @@ export class PatientBookingService {
     businessLocationId: string,
     from: string,
     to: string,
-    serviceId?: string
+    serviceId?: string,
+    medicId?: string
   ): Promise<ResourceEntity[]> {
     const qb = this.resourceRepo
       .createQueryBuilder('resource')
@@ -729,6 +754,10 @@ export class PatientBookingService {
 
     if (serviceId) {
       qb.andWhere("(resource.data->>'serviceId' = :serviceId OR resource.data->'service'->>'id' = :serviceId)", { serviceId });
+    }
+
+    if (medicId) {
+      qb.andWhere("resource.data->>'medicId' = :medicId", { medicId });
     }
 
     return qb.getMany();
@@ -1189,6 +1218,159 @@ export class PatientBookingService {
 
     await this.kinesisService.sendResourceOperation(operation);
     return { success: true, message: 'Appointment canceled successfully', requestId: operation.requestId };
+  }
+
+  /**
+   * Verify rating token and return appointment details
+   */
+  async verifyRatingToken(businessId: string, locationId: string, token: string) {
+    const businessLocationId = `${businessId}-${locationId}`;
+
+    try {
+      // Find rating resource by token
+      const ratingResource = await this.resourceRepo
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :type', { type: 'rating' })
+        .andWhere("resource.data->>'token' = :token", { token })
+        .getOne();
+
+      if (!ratingResource) {
+        throw new BadRequestException('Invalid rating token');
+      }
+
+      const ratingData = ratingResource.data as any;
+
+      // Check if token is already used
+      if (ratingData.tokenUsed) {
+        throw new BadRequestException('This rating link has already been used');
+      }
+
+      // Check if token is expired
+      const expiresAt = new Date(ratingData.tokenExpiresAt);
+      if (expiresAt < new Date()) {
+        throw new BadRequestException('This rating link has expired');
+      }
+
+      // Return appointment and patient details for display
+      return {
+        success: true,
+        data: {
+          appointmentId: ratingData.appointmentId,
+          patientName: ratingData.patientName,
+          appointmentDate: ratingData.appointmentDate,
+          appointmentTime: ratingData.appointmentTime,
+          locationName: ratingData.locationName || '',
+        },
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(`Failed to verify rating token: ${error.message}`, error.stack);
+      throw new BadRequestException('Invalid or expired rating token');
+    }
+  }
+
+  /**
+   * Submit rating for a completed appointment
+   */
+  async submitRating(
+    businessId: string,
+    locationId: string,
+    token: string,
+    ratingData: {
+      score: number;
+      comment?: string;
+      categories?: {
+        service?: number;
+        cleanliness?: number;
+        staff?: number;
+        waitTime?: number;
+      };
+    },
+  ) {
+    const businessLocationId = `${businessId}-${locationId}`;
+
+    // Validate score
+    if (ratingData.score < 1 || ratingData.score > 5) {
+      throw new BadRequestException('Score must be between 1 and 5');
+    }
+
+    // Validate categories if provided
+    if (ratingData.categories) {
+      const categories = Object.values(ratingData.categories);
+      for (const cat of categories) {
+        if (cat !== undefined && (cat < 1 || cat > 5)) {
+          throw new BadRequestException('Category scores must be between 1 and 5');
+        }
+      }
+    }
+
+    try {
+      // Find and verify the rating resource with token
+      const ratingResource = await this.resourceRepo
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :type', { type: 'rating' })
+        .andWhere("resource.data->>'token' = :token", { token })
+        .getOne();
+
+      if (!ratingResource) {
+        throw new BadRequestException('Invalid rating token');
+      }
+
+      const existingRatingData = ratingResource.data as any;
+
+      // Check if token is already used
+      if (existingRatingData.tokenUsed) {
+        throw new BadRequestException('This rating link has already been used');
+      }
+
+      // Check if token is expired
+      const expiresAt = new Date(existingRatingData.tokenExpiresAt);
+      if (expiresAt < new Date()) {
+        throw new BadRequestException('This rating link has expired');
+      }
+
+      // Update the rating resource with the submitted rating
+      const updatedRatingData = {
+        ...existingRatingData,
+        score: ratingData.score,
+        comment: ratingData.comment,
+        categories: ratingData.categories,
+        tokenUsed: true,
+        submittedAt: new Date().toISOString(),
+      };
+
+      // Send update operation to Kinesis to mark token as used and save rating
+      const operation = {
+        operation: 'update',
+        businessId,
+        locationId,
+        resourceType: 'rating',
+        resourceId: ratingResource.resourceId,
+        data: updatedRatingData,
+        timestamp: new Date().toISOString(),
+        requestId: Date.now().toString(),
+      } as any;
+
+      await this.kinesisService.sendResourceOperation(operation);
+
+      this.logger.log(`Rating submitted successfully for appointment ${existingRatingData.appointmentId}`);
+
+      return {
+        success: true,
+        message: 'Thank you for your feedback!',
+        requestId: operation.requestId,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(`Failed to submit rating: ${error.message}`, error.stack);
+      throw new BadRequestException('Failed to submit rating');
+    }
   }
 }
 

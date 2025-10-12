@@ -34,11 +34,20 @@ export interface EmailConfig {
   senderName?: string;
 }
 
+export interface RatingConfig {
+  enabled: boolean;
+  sendOnCompletion: boolean; // Send rating request when appointment is marked as completed
+  defaultTemplate: string; // template ID
+  templates: EmailTemplate[];
+  allowAnonymous: boolean; // Allow ratings without authentication
+}
+
 export interface ExternalApiConfig {
   businessId: string;
   locationId?: string; // Optional for location-specific configs
   sms: SMSConfig;
   email: EmailConfig;
+  rating: RatingConfig;
   createdAt: string;
   updatedAt: string;
   version: number; // For optimistic locking
@@ -49,11 +58,13 @@ export interface CreateExternalApiConfigDto {
   locationId?: string;
   sms?: Partial<SMSConfig>;
   email?: Partial<EmailConfig>;
+  rating?: Partial<RatingConfig>;
 }
 
 export interface UpdateExternalApiConfigDto {
   sms?: Partial<SMSConfig>;
   email?: Partial<EmailConfig>;
+  rating?: Partial<RatingConfig>;
 }
 
 export interface TemplateVariable {
@@ -128,6 +139,12 @@ export const COMMON_TEMPLATE_VARIABLES: TemplateVariable[] = [
     name: 'patientUrl',
     description: 'URL-ul pentru pagina pacientului',
     example: 'https://clinica-alfa.simplu.io/sediu-central/details?patient00000',
+    required: false
+  },
+  {
+    name: 'ratingUrl',
+    description: 'URL-ul pentru a oferi rating (one-time link)',
+    example: 'https://clinica-alfa.simplu.io/rating/abc123xyz',
     required: false
   }
 ];

@@ -457,36 +457,47 @@ export class StatisticsService {
   }
 
   /**
-   * Get clinic rating (from reviews or ratings resource)
+   * Get clinic rating from submitted ratings for current month
    */
   private async getClinicRating(
     businessLocationId: string,
   ): Promise<BusinessStatistics['clinicRating']> {
     try {
-      const reviews = await this.resourceRepository
+      const { thisMonth } = this.getMonthRanges();
+      
+      // Get all rating resources that have been submitted (tokenUsed = true)
+      const ratings = await this.resourceRepository
         .createQueryBuilder('resource')
         .where('resource.businessLocationId = :businessLocationId', {
           businessLocationId,
         })
         .andWhere('resource.resourceType = :resourceType', {
-          resourceType: 'review',
+          resourceType: 'rating',
+        })
+        .andWhere("resource.data->>'tokenUsed' = :used", { used: 'true' })
+        .andWhere("(resource.data->>'score')::int > :minScore", { minScore: 0 })
+        .andWhere('resource.createdAt >= :startDate', {
+          startDate: thisMonth.startDate,
+        })
+        .andWhere('resource.createdAt <= :endDate', {
+          endDate: thisMonth.endDate,
         })
         .getMany();
 
-      if (reviews.length === 0) {
+      if (ratings.length === 0) {
         return { average: 0, totalReviews: 0 };
       }
 
-      const totalRating = reviews.reduce((sum, review) => {
-        const rating = review.data.rating || review.data.score || 0;
-        return sum + Number(rating);
+      const totalRating = ratings.reduce((sum, rating) => {
+        const score = Number(rating.data.score) || 0;
+        return sum + score;
       }, 0);
 
-      const average = totalRating / reviews.length;
+      const average = totalRating / ratings.length;
 
       return {
-        average: Math.round(average * 10) / 10,
-        totalReviews: reviews.length,
+        average: Math.round(average * 10) / 10, // Round to 1 decimal
+        totalReviews: ratings.length,
       };
     } catch (error) {
       this.logger.error(`Error getting clinic rating: ${error.message}`);

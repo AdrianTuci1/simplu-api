@@ -7,6 +7,7 @@ import {
   UpdateExternalApiConfigDto,
   SMSConfig,
   EmailConfig,
+  RatingConfig,
   SMSTemplate,
   EmailTemplate,
   COMMON_TEMPLATE_VARIABLES
@@ -28,6 +29,7 @@ export class ExternalApiConfigService {
       locationId: dto.locationId,
       sms: this.createDefaultSMSConfig(dto.sms),
       email: this.createDefaultEmailConfig(dto.email),
+      rating: this.createDefaultRatingConfig(dto.rating),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       version: 1
@@ -81,6 +83,7 @@ export class ExternalApiConfigService {
         locationId: locationId || 'default',
         sms: this.createDefaultSMSConfig(),
         email: this.createDefaultEmailConfig(),
+        rating: this.createDefaultRatingConfig(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         version: 1
@@ -108,6 +111,7 @@ export class ExternalApiConfigService {
       ...existingConfig,
       sms: dto.sms ? { ...existingConfig.sms, ...dto.sms } : existingConfig.sms,
       email: dto.email ? { ...existingConfig.email, ...dto.email } : existingConfig.email,
+      rating: dto.rating ? { ...existingConfig.rating, ...dto.rating } : existingConfig.rating,
       updatedAt: new Date().toISOString(),
       version: existingConfig.version + 1
     };
@@ -448,6 +452,43 @@ Echipa {{locationName}}`,
       templates: [defaultTemplate],
       serviceType: 'gmail',
       senderName: '',
+      ...overrides
+    };
+  }
+
+  private createDefaultRatingConfig(overrides?: Partial<RatingConfig>): RatingConfig {
+    const defaultTemplate: EmailTemplate = {
+      id: 'default',
+      name: 'Cerere Rating Implicit',
+      subject: 'Cum a fost experiența ta la {{locationName}}?',
+      content: `Salut {{patientName}},
+
+Mulțumim că ai ales {{locationName}}!
+
+Programarea ta din data de {{appointmentDate}} la ora {{appointmentTime}} a fost marcată ca finalizată.
+
+Ne-ar ajuta enorm dacă ne-ai putea oferi un scurt feedback despre experiența ta:
+
+🔗 Oferă-ne un rating: {{ratingUrl}}
+
+Link-ul este valabil pentru o singură utilizare și este disponibil timp de 30 de zile.
+
+Feedback-ul tău ne ajută să îmbunătățim constant serviciile noastre.
+
+Cu stimă,
+Echipa {{locationName}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dacă ai întrebări, ne poți contacta la {{phoneNumber}}.`,
+      variables: ['patientName', 'locationName', 'appointmentDate', 'appointmentTime', 'ratingUrl', 'phoneNumber']
+    };
+
+    return {
+      enabled: false,
+      sendOnCompletion: false,
+      defaultTemplate: 'default',
+      templates: [defaultTemplate],
+      allowAnonymous: true,
       ...overrides
     };
   }

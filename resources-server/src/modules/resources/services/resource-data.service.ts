@@ -33,6 +33,8 @@ export class ResourceDataService {
       'actionDate',
       'documentDate',
       'date',
+      'issueDate',
+      
     ];
 
     let startDate: string | null = null;
