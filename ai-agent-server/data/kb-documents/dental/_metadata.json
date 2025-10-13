@@ -1,9 +1,8 @@
 {
   "businessType": "dental",
-  "version": "1.0.1",
-  "created": "2025-10-10T17:29:12.911Z",
-  "lastUpdated": "2025-10-10T22:04:00.000Z",
-  "totalDocuments": 15,
+  "version": "1.0.0",
+  "created": "2025-10-12T20:40:20.251Z",
+  "totalDocuments": 14,
   "categories": [
     "systemInstructions",
     "resourceStructure",
@@ -13,8 +12,7 @@
     "queryExamples",
     "conversationPatterns",
     "terminology",
-    "bestPractices",
-    "toolUsageGuide"
+    "bestPractices"
   ],
   "resourceTypes": [
     "appointment",

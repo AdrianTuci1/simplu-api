@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-bedrock-agent-runtime';
 import { BedrockInvocationResult, ToolContext } from '../interfaces';
 import { ToolExecutorService } from './tool-executor.service';
+import { ElixirNotificationTool } from '../http-tools/elixir-notification.tool';
 
 export interface BedrockConfig {
   agentId: string;
@@ -24,6 +25,8 @@ export class BedrockAgentService {
   constructor(
     @Inject(forwardRef(() => ToolExecutorService))
     private readonly toolExecutorService: ToolExecutorService,
+    @Inject(forwardRef(() => ElixirNotificationTool))
+    private readonly elixirNotificationTool: ElixirNotificationTool,
   ) {
     this.config = {
       agentId: process.env.BEDROCK_AGENT_ID || '',
@@ -199,6 +202,28 @@ export class BedrockAgentService {
             if (chunk.bytes) {
               const text = new TextDecoder().decode(chunk.bytes);
               outputText += text;
+              
+              // Trimite chunk-ul în timp real prin Elixir
+              try {
+                await this.elixirNotificationTool.execute({
+                  toolName: 'send_elixir_notification',
+                  parameters: {
+                    businessId: context.businessId,
+                    userId: context.userId,
+                    sessionId: sessionId,
+                    messageId: `chunk_${Date.now()}`,
+                    content: text,
+                    context: {
+                      type: 'streaming_chunk',
+                      isComplete: false,
+                    },
+                  },
+                  context,
+                });
+              } catch (error) {
+                // Nu oprim procesarea dacă trimiterea chunk-ului eșuează
+                this.logger.warn(`⚠️ Failed to send chunk to Elixir: ${error.message}`);
+              }
             }
           }
 
@@ -315,6 +340,29 @@ export class BedrockAgentService {
     } catch (error) {
       this.logger.error('Error processing Bedrock stream:', error);
       throw error;
+    }
+
+    // Trimite notificare finală că mesajul este complet
+    try {
+      await this.elixirNotificationTool.execute({
+        toolName: 'send_elixir_notification',
+        parameters: {
+          businessId: context.businessId,
+          userId: context.userId,
+          sessionId: sessionId,
+          messageId: `complete_${Date.now()}`,
+          content: outputText.trim() || 'Am procesat cererea ta.',
+          context: {
+            type: 'streaming_complete',
+            isComplete: true,
+            toolsUsed,
+            actions: actions.length > 0 ? actions : undefined,
+          },
+        },
+        context,
+      });
+    } catch (error) {
+      this.logger.warn(`⚠️ Failed to send completion notification to Elixir: ${error.message}`);
     }
 
     return {

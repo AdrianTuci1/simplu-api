@@ -58,22 +58,10 @@ export class MessagesController {
       this.logger.log('Storing message exchange in database...');
       await this.messagesService.storeMessageExchange(messageData, agentResponse);
 
-      // Trimite răspunsul înapoi la Notification Hub
-      this.logger.log('Sending AI response back to Notification Hub...');
-      await this.elixirHttpService.sendAIResponse(
-        messageRequest.tenant_id,
-        messageRequest.user_id,
-        agentResponse.sessionId,
-        agentResponse.responseId,
-        agentResponse.message,
-        {
-          ...context,
-          actions: agentResponse.actions || [],
-          timestamp: agentResponse.timestamp,
-          aiProcessing: true
-        }
-      );
-
+      // NOTE: Nu mai trimitem răspunsul aici deoarece bedrock-agent.service.ts
+      // deja trimite streaming chunks și mesajul complet către Elixir
+      // Acest lucru previne trimiterea duplicată a răspunsurilor
+      
       this.logger.log('=== Message Processing Completed Successfully ===');
       this.logger.log(`Response sent for message: ${messageRequest.message_id}`);
 
@@ -121,19 +109,9 @@ export class MessagesController {
       this.logger.log(`AI Response: "${response.message}"`);
       this.logger.log(`Timestamp: ${response.timestamp}`);
 
-      // Trimitere răspuns înapoi către Elixir prin HTTP
-      await this.elixirHttpService.sendAIResponse(
-        messageDto.businessId,
-        messageDto.userId,
-        response.sessionId,
-        response.responseId,
-        response.message,
-        {
-          actions: response.actions || [],
-          timestamp: response.timestamp,
-          source: 'websocket_gateway'
-        }
-      );
+      // NOTE: Nu mai trimitem răspunsul aici deoarece bedrock-agent.service.ts
+      // deja trimite streaming chunks și mesajul complet către Elixir
+      // Acest lucru previne trimiterea duplicată a răspunsurilor
 
       this.logger.log('=== WebSocket Message Processing Completed Successfully ===');
 

@@ -5,6 +5,7 @@ export interface MessageDto {
   message: string;
   sessionId?: string;
   timestamp?: string;
+  view?: any;
 }
 
 export interface AgentResponse {

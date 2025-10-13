@@ -9,7 +9,7 @@
     "/query_app_server": {
       "post": {
         "summary": "Query app server for real-time business data (services, appointments, patients, medics)",
-        "description": "READ-ONLY queries for REAL-TIME BUSINESS DATA. Use this for: Services/treatments, Appointments, Patients, Medics, Time slots. DO NOT use query_management_server for these! Two modules: 1) PATIENT-BOOKING - Get services (what treatments we offer), check time slots, view history. 2) RESOURCES - List/get appointments, patients, treatments, medics. For modifications use call_frontend_function.",
+        "description": "READ-ONLY queries for REAL-TIME BUSINESS DATA. Use this for: Services/treatments, Appointments, Patients, Medics, Time slots, Business settings. Two modules: 1) PATIENT-BOOKING - Get services (what treatments we offer), check time slots, view history. 2) RESOURCES - List/get appointments, patients, treatments, medics, settings. For modifications use call_frontend_function.",
         "operationId": "query_app_server",
         "requestBody": {
           "required": true,
@@ -59,76 +59,6 @@
                   "accessCode": {
                     "type": "string",
                     "description": "Patient access code (for patient-booking history)"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful query",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/query_management_server": {
-      "post": {
-        "summary": "Query management server for business CONFIGURATION ONLY (NOT for services/appointments/patients)",
-        "description": "Use ONLY for business CONFIGURATION and SETTINGS. DO NOT use for: services/treatments (use query_app_server patient-booking), appointments (use query_app_server resources), patients (use query_app_server), medics (use query_app_server). USE ONLY for: Business settings, Subscriptions, User invitations, Administrative config.",
-        "operationId": "query_management_server",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "endpoint",
-                  "method"
-                ],
-                "properties": {
-                  "endpoint": {
-                    "type": "string",
-                    "description": "The API endpoint to query (e.g., /api/businesses, /api/subscriptions)"
-                  },
-                  "method": {
-                    "type": "string",
-                    "enum": [
-                      "GET",
-                      "POST",
-                      "PUT",
-                      "PATCH",
-                      "DELETE"
-                    ],
-                    "description": "HTTP method to use"
-                  },
-                  "params": {
-                    "type": "object",
-                    "description": "Query parameters for GET requests"
-                  },
-                  "body": {
-                    "type": "object",
-                    "description": "Request body for POST/PUT/PATCH requests"
-                  },
-                  "tenantId": {
-                    "type": "string",
-                    "description": "Business ID (tenant ID) for multi-tenant queries"
                   }
                 }
               }

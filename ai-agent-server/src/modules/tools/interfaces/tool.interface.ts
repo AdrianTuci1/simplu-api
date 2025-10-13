@@ -28,6 +28,7 @@ export interface ToolContext {
   role: 'operator' | 'customer';
   businessType?: 'dental' | 'gym' | 'hotel';
   source: 'websocket' | 'webhook' | 'cron';
+  view?: any;
 }
 
 export interface ToolResult {

@@ -84,3 +84,51 @@ This architecture is ideal for deployment using:
 * **Kubernetes:** For production, a container orchestrator like Kubernetes would manage the complex scaling, availability, and deployment of these services.
 
 ---
+
+## 📚 Documentation & Guides
+
+### AI Agent & Chat System
+
+| Guide | Description | Link |
+|-------|-------------|------|
+| **Chat Session Management** | HTTP REST API pentru managementul sesiunilor (creare, listare, istoric) | [CHAT_SESSION_MANAGEMENT_GUIDE.md](./CHAT_SESSION_MANAGEMENT_GUIDE.md) |
+| **Elixir Frontend Interaction** | WebSocket streaming în timp real și function calls | [ELIXIR_FRONTEND_INTERACTION_GUIDE.md](./ELIXIR_FRONTEND_INTERACTION_GUIDE.md) |
+| **AI Agent Session Management** | Integrare AI Agent cu sesiuni WebSocket | [elixir/AI_AGENT_SESSION_MANAGEMENT.md](./elixir/AI_AGENT_SESSION_MANAGEMENT.md) |
+
+### Features & Integration
+
+| Guide | Description | Link |
+|-------|-------------|------|
+| **Patient Booking** | Sistem de rezervări pentru pacienți | [PATIENT_BOOKING_FRONTEND_INTEGRATION.md](./PATIENT_BOOKING_FRONTEND_INTEGRATION.md) |
+| **Invitations System** | Sistem de invitații pentru utilizatori | [INVITATIONS_SYSTEM_GUIDE.md](./INVITATIONS_SYSTEM_GUIDE.md) |
+| **Rating System** | Sistem de rating pentru servicii | [RATING_SYSTEM_IMPLEMENTATION.md](./RATING_SYSTEM_IMPLEMENTATION.md) |
+| **Patient Access Code** | Sistem de coduri de acces pentru pacienți | [PATIENT_ACCESS_CODE_FRONTEND_INTEGRATION.md](./PATIENT_ACCESS_CODE_FRONTEND_INTEGRATION.md) |
+
+### Architecture Separation
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    FRONTEND                              │
+└──────────────┬──────────────────────┬────────────────────┘
+               │                      │
+       ┌───────▼────────┐    ┌────────▼──────────┐
+       │  HTTP REST     │    │  WebSocket        │
+       │  (Sessions)    │    │  (Streaming)      │
+       └───────┬────────┘    └────────┬──────────┘
+               │                      │
+       ┌───────▼────────────┐  ┌──────▼──────────┐
+       │ AI Agent Server    │  │ Elixir Hub      │
+       │ Port: 3003         │  │ Port: 4000      │
+       │                    │  │                 │
+       │ - Session CRUD     │  │ - Streaming     │
+       │ - Message History  │  │ - Real-time     │
+       │ - Business Logic   │  │ - Broadcast     │
+       └────────────────────┘  └─────────────────┘
+```
+
+**Key Principles:**
+- 🔴 **Real-time messaging** → Elixir WebSocket (low latency, streaming)
+- 🟢 **Session management** → AI Agent Server HTTP REST (reliable, queryable)
+- 🔵 **Business logic** → AI Agent Server (Bedrock integration, tools)
+
+---

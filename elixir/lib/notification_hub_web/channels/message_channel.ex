@@ -58,6 +58,23 @@ defmodule NotificationHubWeb.MessageChannel do
   end
 
   @impl true
+  def handle_in("function_response", payload, socket) do
+    Logger.info("=== MESSAGE CHANNEL: Received function_response event ===")
+    Logger.info("Raw payload: #{inspect(payload)}")
+    Logger.info("Socket topic: #{socket.topic}")
+
+    case process_function_response(payload, socket) do
+      {:ok, response} ->
+        Logger.info("Function response processed successfully: #{inspect(response)}")
+        {:reply, {:ok, response}, socket}
+
+      {:error, reason} ->
+        Logger.error("Failed to process function response: #{inspect(reason)}")
+        {:reply, {:error, reason}, socket}
+    end
+  end
+
+  @impl true
   def handle_in(event, payload, socket) do
     Logger.info("=== MESSAGE CHANNEL: Received unhandled event ===")
     Logger.info("Event: #{event}")
@@ -126,6 +143,104 @@ defmodule NotificationHubWeb.MessageChannel do
   defp process_message(payload, _socket) do
     Logger.warning("Invalid message payload: #{inspect(payload)}")
     {:error, "Invalid payload format. Required: businessId, userId, message"}
+  end
+
+  # Procesare răspuns funcție de la frontend și trimitere către AI Agent Server
+  defp process_function_response(%{"businessId" => business_id, "sessionId" => session_id, "functionResponse" => function_response} = payload, _socket) do
+    try do
+      Logger.info("=== PROCESSING FUNCTION RESPONSE ===")
+      Logger.info("Business ID: #{business_id}")
+      Logger.info("Session ID: #{session_id}")
+      Logger.info("Function response: #{inspect(function_response)}")
+
+      # Trimitere răspuns către AI Agent Server
+      case send_function_response_to_ai_agent(business_id, session_id, function_response, payload) do
+        {:ok, response} ->
+          Logger.info("=== FUNCTION RESPONSE FORWARDED SUCCESSFULLY ===")
+          Logger.info("AI Agent Server response: #{inspect(response)}")
+
+          {:ok, %{
+            status: "forwarded_to_ai_agent",
+            sessionId: session_id,
+            message: "Function response was forwarded to AI Agent Server."
+          }}
+
+        {:error, error} ->
+          Logger.error("=== FAILED TO FORWARD FUNCTION RESPONSE ===")
+          Logger.error("Error: #{inspect(error)}")
+          {:error, "Failed to forward function response: #{error}"}
+      end
+
+    rescue
+      error ->
+        Logger.error("=== ERROR PROCESSING FUNCTION RESPONSE ===")
+        Logger.error("Error: #{inspect(error)}")
+        {:error, "Internal processing error: #{error}"}
+    end
+  end
+
+  defp process_function_response(payload, _socket) do
+    Logger.warning("Invalid function response payload: #{inspect(payload)}")
+    {:error, "Invalid payload format. Required: businessId, sessionId, functionResponse"}
+  end
+
+  # Trimitere răspuns funcție către AI Agent Server
+  defp send_function_response_to_ai_agent(business_id, session_id, function_response, payload) do
+    try do
+      ai_agent_url = Application.get_env(:notification_hub, :ai_agent_http_url, "http://ai-agent-server:3003")
+      endpoint_url = "#{ai_agent_url}/agent/frontend-responses"
+
+      Logger.info("=== SENDING FUNCTION RESPONSE TO AI AGENT SERVER ===")
+      Logger.info("Target URL: #{endpoint_url}")
+      Logger.info("Business ID: #{business_id}")
+      Logger.info("Session ID: #{session_id}")
+      Logger.info("Function response: #{inspect(function_response)}")
+
+      # Format răspuns pentru AI Agent Server
+      response_payload = %{
+        tenant_id: business_id,
+        session_id: session_id,
+        function_response: %{
+          success: function_response["success"],
+          data: function_response["data"],
+          error: function_response["error"],
+          functionName: function_response["functionName"],
+          timestamp: function_response["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601()
+        },
+        timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
+      }
+
+      Logger.info("Response payload: #{inspect(response_payload)}")
+
+      case HTTPoison.post(endpoint_url, Jason.encode!(response_payload), [
+        {"Content-Type", "application/json"},
+        {"User-Agent", "NotificationHub/1.0"}
+      ], [timeout: 10000]) do
+        {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+          Logger.info("=== AI AGENT SERVER RESPONSE SUCCESS ===")
+          Logger.info("Response body: #{body}")
+          parsed_response = Jason.decode!(body)
+          Logger.info("Parsed response: #{inspect(parsed_response)}")
+          {:ok, parsed_response}
+
+        {:ok, %HTTPoison.Response{status_code: status_code, body: body}} ->
+          Logger.error("=== AI AGENT SERVER ERROR RESPONSE ===")
+          Logger.error("Status code: #{status_code}")
+          Logger.error("Response body: #{body}")
+          {:error, "HTTP #{status_code}: #{body}"}
+
+        {:error, error} ->
+          Logger.error("=== AI AGENT SERVER CONNECTION ERROR ===")
+          Logger.error("Error: #{inspect(error)}")
+          {:error, "Connection failed: #{error}"}
+      end
+
+    rescue
+      error ->
+        Logger.error("=== AI AGENT SERVER REQUEST ERROR ===")
+        Logger.error("Error: #{inspect(error)}")
+        {:error, "Request error: #{error}"}
+    end
   end
 
   # Trimitere mesaj către AI Agent Server prin HTTP

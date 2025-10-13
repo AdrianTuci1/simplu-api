@@ -37,7 +37,8 @@ export class AgentService {
         locationId: data.locationId || 'default',
         userId: data.userId,
         sessionId: data.sessionId || this.generateSessionId(data),
-        source: 'websocket'
+        source: 'websocket',
+        view: data.view || {},
       };
 
       this.logger.log(`📨 Processing operator message for session: ${toolContext.sessionId}`);
@@ -116,7 +117,7 @@ export class AgentService {
         locationId: webhookData.locationId || 'default',
         userId: webhookData.userId,
         sessionId: webhookData.sessionId || this.generateSessionId(webhookData),
-        source: 'webhook'
+        source: 'webhook',
       };
 
       this.logger.log(`📨 Processing customer webhook message for session: ${toolContext.sessionId}`);
@@ -208,6 +209,43 @@ export class AgentService {
       timestamp: new Date().toISOString(),
       sessionId: webhookData.sessionId || this.generateSessionId(webhookData)
     };
+  }
+
+  /**
+   * Process frontend response from user actions
+   * Frontend sends response → Elixir → AI Agent Server → Continue conversation
+   */
+  async processFrontendResponse(data: any): Promise<any> {
+    const { tenant_id, session_id, function_response } = data;
+
+    this.logger.log(`📥 Received frontend response for session: ${session_id}`);
+    this.logger.log(`📋 Function: ${function_response?.functionName}`);
+    this.logger.log(`✅ Success: ${function_response?.success}`);
+
+    try {
+      // Store the response for the session (could be in memory or DynamoDB)
+      // For now, just log it and potentially continue the conversation
+      
+      if (function_response?.success) {
+        this.logger.log(`✅ Frontend action completed successfully`);
+        this.logger.log(`📊 Data: ${JSON.stringify(function_response.data)}`);
+      } else {
+        this.logger.warn(`⚠️ Frontend action failed: ${function_response?.error}`);
+      }
+
+      // TODO: Optionally continue conversation with AI based on response
+      // Could call processMessage again with context about what happened
+
+      return {
+        status: 'ok',
+        message: 'Frontend response received and processed',
+        sessionId: session_id,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to process frontend response:`, error);
+      throw error;
+    }
   }
 
   // Generate response ID

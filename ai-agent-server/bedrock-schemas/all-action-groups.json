@@ -14,7 +14,7 @@
           "/query_app_server": {
             "post": {
               "summary": "Query app server for real-time business data (services, appointments, patients, medics)",
-              "description": "READ-ONLY queries for REAL-TIME BUSINESS DATA. Use this for: Services/treatments, Appointments, Patients, Medics, Time slots. DO NOT use query_management_server for these! Two modules: 1) PATIENT-BOOKING - Get services (what treatments we offer), check time slots, view history. 2) RESOURCES - List/get appointments, patients, treatments, medics. For modifications use call_frontend_function.",
+              "description": "READ-ONLY queries for REAL-TIME BUSINESS DATA. Use this for: Services/treatments, Appointments, Patients, Medics, Time slots, Business settings. Two modules: 1) PATIENT-BOOKING - Get services (what treatments we offer), check time slots, view history. 2) RESOURCES - List/get appointments, patients, treatments, medics, settings. For modifications use call_frontend_function.",
               "operationId": "query_app_server",
               "requestBody": {
                 "required": true,
@@ -64,76 +64,6 @@
                         "accessCode": {
                           "type": "string",
                           "description": "Patient access code (for patient-booking history)"
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "responses": {
-                "200": {
-                  "description": "Successful query",
-                  "content": {
-                    "application/json": {
-                      "schema": {
-                        "type": "object",
-                        "properties": {
-                          "success": {
-                            "type": "boolean"
-                          },
-                          "data": {
-                            "type": "object"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "/query_management_server": {
-            "post": {
-              "summary": "Query management server for business CONFIGURATION ONLY (NOT for services/appointments/patients)",
-              "description": "Use ONLY for business CONFIGURATION and SETTINGS. DO NOT use for: services/treatments (use query_app_server patient-booking), appointments (use query_app_server resources), patients (use query_app_server), medics (use query_app_server). USE ONLY for: Business settings, Subscriptions, User invitations, Administrative config.",
-              "operationId": "query_management_server",
-              "requestBody": {
-                "required": true,
-                "content": {
-                  "application/json": {
-                    "schema": {
-                      "type": "object",
-                      "required": [
-                        "endpoint",
-                        "method"
-                      ],
-                      "properties": {
-                        "endpoint": {
-                          "type": "string",
-                          "description": "The API endpoint to query (e.g., /api/businesses, /api/subscriptions)"
-                        },
-                        "method": {
-                          "type": "string",
-                          "enum": [
-                            "GET",
-                            "POST",
-                            "PUT",
-                            "PATCH",
-                            "DELETE"
-                          ],
-                          "description": "HTTP method to use"
-                        },
-                        "params": {
-                          "type": "object",
-                          "description": "Query parameters for GET requests"
-                        },
-                        "body": {
-                          "type": "object",
-                          "description": "Request body for POST/PUT/PATCH requests"
-                        },
-                        "tenantId": {
-                          "type": "string",
-                          "description": "Business ID (tenant ID) for multi-tenant queries"
                         }
                       }
                     }
@@ -272,8 +202,8 @@
         "paths": {
           "/send_external_message": {
             "post": {
-              "summary": "Send external message via Meta, Twilio, or Email",
-              "description": "Send messages through external channels (Meta WhatsApp, Twilio SMS, Gmail)",
+              "summary": "Send external message via Meta WhatsApp, SMS, or Email",
+              "description": "Send messages through external channels (WhatsApp via Meta, SMS via Twilio/SNS, Email via Gmail)",
               "operationId": "send_external_message",
               "requestBody": {
                 "required": true,
@@ -282,35 +212,40 @@
                     "schema": {
                       "type": "object",
                       "required": [
-                        "channel",
-                        "recipient",
-                        "message"
+                        "provider",
+                        "to",
+                        "message",
+                        "businessId"
                       ],
                       "properties": {
-                        "channel": {
+                        "provider": {
                           "type": "string",
                           "enum": [
                             "meta",
-                            "twilio",
-                            "gmail"
+                            "sms",
+                            "email"
                           ],
-                          "description": "Communication channel to use"
+                          "description": "The external provider to use (meta for WhatsApp, sms for SMS, email for Gmail)"
                         },
-                        "recipient": {
+                        "to": {
                           "type": "string",
-                          "description": "Recipient identifier (phone number or email)"
+                          "description": "Recipient phone number (for meta/sms) or email address (for email)"
                         },
                         "message": {
                           "type": "string",
-                          "description": "Message content to send"
+                          "description": "The message content to send"
+                        },
+                        "subject": {
+                          "type": "string",
+                          "description": "Email subject (only for email provider)"
                         },
                         "businessId": {
                           "type": "string",
-                          "description": "Business ID"
+                          "description": "Business ID to use for credentials lookup"
                         },
-                        "metadata": {
-                          "type": "object",
-                          "description": "Additional metadata for the message"
+                        "locationId": {
+                          "type": "string",
+                          "description": "Location ID (for email provider)"
                         }
                       }
                     }
@@ -342,7 +277,7 @@
           "/send_elixir_notification": {
             "post": {
               "summary": "Send notification to frontend via Elixir server",
-              "description": "Send real-time notifications to frontend users through Elixir WebSocket server",
+              "description": "Send real-time notifications to frontend users through Elixir WebSocket server. Used for AI responses, drafts, and streaming chunks.",
               "operationId": "send_elixir_notification",
               "requestBody": {
                 "required": true,
@@ -353,28 +288,37 @@
                       "required": [
                         "businessId",
                         "userId",
-                        "message"
+                        "sessionId",
+                        "content"
                       ],
                       "properties": {
                         "businessId": {
                           "type": "string",
-                          "description": "Business ID"
+                          "description": "Business ID (tenant_id)"
                         },
                         "userId": {
                           "type": "string",
                           "description": "User ID to notify"
                         },
-                        "message": {
+                        "sessionId": {
                           "type": "string",
-                          "description": "Notification message"
+                          "description": "Session ID for the conversation"
                         },
-                        "notificationType": {
+                        "messageId": {
                           "type": "string",
-                          "description": "Type of notification (info, success, warning, error)"
+                          "description": "Message ID (optional, auto-generated if not provided)"
                         },
-                        "metadata": {
+                        "content": {
+                          "type": "string",
+                          "description": "The notification content/message"
+                        },
+                        "context": {
                           "type": "object",
-                          "description": "Additional notification data"
+                          "description": "Additional context data (actions, drafts, streaming info, etc.)"
+                        },
+                        "draft": {
+                          "type": "object",
+                          "description": "Draft data if creating/updating a draft"
                         }
                       }
                     }
@@ -402,8 +346,8 @@
           },
           "/broadcast_websocket_message": {
             "post": {
-              "summary": "Broadcast message to multiple WebSocket clients",
-              "description": "Send broadcast messages to all connected clients or specific rooms",
+              "summary": "Broadcast message to WebSocket clients",
+              "description": "Broadcasts a message to WebSocket clients connected to a specific business or user. Use this to send real-time updates, notifications, or AI responses to operators or customers.",
               "operationId": "broadcast_websocket_message",
               "requestBody": {
                 "required": true,
@@ -412,32 +356,34 @@
                     "schema": {
                       "type": "object",
                       "required": [
-                        "businessId",
-                        "message"
+                        "target",
+                        "event",
+                        "data"
                       ],
                       "properties": {
+                        "target": {
+                          "type": "string",
+                          "enum": [
+                            "business",
+                            "user"
+                          ],
+                          "description": "Broadcast target: \"business\" broadcasts to all business connections, \"user\" broadcasts to specific user"
+                        },
                         "businessId": {
                           "type": "string",
-                          "description": "Business ID"
+                          "description": "Business ID to broadcast to (required if target is \"business\")"
                         },
-                        "locationId": {
+                        "userId": {
                           "type": "string",
-                          "description": "Location ID (optional, for specific location)"
-                        },
-                        "message": {
-                          "type": "string",
-                          "description": "Broadcast message content"
+                          "description": "User ID to broadcast to (required if target is \"user\")"
                         },
                         "event": {
                           "type": "string",
-                          "description": "WebSocket event name"
+                          "description": "Event name for the WebSocket message"
                         },
-                        "targetUsers": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          },
-                          "description": "Optional list of specific user IDs to broadcast to"
+                        "data": {
+                          "type": "object",
+                          "description": "Payload data to send"
                         }
                       }
                     }

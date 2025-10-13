@@ -35,6 +35,7 @@ USE THIS TOOL FOR:
 - Medics/doctors information
 - Available time slots
 - Appointment history
+- Business settings and configuration (resourceType: setting)
 
 MODULES:
 
@@ -43,15 +44,16 @@ MODULES:
    Actions: services, slots, history
 
 2. RESOURCES (for operators):
-   - List any resource type (appointment, patient, treatment, medic, service, etc.)
+   - List any resource type (appointment, patient, treatment, medic, service, setting, etc.)
    - Get specific resource details by ID
    - Requires resourceType parameter
    Actions: list, get
 
 EXAMPLES:
-- "What services do we offer?" → module: "resources", action: "treatment", resourceType: "treatment"
+- "What services do we offer?" → module: "resources", action: "list", resourceType: "treatment"
 - "List appointments" → module: "resources", action: "list", resourceType: "appointment"
 - "Get patient details" → module: "resources", action: "get", resourceType: "patient", resourceId: "123"
+- "What are the business settings?" → module: "resources", action: "list", resourceType: "setting"
 
 IMPORTANT: This is READ-ONLY. Use call_frontend_function for create/update/delete.`,
       inputSchema: {
@@ -77,7 +79,7 @@ IMPORTANT: This is READ-ONLY. Use call_frontend_function for create/update/delet
             },
             resourceType: {
               type: 'string',
-              description: 'Resource type (REQUIRED for resources module): appointment, patient, treatment, medic, service, etc.',
+              description: 'Resource type (REQUIRED for resources module): appointment, patient, treatment, medic, service, setting, etc.',
             },
             resourceId: {
               type: 'string',

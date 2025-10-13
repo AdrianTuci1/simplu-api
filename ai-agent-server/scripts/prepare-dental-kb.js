@@ -75,24 +75,7 @@ async function prepareDentalKnowledgeBase() {
       console.log(`✅ Created Resource Structure document`);
     }
 
-    // 3. Data Field Structure
-    console.log('\n📝 Processing Data Field Structure...');
-    if (data.dataFieldStructure) {
-      const dataFieldContent = formatDataFieldStructure(data.dataFieldStructure);
-      await createDocument(
-        'dental-data-field-structure',
-        dataFieldContent,
-        {
-          category: 'dataFieldStructure',
-          businessType: 'dental',
-          priority: 'critical'
-        }
-      );
-      totalDocs++;
-      console.log(`✅ Created Data Field Structure document`);
-    }
-
-    // 4. Resource Schemas
+    // 3. Resource Schemas
     console.log('\n📝 Processing Resource Schemas...');
     if (data.resourceTypes) {
       for (const [resourceType, schema] of Object.entries(data.resourceTypes)) {
@@ -110,6 +93,23 @@ async function prepareDentalKnowledgeBase() {
         totalDocs++;
       }
       console.log(`✅ Created ${Object.keys(data.resourceTypes).length} Resource Schema documents`);
+    }
+
+    // 4. Data Field Structure
+    console.log('\n📝 Processing Data Field Structure...');
+    if (data.dataFieldStructure) {
+      const dataFieldContent = formatDataFieldStructure(data.dataFieldStructure);
+      await createDocument(
+        'dental-data-field-structure',
+        dataFieldContent,
+        {
+          category: 'dataFieldStructure',
+          businessType: 'dental',
+          priority: 'critical'
+        }
+      );
+      totalDocs++;
+      console.log(`✅ Created Data Field Structure document`);
     }
 
     // 5. Context Usage
@@ -156,7 +156,7 @@ async function prepareDentalKnowledgeBase() {
         {
           category: 'conversationPatterns',
           businessType: 'dental',
-          priority: 'high'
+          priority: 'critical'
         }
       );
       totalDocs++;
@@ -190,7 +190,7 @@ async function prepareDentalKnowledgeBase() {
         {
           category: 'bestPractices',
           businessType: 'dental',
-          priority: 'high'
+          priority: 'critical'
         }
       );
       totalDocs++;

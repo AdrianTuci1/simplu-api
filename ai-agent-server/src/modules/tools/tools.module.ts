@@ -9,7 +9,6 @@ import { ToolExecutorService } from './bedrock/tool-executor.service';
 import { AppServerTool } from './http-tools/app-server.tool';
 import { ElixirNotificationTool } from './http-tools/elixir-notification.tool';
 import { ExternalApiTool } from './http-tools/external-api.tool';
-import { ManagementServerTool } from './http-tools/management-server.tool';
 
 // WebSocket Tools
 import { BroadcastTool } from './websocket-tools/broadcast.tool';
@@ -32,7 +31,6 @@ import { ExternalApisModule } from '../external-apis/external-apis.module';
     AppServerTool,
     ElixirNotificationTool,
     ExternalApiTool,
-    ManagementServerTool,
     
     // WebSocket Tools
     BroadcastTool,

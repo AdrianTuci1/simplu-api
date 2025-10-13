@@ -22,6 +22,11 @@ export class AgentController {
     return await this.agentService.processWebhookThroughPipeline(webhookData);
   }
 
+  @Post('frontend-responses')
+  async processFrontendResponse(@Body() data: any) {
+    return await this.agentService.processFrontendResponse(data);
+  }
+
   @Get('health')
   async health() {
     return {

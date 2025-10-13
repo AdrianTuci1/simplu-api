@@ -7,7 +7,6 @@ import { ToolContext, BedrockInvocationResult } from './interfaces';
 import { AppServerTool } from './http-tools/app-server.tool';
 import { ElixirNotificationTool } from './http-tools/elixir-notification.tool';
 import { ExternalApiTool } from './http-tools/external-api.tool';
-import { ManagementServerTool } from './http-tools/management-server.tool';
 
 // WebSocket Tools
 import { BroadcastTool } from './websocket-tools/broadcast.tool';
@@ -27,7 +26,6 @@ export class ToolsService implements OnModuleInit {
     private readonly appServerTool: AppServerTool,
     private readonly elixirNotificationTool: ElixirNotificationTool,
     private readonly externalApiTool: ExternalApiTool,
-    private readonly managementServerTool: ManagementServerTool,
     // WebSocket Tools
     private readonly broadcastTool: BroadcastTool,
     private readonly frontendInteractionTool: FrontendInteractionTool,
@@ -43,7 +41,6 @@ export class ToolsService implements OnModuleInit {
     this.toolExecutorService.registerTool(this.appServerTool);
     this.toolExecutorService.registerTool(this.elixirNotificationTool);
     this.toolExecutorService.registerTool(this.externalApiTool);
-    this.toolExecutorService.registerTool(this.managementServerTool);
 
     // Register WebSocket Tools
     this.toolExecutorService.registerTool(this.broadcastTool);
@@ -96,7 +93,7 @@ export class ToolsService implements OnModuleInit {
    */
   setWebSocketGateway(gateway: any) {
     this.broadcastTool.setWebSocketGateway(gateway);
-    this.frontendInteractionTool.setWebSocketGateway(gateway);
+    // frontendInteractionTool acum folosește Elixir HTTP în loc de WebSocket Gateway direct
     this.logger.log('✅ WebSocket Gateway set for WebSocket tools');
   }
 

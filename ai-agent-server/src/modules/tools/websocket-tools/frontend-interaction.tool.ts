@@ -1,22 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ToolDefinition, ToolInput, ToolResult, ToolExecutor } from '../interfaces';
+import axios from 'axios';
 
 /**
  * Frontend Interaction Tool - apelează funcții din frontend care fac API calls
  * 
- * Tool-ul trimite comenzi către frontend pentru a executa funcții JavaScript
+ * Tool-ul trimite comenzi către frontend prin Elixir Notification Hub
  * care gestionează API-urile (createAppointment, updatePatient, etc.)
  * 
- * Frontend-ul primește context când trimite mesajul (ce meniu e deschis, ce resursă editează)
- * AI-ul poate apoi să apeleze funcții în frontend pentru a finaliza acțiuni
+ * Flux:
+ * 1. AI Agent → HTTP POST → Elixir /api/ai-responses
+ * 2. Elixir → WebSocket broadcast → Frontend
+ * 3. Frontend execută funcția → WebSocket → Elixir
+ * 4. Elixir → HTTP POST → AI Agent /api/frontend-responses
+ * 5. AI Agent continuă conversația
  */
 @Injectable()
 export class FrontendInteractionTool implements ToolExecutor {
   private readonly logger = new Logger(FrontendInteractionTool.name);
-  private wsGateway: any = null; // Will be set by ToolsModule
+  private readonly elixirUrl: string;
 
-  setWebSocketGateway(gateway: any): void {
-    this.wsGateway = gateway;
+  constructor() {
+    this.elixirUrl = process.env.ELIXIR_HTTP_URL || 'http://localhost:4000';
   }
 
   getDefinition(): ToolDefinition {
@@ -98,14 +103,6 @@ The functions in frontend will make the actual API calls to app server.`,
     const { functionName, parameters: functionParams, businessId, locationId, sessionId } = parameters;
 
     try {
-      if (!this.wsGateway) {
-        this.logger.error('❌ WebSocket Gateway not initialized');
-        return {
-          success: false,
-          error: 'WebSocket Gateway not available',
-        };
-      }
-
       if (!functionName) {
         return {
           success: false,
@@ -113,32 +110,45 @@ The functions in frontend will make the actual API calls to app server.`,
         };
       }
 
-      this.logger.log(`🖥️ Calling frontend function: ${functionName}`);
+      this.logger.log(`🖥️ Calling frontend function via Elixir: ${functionName}`);
 
       const targetBusinessId = businessId || context.businessId;
       const targetLocationId = locationId || context.locationId;
       const targetSessionId = sessionId || context.sessionId;
+      const targetUserId = context.userId;
 
-      // Prepare function call payload
+      // Prepare function call payload pentru Elixir
+      const url = `${this.elixirUrl}/api/ai-responses`;
+      
       const payload = {
-        type: 'function_call',
-        functionName,
-        parameters: functionParams || {},
+        tenant_id: targetBusinessId,
+        user_id: targetUserId,
+        session_id: targetSessionId,
+        message_id: `function_${Date.now()}`,
+        content: `Calling frontend function: ${functionName}`,
+        context: {
+          type: 'function_call',
+          functionName,
+          parameters: functionParams || {},
+          locationId: targetLocationId,
+        },
         timestamp: new Date().toISOString(),
+        type: 'function_call', // Tip special pentru function calls
       };
 
-      // Send function call to frontend via WebSocket
-      await this.wsGateway.sendMessageToSession?.(
-        targetBusinessId,
-        targetSessionId,
-        {
-          event: 'ai_function_call',
-          data: payload,
-        },
-        targetLocationId
-      );
+      this.logger.log(`📤 Sending function call to Elixir: ${url}`);
+      this.logger.log(`📋 Payload: ${JSON.stringify(payload, null, 2)}`);
 
-      this.logger.log(`✅ Frontend function call sent: ${functionName}`);
+      // Trimite către Elixir care va broadcast către frontend
+      const response = await axios.post(url, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 5000,
+      });
+
+      this.logger.log(`✅ Frontend function call sent via Elixir: ${functionName}`);
+      this.logger.log(`📊 Elixir response: ${response.status}`);
 
       return {
         success: true,
@@ -146,7 +156,8 @@ The functions in frontend will make the actual API calls to app server.`,
           functionName,
           parameters: functionParams,
           timestamp: new Date().toISOString(),
-          message: `Function ${functionName} called in frontend. Frontend will execute and handle API calls.`,
+          message: `Function ${functionName} sent to frontend via Elixir. Waiting for frontend response...`,
+          elixirStatus: response.status,
         },
       };
     } catch (error: any) {
@@ -155,6 +166,9 @@ The functions in frontend will make the actual API calls to app server.`,
       return {
         success: false,
         error: error.message,
+        data: {
+          statusCode: error.response?.status,
+        },
       };
     }
   }
