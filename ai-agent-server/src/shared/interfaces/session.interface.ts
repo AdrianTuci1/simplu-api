@@ -30,4 +30,5 @@ export interface Message {
     actions?: any[];
     clientSource?: string;
   };
+  view?: any;
 } 

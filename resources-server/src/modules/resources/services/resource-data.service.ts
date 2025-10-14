@@ -226,6 +226,7 @@ export class ResourceDataService {
 
       // Handle patient creation for appointments created by patients
       if (resourceType === 'appointment' && data.createdByPatient && data.customer) {
+        console.log('Appointment created by patient, finding or creating patient first');
         this.logger.log(`Appointment created by patient, finding or creating patient first`);
         
         // Find or create patient based on customer data

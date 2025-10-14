@@ -145,7 +145,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         timestamp,
         metadata: {
           source: 'websocket'
-        }
+        },
+        view: data.view || {}
       });
 
       // Procesare mesaj prin noul AgentService cu RAG
@@ -166,7 +167,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         metadata: {
           source: 'websocket',
           responseId: response.responseId
-        }
+        },
+        view: data.view || {}
       });
 
       // Trimitere răspuns către client în format Phoenix
