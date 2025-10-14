@@ -1,0 +1,15 @@
+{
+  "id": "dental-resource-medic",
+  "title": "Resource Type: Medic/Doctor",
+  "text": "# Resource Type: Medic/Doctor\n\n**Document Type:** resource-type\n**Resource Type:** medic\n**Business Type:** dental\n\n---\n\n**Display Name:** Medic/Doctor\n**Description:** Medici și doctori din clinică\n**Resource Id Format:** UUID (ex: 33948842-b061-7036-f02f-79b9c0b4225b)\n**Note:** IMPORTANT: resourceId pentru medic este același cu userId din conversație dacă operatorul este medic!\n\n**Data Schema:**\n\n  **Medic Name:**\n    **Type:** string\n    **Required:** true\n    **Description:** Numele medicului\n\n  **Email:**\n    **Type:** string\n    **Format:** email\n    **Required:** false\n    **Description:** Email medic\n\n  **Phone:**\n    **Type:** string\n    **Required:** false\n    **Description:** Telefon medic\n\n  **Role:**\n    **Type:** string\n    **Required:** false\n    **Description:** Rol în clinică (Administrator, Medic, etc.)\n\n  **Duty Days:**\n    **Type:** array\n    **Items:** string\n    **Required:** false\n    **Description:** Zilele în care medicul este disponibil (Luni, Marți, etc.)\n\n  **Created At:**\n    **Type:** string\n    **Format:** ISO8601\n    **Auto:** true\n\n  **Updated At:**\n    **Type:** string\n    **Format:** ISO8601\n    **Auto:** true\n\n**Full Resource Example:**\n  **Id:** B0100001-L0100001-33948842-b061-7036-f02f-79b9c0b4225b\n  **Business Id:** B0100001\n  **Location Id:** L0100001\n  **Resource Type:** medic\n  **Resource Id:** 33948842-b061-7036-f02f-79b9c0b4225b\n\n  **Data:**\n    **Medic Name:** Tucean\n    **Email:** tucean@test.com\n    **Phone:** 0736999960\n    **Role:** Administrator\n\n    **Duty Days:**\n      - Luni\n      - Miercuri\n      - Vineri\n    **Created At:** 2025-10-01T02:13:30.045Z\n    **Updated At:** 2025-10-01T02:13:30.045Z\n  **Timestamp:** 2025-10-01T02:13:30.045Z\n  **Last Updated:** 2025-10-01T02:13:30.045Z\n\n**Data Field Example:**\n  **Medic Name:** Tucean\n  **Email:** tucean@test.com\n  **Phone:** 0736999960\n  **Role:** Administrator\n\n  **Duty Days:**\n    - Luni\n    - Miercuri\n    - Vineri\n\n**Frontend Function Example:**\n  **Function Name:** createResource\n\n  **Parameters:**\n    **Resource Type:** medic\n\n    **Data:**\n      **Medic Name:** Dr. Ionescu\n      **Email:** ionescu@clinica.ro\n      **Phone:** 0721234567\n      **Role:** Medic\n\n      **Duty Days:**\n        - Luni\n        - Marți\n        - Joi\n        - Vineri\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "resource-type",
+    "resourceType": "medic",
+    "displayName": "Medic/Doctor",
+    "documentId": "dental-resource-medic",
+    "source": "dental-knowledge-base"
+  }
+}

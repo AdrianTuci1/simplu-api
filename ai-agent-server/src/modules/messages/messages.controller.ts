@@ -4,11 +4,12 @@ import { MessagesService } from './messages.service';
 import { AgentService } from '../agent/agent.service';
 import { MessageDto } from '@/shared/interfaces/message.interface';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
+import { SessionService } from '../session/session.service';
 
 interface MessageRequest {
   tenant_id: string;
   user_id: string;
-  session_id: string;
+  session_id?: string;
   message_id: string;
   payload: {
     content: string;
@@ -26,7 +27,8 @@ export class MessagesController {
     private readonly messagesService: MessagesService,
     @Inject(forwardRef(() => AgentService))
     private readonly agentService: AgentService,
-    private readonly webSocketGateway: WebSocketGateway
+    private readonly webSocketGateway: WebSocketGateway,
+    private readonly sessionService: SessionService
   ) {}
 
   @Post()
@@ -52,7 +54,36 @@ export class MessagesController {
         timestamp: messageRequest.timestamp
       };
 
+      // Ensure session exists or create when missing
+      if (!messageData.sessionId) {
+        this.logger.log('No sessionId provided. Creating new session for HTTP message...');
+        const newSession = await this.sessionService.createSession(
+          messageData.businessId,
+          messageData.locationId || 'default',
+          messageData.userId,
+          'general'
+        );
+        messageData.sessionId = newSession.sessionId;
+        this.logger.log(`Created new session: ${newSession.sessionId}`);
+      } else {
+        const existing = await this.sessionService.getSession(messageData.sessionId);
+        if (!existing) {
+          this.logger.warn(`Provided sessionId ${messageData.sessionId} not found. Creating replacement session...`);
+          const newSession = await this.sessionService.createSession(
+            messageData.businessId,
+            messageData.locationId || 'default',
+            messageData.userId,
+            'general'
+          );
+          messageData.sessionId = newSession.sessionId;
+          this.logger.log(`Created replacement session: ${newSession.sessionId}`);
+        }
+      }
+
       const agentResponse = await this.agentService.processMessage(messageData);
+
+      // Asigură consistență: folosește sessionId-ul generat de AgentService pentru stocare
+      messageData.sessionId = agentResponse.sessionId;
 
       // Store both user message and AI response in database
       this.logger.log('Storing message exchange in database...');
@@ -100,6 +131,35 @@ export class MessagesController {
     this.logger.log(`Timestamp: ${messageDto.timestamp}`);
 
     try {
+      // Ensure session exists or create a new one when missing
+      let sessionId = messageDto.sessionId;
+      if (!sessionId) {
+        this.logger.log('No sessionId provided. Creating new session...');
+        const newSession = await this.sessionService.createSession(
+          messageDto.businessId,
+          messageDto.locationId || 'default',
+          messageDto.userId,
+          'general'
+        );
+        sessionId = newSession.sessionId;
+        messageDto.sessionId = sessionId;
+        this.logger.log(`Created new session: ${sessionId}`);
+      } else {
+        const existing = await this.sessionService.getSession(sessionId);
+        if (!existing) {
+          this.logger.warn(`Provided sessionId ${sessionId} not found. Creating new session...`);
+          const newSession = await this.sessionService.createSession(
+            messageDto.businessId,
+            messageDto.locationId || 'default',
+            messageDto.userId,
+            'general'
+          );
+          sessionId = newSession.sessionId;
+          messageDto.sessionId = sessionId;
+          this.logger.log(`Created replacement session: ${sessionId}`);
+        }
+      }
+
       // Procesare mesaj prin Agent Service
       const response = await this.agentService.processMessage(messageDto);
 

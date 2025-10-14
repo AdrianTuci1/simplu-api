@@ -22,6 +22,119 @@ export class ResourceDataService {
   ) { }
 
   /**
+   * Find or create patient based on customer data
+   */
+  private async findOrCreatePatient(
+    businessId: string,
+    locationId: string,
+    customer: { name?: string; email?: string; phone?: string }
+  ): Promise<string> {
+    const businessLocationId = `${businessId}-${locationId}`;
+
+    // First, try to find existing patient by email
+    if (customer.email) {
+      const existingPatientByEmail = await this.resourceRepository.findOne({
+        where: { 
+          businessLocationId,
+          resourceType: 'patient',
+          data: { email: customer.email } as any
+        }
+      });
+
+      if (existingPatientByEmail) {
+        this.logger.debug(`Found existing patient by email: ${existingPatientByEmail.resourceId}`);
+        return existingPatientByEmail.resourceId;
+      }
+    }
+
+    // If not found by email, try to find by phone
+    if (customer.phone) {
+      const existingPatientByPhone = await this.resourceRepository.findOne({
+        where: { 
+          businessLocationId,
+          resourceType: 'patient',
+          data: { phone: customer.phone } as any
+        }
+      });
+
+      if (existingPatientByPhone) {
+        this.logger.debug(`Found existing patient by phone: ${existingPatientByPhone.resourceId}`);
+        
+        // Update patient with new email if provided and different
+        if (customer.email && customer.email !== (existingPatientByPhone.data as any)?.email) {
+          existingPatientByPhone.data = {
+            ...existingPatientByPhone.data,
+            email: customer.email,
+            updatedAt: new Date().toISOString()
+          };
+          await this.resourceRepository.save(existingPatientByPhone);
+          this.logger.debug(`Updated patient ${existingPatientByPhone.resourceId} with new email: ${customer.email}`);
+        }
+        
+        return existingPatientByPhone.resourceId;
+      }
+    }
+
+    // If no existing patient found, create a new one
+    const connection = await this.databaseService.getConnection(businessId, locationId);
+    const patientId = await this.resourceIdService.generateResourceId(
+      businessId,
+      locationId,
+      'patient',
+      connection.pool
+    );
+    
+    const patientData = {
+      name: customer.name || 'Unknown',
+      email: customer.email,
+      phone: customer.phone,
+      createdAt: new Date().toISOString(),
+      createdBy: {
+        userId: 'guest',
+        email: customer.email,
+        name: customer.name
+      }
+    };
+
+    // Get shard info
+    const { shardId } = await this.getShardInfo(businessId, locationId);
+
+    // Create patient entity
+    const patientEntity = this.resourceRepository.create({
+      businessLocationId,
+      resourceType: 'patient',
+      resourceId: patientId,
+      data: patientData,
+      startDate: null,
+      endDate: null,
+      shardId: shardId,
+    });
+
+    // Save patient
+    await this.resourceRepository.save(patientEntity);
+    
+    this.logger.log(`Created new patient: ${patientId} for customer: ${customer.email || customer.phone}`);
+    
+    // Send notification to Elixir
+    await this.notificationService.notifyResourceCreated({
+      resourceType: 'patient',
+      businessId,
+      locationId,
+      resourceId: patientId,
+      shardId: shardId,
+      data: {
+        id: patientId,
+        ...patientData,
+        businessId,
+        locationId,
+        shardId: shardId,
+      },
+    });
+    
+    return patientId;
+  }
+
+  /**
    * Extract start and end dates from resource data
    */
   private extractDates(data: any, resourceType: string): { startDate: string | null; endDate: string | null } {
@@ -109,6 +222,31 @@ export class ResourceDataService {
         this.logger.log(`Creating ${resourceType} in RDS mode using TypeORM`);
       } else {
         this.logger.log(`Using shard ${shardId} for creating ${resourceType}`);
+      }
+
+      // Handle patient creation for appointments created by patients
+      if (resourceType === 'appointment' && data.createdByPatient && data.customer) {
+        this.logger.log(`Appointment created by patient, finding or creating patient first`);
+        
+        // Find or create patient based on customer data
+        const patientId = await this.findOrCreatePatient(businessId, locationId, data.customer);
+        
+        // Get patient details
+        const patient = await this.resourceRepository.findOne({
+          where: { 
+            businessLocationId: `${businessId}-${locationId}`,
+            resourceType: 'patient',
+            resourceId: patientId
+          }
+        });
+        
+        // Update data with patient info
+        data.patient = {
+          id: patientId,
+          name: patient?.data?.name || data.customer.name || 'Unknown Patient'
+        };
+        
+        this.logger.log(`Patient found/created: ${patientId}, proceeding with appointment creation`);
       }
 
       // Extract dates from data - căutăm automat câmpurile de dată
@@ -207,6 +345,31 @@ export class ResourceDataService {
         this.logger.log(`Updating ${resourceType} in RDS mode using TypeORM`);
       } else {
         this.logger.log(`Using shard ${shardId} for updating ${resourceType}`);
+      }
+
+      // Handle patient creation for appointments updated by patients
+      if (resourceType === 'appointment' && data.createdByPatient && data.customer) {
+        this.logger.log(`Appointment updated by patient, finding or creating patient first`);
+        
+        // Find or create patient based on customer data
+        const patientId = await this.findOrCreatePatient(businessId, locationId, data.customer);
+        
+        // Get patient details
+        const patient = await this.resourceRepository.findOne({
+          where: { 
+            businessLocationId: `${businessId}-${locationId}`,
+            resourceType: 'patient',
+            resourceId: patientId
+          }
+        });
+        
+        // Update data with patient info
+        data.patient = {
+          id: patientId,
+          name: patient?.data?.name || data.customer.name || 'Unknown Patient'
+        };
+        
+        this.logger.log(`Patient found/created: ${patientId}, proceeding with appointment update`);
       }
 
       // Extract dates from data - căutăm automat câmpurile de dată

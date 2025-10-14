@@ -1,0 +1,14 @@
+{
+  "id": "dental-query-example-getMedicByUserId",
+  "title": "Query Example: Identifică medicul curent bazat pe userId",
+  "text": "# Query Example: Identifică medicul curent bazat pe userId\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Identifică medicul curent bazat pe userId\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** get\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** medic\n  **Resource Id:** {{userId}}\n**Note:** userId din context === resourceId pentru medic\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "getMedicByUserId",
+    "documentId": "dental-query-example-getMedicByUserId",
+    "source": "dental-knowledge-base"
+  }
+}

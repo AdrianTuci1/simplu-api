@@ -2,89 +2,68 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Query Tools API",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "description": "Read-only queries for business data"
   },
   "paths": {
-    "/query_app_server": {
+    "/query_resources": {
       "post": {
-        "summary": "Query app server for real-time business data (services, appointments, patients, medics)",
-        "description": "READ-ONLY queries for REAL-TIME BUSINESS DATA. Use this for: Services/treatments, Appointments, Patients, Medics, Time slots, Business settings. Two modules: 1) PATIENT-BOOKING - Get services (what treatments we offer), check time slots, view history. 2) RESOURCES - List/get appointments, patients, treatments, medics, settings. For modifications use call_frontend_function.",
-        "operationId": "query_app_server",
+        "summary": "Query resources (operators) via /api/resources",
+        "description": "READ-ONLY. Use x-resource-type header to select resource kind (appointment, patient, treatment, medic, service, setting, ...). Supports action=list|get, optional resourceId for get, and arbitrary filters including startDate/endDate and nested fields like data.patientName.",
+        "operationId": "query_resources",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "module",
-                  "action",
-                  "businessId",
-                  "locationId"
-                ],
+                "required": ["businessId", "locationId", "action", "resourceType"],
                 "properties": {
-                  "module": {
-                    "type": "string",
-                    "enum": [
-                      "patient-booking",
-                      "resources"
-                    ],
-                    "description": "Module to query: patient-booking (for customers) or resources (for operators)"
-                  },
-                  "action": {
-                    "type": "string",
-                    "description": "READ-ONLY action: services, slots, history (patient-booking) or list, get (resources with resourceType)"
-                  },
-                  "businessId": {
-                    "type": "string",
-                    "description": "Business ID"
-                  },
-                  "locationId": {
-                    "type": "string",
-                    "description": "Location ID"
-                  },
-                  "resourceType": {
-                    "type": "string",
-                    "description": "Resource type (REQUIRED for resources module): appointment, patient, treatment, medic, service, etc."
-                  },
-                  "resourceId": {
-                    "type": "string",
-                    "description": "Resource ID (for get action only)"
-                  },
-                  "params": {
-                    "type": "object",
-                    "description": "Query parameters (filters, pagination, date ranges, etc.)"
-                  },
-                  "accessCode": {
-                    "type": "string",
-                    "description": "Patient access code (for patient-booking history)"
-                  }
+                  "businessId": { "type": "string" },
+                  "locationId": { "type": "string" },
+                  "action": { "type": "string", "enum": ["list", "get"] },
+                  "resourceType": { "type": "string" },
+                  "resourceId": { "type": "string" },
+                  "params": { "type": "object" }
                 }
               }
             }
           }
         },
-        "responses": {
-          "200": {
-            "description": "Successful query",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object"
+        "responses": { "200": { "description": "Successful query" } }
+      }
+    },
+    "/query_patient_booking": {
+      "post": {
+        "summary": "Query patient-booking endpoints",
+        "description": "READ-ONLY. Actions: available-dates (from,to), day-slots (date, optional: serviceId, medicId), history (x-access-code optional). For services/treatments listing, use query_resources with resourceType=treatment.",
+        "operationId": "query_patient_booking",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["businessId", "locationId", "action"],
+                "properties": {
+                  "businessId": { "type": "string" },
+                  "locationId": { "type": "string" },
+                  "action": { "type": "string", "enum": ["available-dates", "day-slots", "history"] },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "date": { "type": "string", "description": "YYYY-MM-DD (required for day-slots)" },
+                      "serviceId": { "type": "string" },
+                      "medicId": { "type": "string" }
                     }
-                  }
+                  },
+                  "accessCode": { "type": "string" }
                 }
               }
             }
           }
-        }
+        },
+        "responses": { "200": { "description": "Successful query" } }
       }
     }
   }

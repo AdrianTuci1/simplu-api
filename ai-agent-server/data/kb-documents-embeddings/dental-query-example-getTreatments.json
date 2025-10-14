@@ -1,0 +1,14 @@
+{
+  "id": "dental-query-example-getTreatments",
+  "title": "Query Example: Obține toate tratamentele disponibile",
+  "text": "# Query Example: Obține toate tratamentele disponibile\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Obține toate tratamentele disponibile\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** treatment\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "getTreatments",
+    "documentId": "dental-query-example-getTreatments",
+    "source": "dental-knowledge-base"
+  }
+}

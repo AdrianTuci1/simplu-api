@@ -1,0 +1,13 @@
+{
+  "id": "dental-data-field-structure",
+  "title": "Data Field Structure",
+  "text": "# Data Field Structure\n\n**Document Type:** data-field-structure\n**Business Type:** dental\n\n---\n\n**Important:** TOATE datele resursei merg în câmpul 'data'. resourceId este generat automat de sistem.\n**When Creating:** call_frontend_function('createResource', {resourceType: '...', data: {...}})\n**When Updating:** call_frontend_function('updateResource', {resourceType: '...', resourceId: '...', data: {...}})\n**When Querying:** Filtrezi după câmpuri din 'data' folosind dot notation: 'data.doctor.id', 'data.patientName', etc.\n**Note:** Nu trimiți businessId, locationId, resourceId, timestamp când creezi - acestea sunt auto-generate\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "data-field-structure",
+    "documentId": "dental-data-field-structure",
+    "source": "dental-knowledge-base"
+  }
+}

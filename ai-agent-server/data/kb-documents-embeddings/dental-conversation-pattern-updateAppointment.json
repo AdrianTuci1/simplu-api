@@ -1,0 +1,15 @@
+{
+  "id": "dental-conversation-pattern-updateAppointment",
+  "title": "Conversation Pattern: User editează o programare existentă",
+  "text": "# Conversation Pattern: User editează o programare existentă\n\n**Document Type:** conversation-pattern\n**Business Type:** dental\n\n---\n\n**Scenario:** User editează o programare existentă\n**Context:** Frontend trimite appointmentId în context când user deschide edit form\n\n**Steps:**\n  1.     **Step:** 1\n    **Action:** Identifică ce să modifice\n\n    **Examples:**\n      - Schimbă ora la 15:00\n      - Modifică doctorul\n      - Schimbă data\n\n  2.     **Step:** 2\n    **Action:** Verifică context din frontend\n    **Note:** appointmentId vine din context\n\n  3.     **Step:** 3\n    **Action:** Actualizează programarea\n    **Tool:** call_frontend_function\n    **Function:** updateResource\n    **Note:** Trimite doar câmpurile modificate\n\n  4.     **Step:** 4\n    **Action:** Confirmă modificarea\n    **Tool:** send_elixir_notification\n\n**Example:** Context: {appointmentId: 'apt_123', editing: 'appointment'}\nUser: 'Schimbă ora la 15:00'\nAI: [call_frontend_function('updateResource', {type: 'appointment', id: 'apt_123', data: {time: '15:00'}})] → 'Done! Programarea e acum la 15:00.'\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "conversation-pattern",
+    "patternKey": "updateAppointment",
+    "scenario": "User editează o programare existentă",
+    "documentId": "dental-conversation-pattern-updateAppointment",
+    "source": "dental-knowledge-base"
+  }
+}

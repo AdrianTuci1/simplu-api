@@ -1,0 +1,14 @@
+{
+  "id": "dental-query-example-getDentalChartByPatient",
+  "title": "Query Example: Obține fișa dentară a unui pacient",
+  "text": "# Query Example: Obține fișa dentară a unui pacient\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Obține fișa dentară a unui pacient\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** dental-chart\n\n  **Params:**\n    **Data.patient Id:** {{patientId}}\n**Note:** Fiecare pacient ar trebui să aibă o singură fișă dentară activă. Consultă fișa înainte de a crea un plan de tratament.\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "getDentalChartByPatient",
+    "documentId": "dental-query-example-getDentalChartByPatient",
+    "source": "dental-knowledge-base"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "dental-query-example-listMedics",
+  "title": "Query Example: Listează toți medicii",
+  "text": "# Query Example: Listează toți medicii\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Listează toți medicii\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** medic\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "listMedics",
+    "documentId": "dental-query-example-listMedics",
+    "source": "dental-knowledge-base"
+  }
+}

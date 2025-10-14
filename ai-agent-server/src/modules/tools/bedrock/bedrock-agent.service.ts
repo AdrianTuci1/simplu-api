@@ -142,8 +142,13 @@ export class BedrockAgentService {
 
       this.logger.log(`📡 Bedrock response received, processing stream...`);
 
-      // Process streaming response
-      const completion = await this.processBedrockStream(response, context, sessionId || context.sessionId);
+      // Process streaming response (isPrimaryInvocation = true pentru apelul principal)
+      const completion = await this.processBedrockStream(
+        response,
+        context,
+        sessionId || context.sessionId,
+        { streamChunks: true, sendCompletion: true }
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(`✅ Bedrock Agent invoked successfully in ${executionTime}ms`);
@@ -171,11 +176,13 @@ export class BedrockAgentService {
 
   /**
    * Procesează stream-ul de răspuns de la Bedrock
+   * @param isPrimaryInvocation - true pentru apelul principal, false pentru continuări (evită trimiterea duplicată către Elixir)
    */
   private async processBedrockStream(
     response: any, 
     context: ToolContext,
     sessionId: string,
+    options: { streamChunks: boolean; sendCompletion: boolean } = { streamChunks: true, sendCompletion: true },
   ): Promise<{
     output: { message: string; actions?: any[] };
     toolsUsed: string[];
@@ -187,6 +194,7 @@ export class BedrockAgentService {
     let sessionState: any = null;
     const trace: any[] = [];
     const actions: any[] = [];
+    let hasStreamedChunks = false;
 
     try {
       this.logger.log(`🔄 Starting to process event stream...`);
@@ -203,26 +211,29 @@ export class BedrockAgentService {
               const text = new TextDecoder().decode(chunk.bytes);
               outputText += text;
               
-              // Trimite chunk-ul în timp real prin Elixir
-              try {
-                await this.elixirNotificationTool.execute({
-                  toolName: 'send_elixir_notification',
-                  parameters: {
-                    businessId: context.businessId,
-                    userId: context.userId,
-                    sessionId: sessionId,
-                    messageId: `chunk_${Date.now()}`,
-                    content: text,
-                    context: {
-                      type: 'streaming_chunk',
-                      isComplete: false,
+              // Trimite chunk-ul în timp real prin Elixir când streaming-ul este activat
+              if (options.streamChunks) {
+                try {
+                  hasStreamedChunks = true;
+                  await this.elixirNotificationTool.execute({
+                    toolName: 'send_elixir_notification',
+                    parameters: {
+                      businessId: context.businessId,
+                      userId: context.userId,
+                      sessionId: sessionId,
+                      messageId: `chunk_${Date.now()}`,
+                      content: text,
+                      context: {
+                        type: 'streaming_chunk',
+                        isComplete: false,
+                      },
                     },
-                  },
-                  context,
-                });
-              } catch (error) {
-                // Nu oprim procesarea dacă trimiterea chunk-ului eșuează
-                this.logger.warn(`⚠️ Failed to send chunk to Elixir: ${error.message}`);
+                    context,
+                  });
+                } catch (error) {
+                  // Nu oprim procesarea dacă trimiterea chunk-ului eșuează
+                  this.logger.warn(`⚠️ Failed to send chunk to Elixir: ${error.message}`);
+                }
               }
             }
           }
@@ -342,27 +353,33 @@ export class BedrockAgentService {
       throw error;
     }
 
-    // Trimite notificare finală că mesajul este complet
-    try {
-      await this.elixirNotificationTool.execute({
-        toolName: 'send_elixir_notification',
-        parameters: {
-          businessId: context.businessId,
-          userId: context.userId,
-          sessionId: sessionId,
-          messageId: `complete_${Date.now()}`,
-          content: outputText.trim() || 'Am procesat cererea ta.',
-          context: {
-            type: 'streaming_complete',
-            isComplete: true,
-            toolsUsed,
-            actions: actions.length > 0 ? actions : undefined,
+    // Trimite notificare finală că mesajul este complet dacă este activat
+    if (options.sendCompletion) {
+      try {
+        await this.elixirNotificationTool.execute({
+          toolName: 'send_elixir_notification',
+          parameters: {
+            businessId: context.businessId,
+            userId: context.userId,
+            sessionId: sessionId,
+            messageId: `complete_${Date.now()}`,
+            // Evită trimiterea conținutului de două ori: dacă am făcut streaming la chunk-uri,
+            // nu mai retrimitem conținutul complet la final.
+            content: hasStreamedChunks ? '' : (outputText.trim() || 'Am procesat cererea ta.'),
+            context: {
+              type: 'streaming_complete',
+              isComplete: true,
+              toolsUsed,
+              actions: actions.length > 0 ? actions : undefined,
+            },
           },
-        },
-        context,
-      });
-    } catch (error) {
-      this.logger.warn(`⚠️ Failed to send completion notification to Elixir: ${error.message}`);
+          context,
+        });
+      } catch (error) {
+        this.logger.warn(`⚠️ Failed to send completion notification to Elixir: ${error.message}`);
+      }
+    } else {
+      this.logger.log(`⏭️ Skipping Elixir completion notification per options`);
     }
 
     return {
@@ -827,8 +844,13 @@ export class BedrockAgentService {
       
       const response = await this.bedrockClient.send(command);
       
-      // Process the continuation response
-      const completion = await this.processBedrockStream(response, context, sessionId);
+      // Process the continuation response (isPrimaryInvocation = false pentru a evita notificări duplicate)
+      const completion = await this.processBedrockStream(
+        response,
+        context,
+        sessionId,
+        { streamChunks: false, sendCompletion: false }
+      );
       
       return {
         success: true,

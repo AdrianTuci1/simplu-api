@@ -1,0 +1,14 @@
+{
+  "id": "dental-best-practices-modules",
+  "title": "Best Practices: modules",
+  "text": "# Best Practices: modules\n\n**Document Type:** best-practices\n**Category:** modules\n**Business Type:** dental\n\n---\n\n- ⚠️ PENTRU OPERATORS: Folosește module='resources' în query_app_server\n- ⚠️ PENTRU CUSTOMERS: Folosește DOAR module='patient-booking' în query_app_server\n- Customers NU au acces la module='resources' - returnează eroare dacă încearcă\n- call_frontend_function este DOAR pentru operators, NU pentru customers\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "modules",
+    "documentId": "dental-best-practices-modules",
+    "source": "dental-knowledge-base"
+  }
+}

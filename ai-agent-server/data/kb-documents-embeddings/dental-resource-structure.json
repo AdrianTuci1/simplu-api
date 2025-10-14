@@ -1,0 +1,13 @@
+{
+  "id": "dental-resource-structure",
+  "title": "Resource Structure - Base Resource",
+  "text": "# Resource Structure - Base Resource\n\n**Document Type:** resource-structure\n**Business Type:** dental\n\n---\n\n**Description:** Toate resursele au această structură de bază\n\n**Schema:**\n\n  **Id:**\n    **Type:** string\n    **Format:** integer\n    **Description:** ID\n    **Auto:** true\n\n  **Business Id:**\n    **Type:** string\n    **Description:** ID-ul business-ului\n    **Auto:** true\n\n  **Location Id:**\n    **Type:** string\n    **Description:** ID-ul locației\n    **Auto:** true\n\n  **Resource Type:**\n    **Type:** string\n    **Description:** Tipul resursei (appointment, patient, medic, treatment, etc.)\n    **Required:** true\n\n  **Resource Id:**\n    **Type:** string\n    **Description:** ID-ul unic al resursei (ex: apt_123, pa2508-00007, UUID pentru medici)\n    **Auto:** true\n\n  **Data:**\n    **Type:** object\n    **Description:** DATELE REALE ale resursei - conținutul variază în funcție de resourceType\n    **Required:** true\n\n  **Timestamp:**\n    **Type:** string\n    **Format:** ISO8601\n    **Auto:** true\n\n  **Last Updated:**\n    **Type:** string\n    **Format:** ISO8601\n    **Auto:** true\n**Note:** Când creezi/modifici o resursă, TOATE datele merg în câmpul 'data'. resourceId este generat automat de sistem.\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "resource-structure",
+    "documentId": "dental-resource-structure",
+    "source": "dental-knowledge-base"
+  }
+}

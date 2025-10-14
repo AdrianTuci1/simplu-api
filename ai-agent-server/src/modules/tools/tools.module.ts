@@ -6,9 +6,10 @@ import { BedrockAgentService } from './bedrock/bedrock-agent.service';
 import { ToolExecutorService } from './bedrock/tool-executor.service';
 
 // HTTP Tools
-import { AppServerTool } from './http-tools/app-server.tool';
 import { ElixirNotificationTool } from './http-tools/elixir-notification.tool';
 import { ExternalApiTool } from './http-tools/external-api.tool';
+import { ResourcesQueryTool } from './http-tools/resources.tool';
+import { PatientBookingQueryTool } from './http-tools/patient-booking.tool';
 
 // WebSocket Tools
 import { BroadcastTool } from './websocket-tools/broadcast.tool';
@@ -28,9 +29,10 @@ import { ExternalApisModule } from '../external-apis/external-apis.module';
     ToolExecutorService,
     
     // HTTP Tools
-    AppServerTool,
     ElixirNotificationTool,
     ExternalApiTool,
+    ResourcesQueryTool,
+    PatientBookingQueryTool,
     
     // WebSocket Tools
     BroadcastTool,

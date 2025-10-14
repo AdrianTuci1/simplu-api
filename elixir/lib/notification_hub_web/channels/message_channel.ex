@@ -92,8 +92,8 @@ defmodule NotificationHubWeb.MessageChannel do
       Logger.info("Message content: \"#{content}\"")
       Logger.info("Full payload: #{inspect(payload)}")
 
-      # Generare ID-uri unice
-      session_id = payload["sessionId"] || generate_session_id(business_id, user_id)
+      # Folosește sessionId furnizat de client; AI Agent Server va genera dacă lipsește
+      session_id = payload["sessionId"]
       message_id = generate_message_id()
 
       Logger.info("Generated session ID: #{session_id}")
@@ -353,8 +353,9 @@ defmodule NotificationHubWeb.MessageChannel do
 
   # Generare ID sesiune
   defp generate_session_id(business_id, user_id) do
-    timestamp = DateTime.utc_now() |> DateTime.to_unix()
-    "#{business_id}:#{user_id}:#{timestamp}"
+    # Stabil per zi: aceeași sesiune pentru (tenant, user) în acea zi
+    date_str = Date.utc_today() |> Date.to_iso8601()
+    "#{business_id}:#{user_id}:#{date_str}"
   end
 
   # Generare ID mesaj

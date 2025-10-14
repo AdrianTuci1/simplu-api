@@ -1,0 +1,486 @@
+{
+  "version": "1.0.0",
+  "businessType": "dental",
+  "lastUpdated": "2025-10-10",
+  "preparedAt": "2025-10-14T17:29:27.651Z",
+  "totalDocuments": 34,
+  "documents": [
+    {
+      "id": "dental-system-instructions-operator",
+      "title": "System Instructions - Operator",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "system-instructions",
+        "role": "operator",
+        "capabilities": {
+          "canAccessAllData": true,
+          "canModifyResources": true,
+          "canViewPersonalInfo": true,
+          "canManageAppointments": true,
+          "canManagePatients": true,
+          "canManageMedics": true,
+          "canManageTreatments": true
+        },
+        "communicationStyle": {
+          "tone": "professional_concise",
+          "maxWords": 50,
+          "language": "formal",
+          "terminology": "medical_correct"
+        },
+        "documentId": "dental-system-instructions-operator",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-system-instructions-customer",
+      "title": "System Instructions - Customer",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "system-instructions",
+        "role": "customer",
+        "capabilities": {
+          "canAccessAllData": false,
+          "canModifyResources": false,
+          "canViewPersonalInfo": false,
+          "canViewPublicInfo": true,
+          "canRequestAppointments": true
+        },
+        "communicationStyle": {
+          "tone": "friendly_helpful",
+          "maxWords": 150,
+          "language": "informal_polite",
+          "terminology": "simple_accessible"
+        },
+        "documentId": "dental-system-instructions-customer",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-structure",
+      "title": "Resource Structure - Base Resource",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-structure",
+        "documentId": "dental-resource-structure",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-appointment",
+      "title": "Resource Type: Programare",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "appointment",
+        "displayName": "Programare",
+        "documentId": "dental-resource-appointment",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-medic",
+      "title": "Resource Type: Medic/Doctor",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "medic",
+        "displayName": "Medic/Doctor",
+        "documentId": "dental-resource-medic",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-patient",
+      "title": "Resource Type: Pacient",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "patient",
+        "displayName": "Pacient",
+        "documentId": "dental-resource-patient",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-treatment",
+      "title": "Resource Type: Tratament/Serviciu",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "treatment",
+        "displayName": "Tratament/Serviciu",
+        "documentId": "dental-resource-treatment",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-dental-chart",
+      "title": "Resource Type: Fișă Dentară",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "dental-chart",
+        "displayName": "Fișă Dentară",
+        "documentId": "dental-resource-dental-chart",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-plan",
+      "title": "Resource Type: Plan de Tratament",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "plan",
+        "displayName": "Plan de Tratament",
+        "documentId": "dental-resource-plan",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-resource-setting",
+      "title": "Resource Type: Setări",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "setting",
+        "displayName": "Setări",
+        "documentId": "dental-resource-setting",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-context-usage",
+      "title": "Context Usage - userId and Frontend Context",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "context-usage",
+        "documentId": "dental-context-usage",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-listAppointmentsToday",
+      "title": "Query Example: Listează toate programările de astăzi",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "listAppointmentsToday",
+        "documentId": "dental-query-example-listAppointmentsToday",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-searchPatient",
+      "title": "Query Example: Caută pacient după nume",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "searchPatient",
+        "documentId": "dental-query-example-searchPatient",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-listMedics",
+      "title": "Query Example: Listează toți medicii",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "listMedics",
+        "documentId": "dental-query-example-listMedics",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-getTreatments",
+      "title": "Query Example: Obține toate tratamentele disponibile",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getTreatments",
+        "documentId": "dental-query-example-getTreatments",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-getMyAppointments",
+      "title": "Query Example: Obține programările medicului curent (userId din context)",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getMyAppointments",
+        "documentId": "dental-query-example-getMyAppointments",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-getMedicByUserId",
+      "title": "Query Example: Identifică medicul curent bazat pe userId",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getMedicByUserId",
+        "documentId": "dental-query-example-getMedicByUserId",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-getWorkingHours",
+      "title": "Query Example: Obține programul de funcționare al clinicii",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getWorkingHours",
+        "documentId": "dental-query-example-getWorkingHours",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-getDentalChartByPatient",
+      "title": "Query Example: Obține fișa dentară a unui pacient",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getDentalChartByPatient",
+        "documentId": "dental-query-example-getDentalChartByPatient",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-query-example-getTreatmentPlanByPatient",
+      "title": "Query Example: Obține planul de tratament al unui pacient",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getTreatmentPlanByPatient",
+        "documentId": "dental-query-example-getTreatmentPlanByPatient",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-conversation-pattern-createAppointment",
+      "title": "Conversation Pattern: Operator vrea să creeze o programare nouă",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "conversation-pattern",
+        "patternKey": "createAppointment",
+        "scenario": "Operator vrea să creeze o programare nouă",
+        "documentId": "dental-conversation-pattern-createAppointment",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-conversation-pattern-updateAppointment",
+      "title": "Conversation Pattern: User editează o programare existentă",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "conversation-pattern",
+        "patternKey": "updateAppointment",
+        "scenario": "User editează o programare existentă",
+        "documentId": "dental-conversation-pattern-updateAppointment",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-conversation-pattern-searchAndDisplay",
+      "title": "Conversation Pattern: User caută informații",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "conversation-pattern",
+        "patternKey": "searchAndDisplay",
+        "scenario": "User caută informații",
+        "documentId": "dental-conversation-pattern-searchAndDisplay",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-terminology-medical",
+      "title": "Terminology - Medical Terms",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "terminology",
+        "category": "medical",
+        "documentId": "dental-terminology-medical",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-terminology-status",
+      "title": "Terminology - Status Terms",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "terminology",
+        "category": "status",
+        "documentId": "dental-terminology-status",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-data-field-structure",
+      "title": "Data Field Structure",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "data-field-structure",
+        "documentId": "dental-data-field-structure",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-general",
+      "title": "Best Practices: general",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "general",
+        "documentId": "dental-best-practices-general",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-appointments",
+      "title": "Best Practices: appointments",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "appointments",
+        "documentId": "dental-best-practices-appointments",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-patients",
+      "title": "Best Practices: patients",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "patients",
+        "documentId": "dental-best-practices-patients",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-medics",
+      "title": "Best Practices: medics",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "medics",
+        "documentId": "dental-best-practices-medics",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-treatments",
+      "title": "Best Practices: treatments",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "treatments",
+        "documentId": "dental-best-practices-treatments",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-modules",
+      "title": "Best Practices: modules",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "modules",
+        "documentId": "dental-best-practices-modules",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-dentalCharts",
+      "title": "Best Practices: dentalCharts",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "dentalCharts",
+        "documentId": "dental-best-practices-dentalCharts",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-best-practices-treatmentPlans",
+      "title": "Best Practices: treatmentPlans",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "treatmentPlans",
+        "documentId": "dental-best-practices-treatmentPlans",
+        "source": "dental-knowledge-base"
+      }
+    }
+  ]
+}

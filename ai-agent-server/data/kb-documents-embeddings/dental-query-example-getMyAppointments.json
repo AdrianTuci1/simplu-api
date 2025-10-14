@@ -1,0 +1,14 @@
+{
+  "id": "dental-query-example-getMyAppointments",
+  "title": "Query Example: Obține programările medicului curent (userId din context)",
+  "text": "# Query Example: Obține programările medicului curent (userId din context)\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Obține programările medicului curent (userId din context)\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** appointment\n\n  **Params:**\n    **Data.doctor.id:** {{userId}}\n    **Start Date:** {{today}}\n    **End Date:** {{today}}\n**Note:** Folosește userId din context ca data.doctor.id pentru filtrare\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "getMyAppointments",
+    "documentId": "dental-query-example-getMyAppointments",
+    "source": "dental-knowledge-base"
+  }
+}

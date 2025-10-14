@@ -71,10 +71,39 @@ export class SessionService {
 
   async getActiveSessionForUser(businessId: string, userId: string): Promise<Session | null> {
     try {
-      // Get all sessions for this user in this business, then sort by updatedAt
       console.log(`🔧 SessionService: Getting active session for businessId=${businessId}, userId=${userId}`);
-      
-      const result = await this.dynamoClient.send(new ScanCommand({
+
+      // Try efficient lookup via GSI first
+      try {
+        const queryResult = await this.dynamoClient.send(new QueryCommand({
+          TableName: tableNames.sessions,
+          IndexName: 'businessId-userId-index',
+          KeyConditionExpression: 'businessId = :businessId AND userId = :userId',
+          ExpressionAttributeValues: marshall({
+            ':businessId': businessId,
+            ':userId': userId,
+          }),
+          Limit: 50
+        }));
+
+        const allSessions = queryResult.Items ? queryResult.Items.map(item => unmarshall(item) as Session) : [];
+        const activeSessions = allSessions.filter(s => s.status === 'active');
+
+        if (activeSessions.length === 0) {
+          console.log(`🔧 SessionService: No active sessions found via GSI`);
+        } else {
+          // Sort by updatedAt descending
+          activeSessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+          const mostRecentActiveSession = activeSessions[0];
+          console.log(`✅ SessionService: Found most recent active session via GSI: ${mostRecentActiveSession.sessionId} (updated: ${mostRecentActiveSession.updatedAt})`);
+          return mostRecentActiveSession;
+        }
+      } catch (gsiError) {
+        console.warn('⚠️  GSI businessId-userId-index not available or query failed, falling back to Scan');
+      }
+
+      // Fallback: Scan and filter (less efficient)
+      const scanResult = await this.dynamoClient.send(new ScanCommand({
         TableName: tableNames.sessions,
         FilterExpression: 'businessId = :businessId AND userId = :userId AND #status = :status',
         ExpressionAttributeNames: {
@@ -87,19 +116,15 @@ export class SessionService {
         })
       }));
 
-      if (!result.Items || result.Items.length === 0) {
+      if (!scanResult.Items || scanResult.Items.length === 0) {
         console.log(`🔧 SessionService: No active sessions found`);
         return null;
       }
 
-      const sessions = result.Items.map(item => unmarshall(item) as Session);
-      
-      // Sort by updatedAt descending (most recently updated first)
+      const sessions = scanResult.Items.map(item => unmarshall(item) as Session);
       sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-      
       const mostRecentActiveSession = sessions[0];
-      console.log(`✅ SessionService: Found most recent active session: ${mostRecentActiveSession.sessionId} (updated: ${mostRecentActiveSession.updatedAt})`);
-      
+      console.log(`✅ SessionService: Found most recent active session (scan): ${mostRecentActiveSession.sessionId} (updated: ${mostRecentActiveSession.updatedAt})`);
       return mostRecentActiveSession;
     } catch (error) {
       console.error('Error getting active session for user:', error);
@@ -127,10 +152,13 @@ export class SessionService {
       } catch (gsiError) {
         // If GSI doesn't exist, fall back to scan
         console.warn('GSI not available, falling back to scan for business sessions lookup');
-        
-        const scanResult = await this.dynamoClient.send(new QueryCommand({
+
+        const scanResult = await this.dynamoClient.send(new ScanCommand({
           TableName: tableNames.sessions,
-          FilterExpression: 'businessId = :businessId AND status = :status',
+          FilterExpression: 'businessId = :businessId AND #status = :status',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
           ExpressionAttributeValues: marshall({
             ':businessId': businessId,
             ':status': 'active'
@@ -279,9 +307,30 @@ export class SessionService {
   async getSessionHistoryForUser(businessId: string, userId: string, limit: number = 20): Promise<Session[]> {
     try {
       console.log(`🔧 SessionService: Getting session history for businessId=${businessId}, userId=${userId}`);
-      
-      // Use ScanCommand to get all sessions for this user in this business
-      // Since we only have partition key (sessionId), we need to scan the entire table
+
+      // Try efficient lookup via GSI first
+      try {
+        const queryResult = await this.dynamoClient.send(new QueryCommand({
+          TableName: tableNames.sessions,
+          IndexName: 'businessId-userId-index',
+          KeyConditionExpression: 'businessId = :businessId AND userId = :userId',
+          ExpressionAttributeValues: marshall({
+            ':businessId': businessId,
+            ':userId': userId
+          }),
+          Limit: Math.max(limit * 2, 20)
+        }));
+
+        const sessionsViaGsi = queryResult.Items ? queryResult.Items.map(item => unmarshall(item) as Session) : [];
+        sessionsViaGsi.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const limitedGsi = sessionsViaGsi.slice(0, limit);
+        console.log(`✅ SessionService: Found ${limitedGsi.length} sessions in history via GSI`);
+        return limitedGsi;
+      } catch (gsiError) {
+        console.warn('⚠️  GSI businessId-userId-index not available or query failed, falling back to Scan');
+      }
+
+      // Fallback: Scan and filter (less efficient)
       const result = await this.dynamoClient.send(new ScanCommand({
         TableName: tableNames.sessions,
         FilterExpression: 'businessId = :businessId AND userId = :userId',
@@ -293,14 +342,9 @@ export class SessionService {
       }));
 
       const sessions = result.Items ? result.Items.map(item => unmarshall(item) as Session) : [];
-      
-      // Sort by createdAt descending (most recent first)
       sessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
-      // Return only the requested limit
       const limitedSessions = sessions.slice(0, limit);
-      
-      console.log(`✅ SessionService: Found ${limitedSessions.length} sessions in history`);
+      console.log(`✅ SessionService: Found ${limitedSessions.length} sessions in history (scan)`);
       return limitedSessions;
     } catch (error) {
       console.error('Error getting session history:', error);

@@ -1,0 +1,15 @@
+{
+  "id": "dental-conversation-pattern-searchAndDisplay",
+  "title": "Conversation Pattern: User caută informații",
+  "text": "# Conversation Pattern: User caută informații\n\n**Document Type:** conversation-pattern\n**Business Type:** dental\n\n---\n\n**Scenario:** User caută informații\n\n**Examples:**\n  1.     **Query:** Câte programări avem astăzi?\n    **Action:** query_app_server(resources, list, appointment, {date: today})\n    **Response:** Astăzi: 12 programări. 8 consultații, 3 tratamente, 1 implant. Prima la 9:00.\n\n  2.     **Query:** Cine este programat mâine cu Dr. Tucean?\n    **Action:** query_app_server(resources, list, appointment, {date: tomorrow, medicId: '...'})\n    **Response:** Mâine Dr. Tucean are 8 pacienți: Ion Popescu (9:00), Maria Ionescu (10:00), ...\n\n  3.     **Query:** Arată-mi pacienții cu numele Popescu\n    **Action:** query_app_server(resources, list, patient, {name: 'Popescu'})\n    **Response:** Am găsit 3 pacienți: 1) Ion Popescu (0712...), 2) Maria Popescu (0723...), 3) ...\n\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "conversation-pattern",
+    "patternKey": "searchAndDisplay",
+    "scenario": "User caută informații",
+    "documentId": "dental-conversation-pattern-searchAndDisplay",
+    "source": "dental-knowledge-base"
+  }
+}

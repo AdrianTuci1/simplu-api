@@ -1,0 +1,14 @@
+{
+  "id": "dental-best-practices-treatmentPlans",
+  "title": "Best Practices: treatmentPlans",
+  "text": "# Best Practices: treatmentPlans\n\n**Document Type:** best-practices\n**Category:** treatmentPlans\n**Business Type:** dental\n\n---\n\n- Planul de tratament se creează pe baza fișei dentare (dental-chart)\n- Planul poate include atât tratamente specifice dinților (isFromChart: true) cât și tratamente generale (isFromChart: false)\n- Ordinea tratamentelor este crucială - folosește câmpul 'order' pentru secvențiere\n- Tratamentele din chart au ID format: chart-{toothNumber}-{treatmentId}\n- Tratamentele generale au ID custom: custom-{description}-{uuid}\n- Calculează automat totalPrice (suma tuturor prețurilor) și totalDuration (suma tuturor duratelor)\n- Statusuri disponibile: draft (ciornă), proposed (propus pacientului), accepted (acceptat), in_progress (în desfășurare), completed (finalizat)\n- Verifică că toate tratamentele din plan există în sistem înainte de creare\n- Permite reordonarea tratamentelor - medicul poate decide ordinea optimă de execuție\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "treatmentPlans",
+    "documentId": "dental-best-practices-treatmentPlans",
+    "source": "dental-knowledge-base"
+  }
+}

@@ -76,7 +76,7 @@ export class PatientBookingService {
       this.resourceRepo
         .createQueryBuilder('resource')
         .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'settings' })
+        .andWhere('resource.resourceType = :type', { type: 'setting' })
         .andWhere("resource.data->>'settingType' = 'working-hours'")
         .getOne(),
       
@@ -134,7 +134,7 @@ export class PatientBookingService {
       this.logger.debug(`Medics duty days: ${JSON.stringify(medics.map(m => ({ 
         id: m.resourceId, 
         name: m.data?.name, 
-        dutyDays: m.data?.dutyDays 
+        dutyDays: m.data?.dutyDays
       })))}`);
 
       if (availableMedics.length === 0) {
@@ -196,7 +196,7 @@ export class PatientBookingService {
     
     // Filter by specific medic if provided
     if (medicId) {
-      appointmentQuery.andWhere("resource.data->>'medicId' = :medicId", { medicId });
+      appointmentQuery.andWhere("resource.data->'medic'->>'id' = :medicId", { medicId });
     }
 
     // Fetch all required data in parallel
@@ -205,7 +205,7 @@ export class PatientBookingService {
       this.resourceRepo
         .createQueryBuilder('resource')
         .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'settings' })
+        .andWhere('resource.resourceType = :type', { type: 'setting' })
         .andWhere("resource.data->>'settingType' = 'working-hours'")
         .getOne(),
       
@@ -243,39 +243,38 @@ export class PatientBookingService {
     // Get service duration
     const serviceDuration = service?.data?.duration || 0;
 
-    // Calculate available slots for each medic and merge them
-    const allAvailableSlots: Slot[] = [];
-    
+    // Calculate available slots across all medics and merge them (no per-medic duplication)
+    const candidateSlots: Slot[] = [];
+
     for (const medic of availableMedics) {
       const medicId = medic.resourceId;
       const medicAppointments = appointmentsByMedic[medicId] || [];
-      
+
       // Convert appointments to occupied slots
-      const occupied = medicAppointments.map((a) => 
+      const occupied = medicAppointments.map((a) =>
         this.toSlot((a.data as any)?.time, (a.data as any)?.service?.duration)
       );
 
-      // Compute free slots for this medic
-      const free = this.computeFreeSlots(dayWorkingHours.startTime, dayWorkingHours.endTime, occupied);
-      
-      // Filter slots by service duration if needed
-      const medicSlots = serviceDuration > 0 
-        ? free.filter(slot => this.canAccommodateService(slot, serviceDuration))
-        : free;
+      // Compute continuous free intervals for this medic
+      const freeIntervals = this.computeFreeIntervals(
+        dayWorkingHours.startTime,
+        dayWorkingHours.endTime,
+        occupied,
+      );
 
-      // Add medic info to each slot
-      const slotsWithMedic = medicSlots.map(slot => ({
-        ...slot,
-        medicId,
-        medicName: medic.data?.name || 'Unknown'
-      }));
-
-      allAvailableSlots.push(...slotsWithMedic);
+      if (serviceDuration > 0) {
+        // Generate service-sized slots within the free intervals
+        const serviceSlots = this.generateServiceSlots(freeIntervals, serviceDuration);
+        candidateSlots.push(...serviceSlots);
+      } else {
+        // Default granularity to 15 minutes across free intervals
+        const sliced = this.sliceIntoGranularity(freeIntervals, 15);
+        candidateSlots.push(...sliced);
+      }
     }
 
-    // Remove duplicates and sort by time
-    const uniqueSlots = this.deduplicateSlots(allAvailableSlots);
-    
+    // Deduplicate by time window (start+end), ignoring medic
+    const uniqueSlots = this.deduplicateSlots(candidateSlots);
     return { success: true, data: uniqueSlots };
   }
 
@@ -302,9 +301,6 @@ export class PatientBookingService {
     if (!medicId) {
       medicId = await this.autoAssignMedic(businessLocationId, date, time, duration || 0);
     }
-
-    // Find or create patient resource
-    const patientId = await this.findOrCreatePatient(businessLocationId, customer);
     
     // Get service details for price
     const service = await this.getServiceDetails(businessLocationId, serviceId);
@@ -318,15 +314,6 @@ export class PatientBookingService {
       .andWhere('resource.resourceId = :medicId', { medicId })
       .getOne();
     const medicName = medic?.data?.name || 'Unknown Medic';
-    
-    // Get patient details for name
-    const patient = await this.resourceRepo
-      .createQueryBuilder('resource')
-      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-      .andWhere('resource.resourceType = :type', { type: 'patient' })
-      .andWhere('resource.resourceId = :patientId', { patientId })
-      .getOne();
-    const patientName = patient?.data?.name || customer.name || 'Unknown Patient';
 
     // Enhanced conflict check with medic consideration
     const overlap = await this.resourceRepo.query(
@@ -380,6 +367,7 @@ export class PatientBookingService {
     }
 
     // Publish appointment create to Kinesis for async creation
+    // resources-server va face find-or-create patient automat
     const operation = {
       operation: 'create',
       businessId,
@@ -398,17 +386,14 @@ export class PatientBookingService {
           id: medicId,
           name: medicName
         },
-        patient: { 
-          id: patientId,
-          name: patientName
-        },
-        customer: payload.customer,
+        customer: payload.customer, // Trimitem datele customerului, resources-server va crea pacientul
         createdBy: { 
           userId: 'guest', 
           email: payload.customer.email,
           name: payload.customer.name 
         },
-        
+        mention: 'string',
+        createdByPatient: true, // Flag pentru resources-server să știe că trebuie să facă find-or-create patient
       },
       timestamp: new Date().toISOString(),
       requestId: Date.now().toString(),
@@ -418,7 +403,7 @@ export class PatientBookingService {
     
     // Send automated messages if services are enabled
     await this.sendAutomatedMessages(businessId, locationId, {
-      patientName: patientName,
+      patientName: customer.name || 'Patient',
       patientPhone: customer.phone,
       patientEmail: customer.email,
       appointmentDate: this.formatDate(date),
@@ -519,9 +504,6 @@ export class PatientBookingService {
     const newDuration = payload.duration ?? (existing.data as any)?.service?.duration ?? 0;
     const newMedicId = payload.medicId ?? (existing.data as any)?.medic?.id;
     
-    // Find or create patient resource for the new customer data
-    const patientId = await this.findOrCreatePatient(businessLocationId, payload.customer);
-    
     // Get service details for price
     const service = await this.getServiceDetails(businessLocationId, newServiceId);
     const servicePrice = service?.data?.price || 0;
@@ -534,15 +516,6 @@ export class PatientBookingService {
       .andWhere('resource.resourceId = :medicId', { medicId: newMedicId })
       .getOne() : null;
     const medicName = medic?.data?.name || 'Unknown Medic';
-    
-    // Get patient details for name
-    const patient = await this.resourceRepo
-      .createQueryBuilder('resource')
-      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-      .andWhere('resource.resourceType = :type', { type: 'patient' })
-      .andWhere('resource.resourceId = :patientId', { patientId })
-      .getOne();
-    const patientName = patient?.data?.name || payload.customer.name || 'Unknown Patient';
 
     if (!newDate || !newTime || !newServiceId) {
       throw new BadRequestException('date, time, serviceId are required for modification');
@@ -601,6 +574,7 @@ export class PatientBookingService {
     }
 
     // Send update operation to Kinesis
+    // resources-server va face find-or-create patient automat
     const operation = {
       operation: 'update',
       businessId,
@@ -620,12 +594,9 @@ export class PatientBookingService {
           id: newMedicId,
           name: medicName
         } : undefined,
-        patient: { 
-          id: patientId,
-          name: patientName
-        },
         customer: payload.customer ?? (existing.data as any)?.customer,
         status: 'scheduled',
+        createdByPatient: true, // Flag pentru resources-server să știe că trebuie să facă find-or-create patient
       },
       timestamp: new Date().toISOString(),
       requestId: Date.now().toString(),
@@ -704,6 +675,27 @@ export class PatientBookingService {
     return this.sliceIntoGranularity(result, granularityMinutes);
   }
 
+  // Compute continuous free intervals without slicing (used for service-duration checks)
+  private computeFreeIntervals(open: string, close: string, occupied: Array<Slot | null>): Slot[] {
+    const busy = occupied
+      .filter((s): s is Slot => !!s)
+      .sort((a, b) => a.start.localeCompare(b.start));
+    const result: Slot[] = [];
+    let cursor = open;
+    for (const b of busy) {
+      if (this.compareTimes(cursor, b.start) < 0) {
+        result.push({ start: cursor, end: b.start });
+      }
+      if (this.compareTimes(cursor, b.end) < 0) {
+        cursor = b.end;
+      }
+    }
+    if (this.compareTimes(cursor, close) < 0) {
+      result.push({ start: cursor, end: close });
+    }
+    return result;
+  }
+
   private compareTimes(a: string, b: string): number {
     return a.localeCompare(b);
   }
@@ -732,6 +724,35 @@ export class PatientBookingService {
     return endTime - startTime;
   }
 
+  private roundUpToGranularity(time: string, granularity: number): string {
+    const minutes = this.timeToMinutes(time);
+    const remainder = minutes % granularity;
+    if (remainder === 0) return time;
+    return this.minutesToTime(minutes + (granularity - remainder));
+  }
+
+  private minutesToTime(totalMinutes: number): string {
+    const hh = Math.floor(totalMinutes / 60) % 24;
+    const mm = totalMinutes % 60;
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+
+  private generateServiceSlots(intervals: Slot[], serviceDuration: number, granularityMinutes: number = 15): Slot[] {
+    if (serviceDuration <= 0) return [];
+    const slots: Slot[] = [];
+    for (const interval of intervals) {
+      let start = this.roundUpToGranularity(interval.start, granularityMinutes);
+      const intervalEndMinutes = this.timeToMinutes(interval.end);
+      while (true) {
+        const endForService = this.addMinutes(start, serviceDuration);
+        if (this.timeToMinutes(endForService) > intervalEndMinutes) break;
+        slots.push({ start, end: endForService });
+        start = this.addMinutes(start, granularityMinutes);
+      }
+    }
+    return slots;
+  }
+
   private timeToMinutes(time: string): number {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
@@ -757,7 +778,7 @@ export class PatientBookingService {
     }
 
     if (medicId) {
-      qb.andWhere("resource.data->>'medicId' = :medicId", { medicId });
+      qb.andWhere("resource.data->'medic'->>'id' = :medicId", { medicId });
     }
 
     return qb.getMany();
@@ -795,26 +816,54 @@ export class PatientBookingService {
     const dutyDays = medic.data?.dutyDays || [];
     this.logger.debug(`Checking medic ${medic.resourceId} for ${weekday}, dutyDays: ${JSON.stringify(dutyDays)}`);
     
-    // Map Romanian day names to English weekday keys
-    const romanianToEnglish: Record<string, string> = {
-      'Luni': 'monday',
-      'Marți': 'tuesday', 
-      'Miercuri': 'wednesday',
-      'Joi': 'thursday',
-      'Vineri': 'friday',
-      'Sâmbătă': 'saturday',
-      'Duminică': 'sunday'
-    };
-    
-    // Check if medic works on this weekday
-    const isAvailable = dutyDays.some((day: string) => {
-      const englishDay = romanianToEnglish[day];
-      this.logger.debug(`Comparing Romanian day "${day}" -> English "${englishDay}" === ${weekday}`);
+    // Check if medic works on this weekday (support RO and EN labels, with/without diacritics)
+    const isAvailable = dutyDays.some((dayLabel: string) => {
+      const englishDay = this.toEnglishWeekdayKeyFromLabel(dayLabel);
+      this.logger.debug(`Duty day label "${dayLabel}" normalized to "${englishDay}"; compare with ${weekday}`);
       return englishDay === weekday;
     });
     
     this.logger.debug(`Medic ${medic.resourceId} available on ${weekday}: ${isAvailable}`);
     return isAvailable;
+  }
+
+  private toEnglishWeekdayKeyFromLabel(label: string): string | null {
+    if (!label) return null;
+    const english = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const lower = String(label).trim().toLowerCase();
+
+    // Already an English weekday
+    if (english.includes(lower)) return lower;
+
+    // Remove common Romanian diacritics for robust matching
+    const noDiacritics = lower
+      .replace(/ș/g, 's').replace(/ş/g, 's')
+      .replace(/ț/g, 't').replace(/ţ/g, 't')
+      .replace(/ă/g, 'a')
+      .replace(/â/g, 'a')
+      .replace(/î/g, 'i');
+
+    switch (noDiacritics) {
+      case 'luni': return 'monday';
+      case 'marti': return 'tuesday';
+      case 'miercuri': return 'wednesday';
+      case 'joi': return 'thursday';
+      case 'vineri': return 'friday';
+      case 'sambata': return 'saturday';
+      case 'duminica': return 'sunday';
+      default:
+        // Try capitalized Romanian with diacritics as a fallback map
+        const map: Record<string, string> = {
+          'luni': 'monday',
+          'marți': 'tuesday',
+          'miercuri': 'wednesday',
+          'joi': 'thursday',
+          'vineri': 'friday',
+          'sâmbătă': 'saturday',
+          'duminică': 'sunday',
+        };
+        return map[lower] || null;
+    }
   }
 
   private groupAppointmentsByDateAndMedic(appointments: ResourceEntity[]): Record<string, Record<string, ResourceEntity[]>> {
@@ -865,16 +914,15 @@ export class PatientBookingService {
         this.toSlot((a.data as any)?.time, (a.data as any)?.service?.duration)
       );
 
-      // Compute free slots for this medic
-      const free = this.computeFreeSlots(dayWorkingHours.startTime, dayWorkingHours.endTime, occupied);
-      
-      // Check if there are slots that can accommodate the service
-      const availableSlots = serviceDuration > 0 
-        ? free.filter(slot => this.canAccommodateService(slot, serviceDuration))
-        : free;
-
-      if (availableSlots.length > 0) {
-        return true;
+      // Compute continuous free intervals for this medic
+      const freeIntervals = this.computeFreeIntervals(dayWorkingHours.startTime, dayWorkingHours.endTime, occupied);
+      if (serviceDuration > 0) {
+        // If any interval can fit the service duration, date is available
+        const fits = freeIntervals.some(interval => this.getSlotDuration(interval) >= serviceDuration);
+        if (fits) return true;
+      } else {
+        // No specific service duration; any free time means available
+        if (freeIntervals.length > 0) return true;
       }
     }
 
@@ -882,14 +930,17 @@ export class PatientBookingService {
   }
 
   private deduplicateSlots(slots: Slot[]): Slot[] {
-    // Remove duplicates based on start time and medic
+    // Remove duplicates based on time window only (start+end), ignore medic
     const seen = new Set<string>();
-    return slots.filter(slot => {
-      const key = `${slot.start}-${(slot as any).medicId}`;
-      if (seen.has(key)) return false;
+    const unique: Slot[] = [];
+    for (const slot of slots) {
+      const key = `${slot.start}-${slot.end}`;
+      if (seen.has(key)) continue;
       seen.add(key);
-      return true;
-    }).sort((a, b) => a.start.localeCompare(b.start));
+      // Ensure we only return start/end, dropping any extra fields
+      unique.push({ start: slot.start, end: slot.end });
+    }
+    return unique.sort((a, b) => a.start.localeCompare(b.start));
   }
 
   private async autoAssignMedic(
@@ -962,96 +1013,6 @@ export class PatientBookingService {
 
     this.logger.debug(`Auto-assigned medic ${selectedMedic.resourceId} for ${date} at ${time}`);
     return selectedMedic.resourceId;
-  }
-
-  private async findOrCreatePatient(
-    businessLocationId: string,
-    customer: { name?: string; email?: string; phone?: string }
-  ): Promise<string> {
-    // First, try to find existing patient by email
-    if (customer.email) {
-      const existingPatientByEmail = await this.resourceRepo
-        .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'patient' })
-        .andWhere("resource.data->>'email' = :email", { email: customer.email })
-        .getOne();
-
-      if (existingPatientByEmail) {
-        this.logger.debug(`Found existing patient by email: ${existingPatientByEmail.resourceId}`);
-        return existingPatientByEmail.resourceId;
-      }
-    }
-
-    // If not found by email, try to find by phone
-    if (customer.phone) {
-      const existingPatientByPhone = await this.resourceRepo
-        .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'patient' })
-        .andWhere("resource.data->>'phone' = :phone", { phone: customer.phone })
-        .getOne();
-
-      if (existingPatientByPhone) {
-        this.logger.debug(`Found existing patient by phone: ${existingPatientByPhone.resourceId}`);
-        
-        // Update patient with new email if provided and different
-        if (customer.email && customer.email !== (existingPatientByPhone.data as any)?.email) {
-          await this.updatePatientEmail(existingPatientByPhone.resourceId, customer.email);
-        }
-        
-        return existingPatientByPhone.resourceId;
-      }
-    }
-
-    // If no existing patient found, create a new one
-    const newPatientId = `pt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    const patientData = {
-      name: customer.name || 'Unknown',
-      email: customer.email,
-      phone: customer.phone,
-      createdAt: new Date().toISOString(),
-      createdBy: {
-        userId: 'guest',
-        email: customer.email,
-        name: customer.name
-      }
-    };
-
-    // Create patient resource via Kinesis
-    const operation = {
-      operation: 'create',
-      businessId: businessLocationId.split('-')[0],
-      locationId: businessLocationId.split('-')[1],
-      resourceType: 'patient',
-      resourceId: newPatientId,
-      data: patientData,
-      timestamp: new Date().toISOString(),
-      requestId: Date.now().toString(),
-    } as any;
-
-    await this.kinesisService.sendResourceOperation(operation);
-    
-    this.logger.debug(`Created new patient: ${newPatientId}`);
-    return newPatientId;
-  }
-
-  private async updatePatientEmail(patientId: string, newEmail: string): Promise<void> {
-    const operation = {
-      operation: 'update',
-      resourceType: 'patient',
-      resourceId: patientId,
-      data: {
-        email: newEmail,
-        updatedAt: new Date().toISOString(),
-      },
-      timestamp: new Date().toISOString(),
-      requestId: Date.now().toString(),
-    } as any;
-
-    await this.kinesisService.sendResourceOperation(operation);
-    this.logger.debug(`Updated patient ${patientId} with new email: ${newEmail}`);
   }
 
   private async sendAutomatedMessages(

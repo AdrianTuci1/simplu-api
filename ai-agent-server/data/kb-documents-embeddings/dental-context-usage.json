@@ -1,0 +1,13 @@
+{
+  "id": "dental-context-usage",
+  "title": "Context Usage - userId and Frontend Context",
+  "text": "# Context Usage - userId and Frontend Context\n\n**Document Type:** context-usage\n**Business Type:** dental\n\n---\n\n\n**User Id:**\n  **Description:** userId din conversație identifică cine vorbește cu AI-ul\n\n  **Usage:**\n    - Dacă userId este un UUID, probabil este un medic (resourceId la medic)\n    - Poate identifica medicul curent pentru query-uri personalizate\n    - Folosește userId pentru a găsi informații despre operatorul curent\n\n  **Examples:**\n    1.       **Scenario:** Operator (care este medic) întreabă 'Când am următorul loc pentru implant?'\n\n      **Steps:**\n        - 1. Extrage userId din context (ex: 33948842-b061-7036-f02f-79b9c0b4225b)\n        - 2. Caută medic cu resourceId === userId\n        - 3. Confirmă că este medic: query_app_server(resources, get, medic, {resourceId: userId})\n        - 4. Caută programări viitoare: query_app_server(resources, list, appointment, {params: {doctor.id: userId, date: future, status: scheduled}})\n        - 5. Găsește prima programare de tip 'implant' în lista sortată\n      **Response:** Următorul implant este pe 25 octombrie la 10:00 cu pacientul Ion Popescu.\n\n    2.       **Scenario:** Operator întreabă 'Câte programări am astăzi?'\n\n      **Steps:**\n        - 1. Extrage userId din context\n        - 2. Verifică dacă userId corespunde unui medic\n        - 3. Query programări pentru medicul respectiv: params: {date: today, 'data.doctor.id': userId}\n        - 4. Numără rezultatele\n      **Response:** Astăzi ai 8 programări: 5 consultații, 2 tratamente endodontice, 1 implant.\n\n    3.       **Scenario:** Operator (non-medic) întreabă 'Câte programări avem astăzi?'\n\n      **Steps:**\n        - 1. userId nu corespunde unui medic\n        - 2. Query toate programările: params: {date: today}\n        - 3. Numără rezultatele\n      **Response:** Astăzi clinica are 23 programări în total.\n\n\n**Frontend Context:**\n  **Description:** Frontend trimite context suplimentar când user deschide chat\n\n  **Possible Fields:**\n    - editingResource: {type, resourceId}\n    - openForm: string\n    - selectedDate: string\n    - currentView: string\n  **Usage:** Folosește context-ul pentru a identifica ce resursă editează user-ul și pentru a face modificări precise\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "context-usage",
+    "documentId": "dental-context-usage",
+    "source": "dental-knowledge-base"
+  }
+}

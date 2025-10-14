@@ -4,9 +4,10 @@ import { ToolExecutorService } from './bedrock/tool-executor.service';
 import { ToolContext, BedrockInvocationResult } from './interfaces';
 
 // HTTP Tools
-import { AppServerTool } from './http-tools/app-server.tool';
 import { ElixirNotificationTool } from './http-tools/elixir-notification.tool';
 import { ExternalApiTool } from './http-tools/external-api.tool';
+import { ResourcesQueryTool } from './http-tools/resources.tool';
+import { PatientBookingQueryTool } from './http-tools/patient-booking.tool';
 
 // WebSocket Tools
 import { BroadcastTool } from './websocket-tools/broadcast.tool';
@@ -23,9 +24,10 @@ export class ToolsService implements OnModuleInit {
     private readonly bedrockAgentService: BedrockAgentService,
     private readonly toolExecutorService: ToolExecutorService,
     // HTTP Tools
-    private readonly appServerTool: AppServerTool,
     private readonly elixirNotificationTool: ElixirNotificationTool,
     private readonly externalApiTool: ExternalApiTool,
+    private readonly resourcesQueryTool: ResourcesQueryTool,
+    private readonly patientBookingQueryTool: PatientBookingQueryTool,
     // WebSocket Tools
     private readonly broadcastTool: BroadcastTool,
     private readonly frontendInteractionTool: FrontendInteractionTool,
@@ -38,9 +40,10 @@ export class ToolsService implements OnModuleInit {
     this.logger.log('🔧 Registering tools...');
 
     // Register HTTP Tools
-    this.toolExecutorService.registerTool(this.appServerTool);
     this.toolExecutorService.registerTool(this.elixirNotificationTool);
     this.toolExecutorService.registerTool(this.externalApiTool);
+    this.toolExecutorService.registerTool(this.resourcesQueryTool);
+    this.toolExecutorService.registerTool(this.patientBookingQueryTool);
 
     // Register WebSocket Tools
     this.toolExecutorService.registerTool(this.broadcastTool);
