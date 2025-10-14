@@ -1,0 +1,12 @@
+{
+  "id": "dental-terminology-status",
+  "title": "Terminology - Status Terms",
+  "content": "{\n  \"scheduled\": \"Programat - programarea este planificată\",\n  \"confirmed\": \"Confirmat - pacientul a confirmat prezența\",\n  \"completed\": \"Finalizat - tratamentul a fost efectuat\",\n  \"cancelled\": \"Anulat - programarea a fost anulată\",\n  \"no_show\": \"Nu s-a prezentat - pacientul nu a venit\"\n}",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "terminology",
+    "category": "status"
+  }
+}

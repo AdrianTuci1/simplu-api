@@ -1,0 +1,13 @@
+{
+  "id": "dental-conversation-pattern-updateAppointment",
+  "title": "Conversation Pattern: User editează o programare existentă",
+  "content": "{\n  \"scenario\": \"User editează o programare existentă\",\n  \"context\": \"Frontend trimite appointmentId în context când user deschide edit form\",\n  \"steps\": [\n    {\n      \"step\": 1,\n      \"action\": \"Identifică ce să modifice\",\n      \"examples\": [\n        \"Schimbă ora la 15:00\",\n        \"Modifică doctorul\",\n        \"Schimbă data\"\n      ]\n    },\n    {\n      \"step\": 2,\n      \"action\": \"Verifică context din frontend\",\n      \"note\": \"appointmentId vine din context\"\n    },\n    {\n      \"step\": 3,\n      \"action\": \"Actualizează programarea\",\n      \"tool\": \"call_frontend_function\",\n      \"function\": \"updateResource\",\n      \"note\": \"Trimite doar câmpurile modificate\"\n    },\n    {\n      \"step\": 4,\n      \"action\": \"Confirmă modificarea\",\n      \"tool\": \"send_elixir_notification\"\n    }\n  ],\n  \"example\": \"Context: {appointmentId: 'apt_123', editing: 'appointment'}\\nUser: 'Schimbă ora la 15:00'\\nAI: [call_frontend_function('updateResource', {type: 'appointment', id: 'apt_123', data: {time: '15:00'}})] → 'Done! Programarea e acum la 15:00.'\"\n}",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "conversation-pattern",
+    "patternKey": "updateAppointment",
+    "scenario": "User editează o programare existentă"
+  }
+}

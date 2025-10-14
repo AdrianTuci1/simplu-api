@@ -1,0 +1,12 @@
+{
+  "id": "dental-query-example-getWorkingHours",
+  "title": "Query Example: Obține programul de funcționare al clinicii",
+  "content": "{\n  \"description\": \"Obține programul de funcționare al clinicii\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"setting\",\n    \"params\": {\n      \"data.settingType\": \"working-hours\"\n    }\n  },\n  \"note\": \"FOARTE IMPORTANT: Verifică working-hours înainte de a crea programări sau când răspunzi la întrebări despre program\",\n  \"usage\": \"Pentru a verifica dacă o oră e în programul de lucru, parsează array-ul days și verifică startTime/endTime pentru ziua respectivă\"\n}",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "getWorkingHours"
+  }
+}

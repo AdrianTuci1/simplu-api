@@ -1,0 +1,451 @@
+{
+  "businessType": "dental",
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-10",
+  "generatedAt": "2025-10-14T00:03:20.115Z",
+  "documents": [
+    {
+      "id": "dental-system-instructions-operator",
+      "title": "System Instructions - Operator",
+      "content": "Tu ești un asistent AI specializat pentru operatorii unei clinici dentare. Ai acces complet la toate datele din sistem.\n\nSTIL DE COMUNICARE:\n- Răspunsuri CONCISE (maxim 50 de cuvinte)\n- Profesional și direct\n- Folosește terminologie medicală corectă\n- Oferă informații clare și acționabile\n\nCAPACITĂȚI:\n- Accesezi și listezi toate programările, pacienții, medicii, tratamentele\n- Modifici resurse prin apeluri către funcții frontend\n- Creezi noi programări, pacienți, etc.\n- Gestionezi statusul programărilor și datele pacienților\n\nTOOLS DISPONIBILE:\n- query_app_server: pentru a CITI date (READ-ONLY)\n  * module: 'resources' (pentru operators), action: 'list' sau 'get'\n  * resourceType: 'appointment', 'patient', 'medic', 'treatment', etc.\n- call_frontend_function: pentru a MODIFICA date (CREATE/UPDATE/DELETE)\n  * createResource, updateResource, deleteResource, submitForm\n- send_elixir_notification: pentru notificări către frontend\n- broadcast_websocket_message: pentru comunicare în timp real\n\n⚠️ REGULI CRITICE PENTRU PROGRAMĂRI:\n1. NU poți crea programare fără pacient EXISTENT în sistem\n2. NU poți crea programare fără tratament EXISTENT în sistem\n3. FLUX OBLIGATORIU:\n   a) Verifică dacă pacientul există (query patient by name)\n   b) Dacă NU există: STOP! Ghidează operatorul să creeze pacientul MAI ÎNTÂI\n   c) Verifică dacă tratamentul există (query treatments)\n   d) Dacă NU există: STOP! Ghidează operatorul să creeze tratamentul MAI ÎNTÂI\n   e) Verifică working-hours (ora trebuie în program)\n   f) Verifică disponibilitate medic\n   g) DOAR ACUM creează programarea\n\nIMPORTANT:\n- Frontend trimite context când user deschide chat (ce editează, ce formular e deschis)\n- Folosește context-ul pentru modificări precise\n- NU crea drafts - execută acțiuni DIRECT prin call_frontend_function\n- Confirmă fiecare acțiune executată\n\nEXEMPLE:\n✅ CORECT - Programare cu verificări:\nQ: \"Creează programare pentru Maria Ionescu mâine la 14:00, consultație\"\nA: \n1. [query_app_server(resources, list, patient, {name: 'Maria Ionescu'})] → NU GĂSIT\n2. \"Maria Ionescu nu există. Creez pacient. Telefon?\"\n3. User: \"0712345678\"\n4. [call_frontend_function('createResource', {resourceType: 'patient', data: {...}})] → CREAT\n5. [query_app_server(resources, list, treatment)] → consultație EXISTĂ\n6. [query working-hours + disponibilitate] → OK\n7. [call_frontend_function('createResource', {resourceType: 'appointment', data: {...}})] → SUCCESS\n8. \"Done! Programare creată pentru Maria Ionescu, mâine 14:00, consultație cu Dr. Tucean.\"\n\n❌ GREȘIT - Programare directă fără verificări:\nQ: \"Creează programare pentru Maria Ionescu mâine la 14:00\"\nA: [call_frontend_function('createResource', {resourceType: 'appointment', ...})] ← GREȘIT! Nu ai verificat dacă pacientul există!\n\nQ: \"Câte programări avem astăzi?\"\nA: [query_app_server(resources, list, appointment, {date: today})] \"Astăzi: 12 programări (8 consultații, 3 tratamente, 1 implant). Prima la 9:00 cu Dr. Popescu.\"",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "system-instructions",
+        "role": "operator",
+        "capabilities": {
+          "canAccessAllData": true,
+          "canModifyResources": true,
+          "canViewPersonalInfo": true,
+          "canManageAppointments": true,
+          "canManagePatients": true,
+          "canManageMedics": true,
+          "canManageTreatments": true
+        },
+        "communicationStyle": {
+          "tone": "professional_concise",
+          "maxWords": 50,
+          "language": "formal",
+          "terminology": "medical_correct"
+        }
+      }
+    },
+    {
+      "id": "dental-system-instructions-customer",
+      "title": "System Instructions - Customer",
+      "content": "Tu ești un asistent AI pentru pacienții unei clinici dentare. Ajuți pacienții să găsească informații și să solicite programări.\n\nSTIL DE COMUNICARE:\n- Răspunsuri PRIETENOASE și ÎNCURAJATOARE\n- Limbaj simplu, fără termeni medicali complicați\n- Răbdător și empatic\n- Ghidează pas cu pas\n\nCAPACITĂȚI LIMITATE:\n- Poți oferi informații despre servicii și prețuri\n- Poți verifica disponibilitate\n- NU poți accesa date personale ale altor pacienți\n- Poți răspunde la întrebări generale despre tratamente\n\nTOOLS DISPONIBILE:\n- query_app_server: EXCLUSIV cu module='patient-booking'\n  * action: 'services' - listează servicii disponibile\n  * action: 'slots' - verifică disponibilitate\n  * action: 'history' - istoric programări (cu access code)\n  * IMPORTANT: module trebuie să fie ÎNTOTDEAUNA 'patient-booking'\n  * NU FOLOSI NICIODATĂ module='resources' - nu ai acces la el!\n- Customers NU pot crea/modifica resurse direct, doar solicită programări\n\nRESTRICȚII CRITICE:\n- NU folosi module='resources' în query_app_server - DOAR module='patient-booking'\n- Nu dezvălui niciodată informații despre alți pacienți\n- Nu oferi diagnostice medicale\n- Pentru urgențe, recomandă să sune direct la clinică\n- Toată comunicarea se face prin patient-booking API (/api/patient-booking)\n\nEXEMPLE:\n✅ CORECT:\nQ: \"Cât costă un implant?\"\nA: [query_app_server(module: 'patient-booking', action: 'services')] \"Bună ziua! Un implant dentar costă în medie 800 RON și durează aproximativ 2 ore. Include consultație, implantul și verificări ulterioare. Doriți să verificăm disponibilitatea?\"\n\nQ: \"Pot să vin astăzi?\"\nA: [query_app_server(module: 'patient-booking', action: 'slots')] \"Să verific... Din păcate, astăzi suntem complet programați. Cel mai apropiat loc liber este mâine la 14:00. Vă convine?\"\n\n❌ GREȘIT:\n- query_app_server(module: 'resources', ...) - NU ai acces!\n- call_frontend_function(...) - Customers nu pot apela funcții frontend!",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "system-instructions",
+        "role": "customer",
+        "capabilities": {
+          "canAccessAllData": false,
+          "canModifyResources": false,
+          "canViewPersonalInfo": false,
+          "canViewPublicInfo": true,
+          "canRequestAppointments": true
+        },
+        "communicationStyle": {
+          "tone": "friendly_helpful",
+          "maxWords": 150,
+          "language": "informal_polite",
+          "terminology": "simple_accessible"
+        }
+      }
+    },
+    {
+      "id": "dental-resource-structure",
+      "title": "Resource Structure - Base Resource",
+      "content": "{\n  \"description\": \"Toate resursele au această structură de bază\",\n  \"schema\": {\n    \"id\": {\n      \"type\": \"string\",\n      \"format\": \"integer\",\n      \"description\": \"ID\",\n      \"auto\": true\n    },\n    \"businessId\": {\n      \"type\": \"string\",\n      \"description\": \"ID-ul business-ului\",\n      \"auto\": true\n    },\n    \"locationId\": {\n      \"type\": \"string\",\n      \"description\": \"ID-ul locației\",\n      \"auto\": true\n    },\n    \"resourceType\": {\n      \"type\": \"string\",\n      \"description\": \"Tipul resursei (appointment, patient, medic, treatment, etc.)\",\n      \"required\": true\n    },\n    \"resourceId\": {\n      \"type\": \"string\",\n      \"description\": \"ID-ul unic al resursei (ex: apt_123, pa2508-00007, UUID pentru medici)\",\n      \"auto\": true\n    },\n    \"data\": {\n      \"type\": \"object\",\n      \"description\": \"DATELE REALE ale resursei - conținutul variază în funcție de resourceType\",\n      \"required\": true\n    },\n    \"timestamp\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    },\n    \"lastUpdated\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    }\n  },\n  \"note\": \"Când creezi/modifici o resursă, TOATE datele merg în câmpul 'data'. resourceId este generat automat de sistem.\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-structure"
+      }
+    },
+    {
+      "id": "dental-resource-appointment",
+      "title": "Resource Type: Programare",
+      "content": "{\n  \"displayName\": \"Programare\",\n  \"description\": \"Programări pentru consultații și tratamente\",\n  \"resourceIdFormat\": \"apt_XXXXX sau UUID\",\n  \"dataSchema\": {\n    \"date\": {\n      \"type\": \"string\",\n      \"format\": \"YYYY-MM-DD\",\n      \"required\": true,\n      \"description\": \"Data programării\"\n    },\n    \"time\": {\n      \"type\": \"string\",\n      \"format\": \"HH:mm\",\n      \"required\": true,\n      \"description\": \"Ora programării\"\n    },\n    \"doctor\": {\n      \"type\": \"object\",\n      \"required\": true,\n      \"properties\": {\n        \"id\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"ID-ul medicului (UUID)\"\n        },\n        \"name\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"Numele complet al medicului\"\n        }\n      }\n    },\n    \"patient\": {\n      \"type\": \"object\",\n      \"required\": true,\n      \"properties\": {\n        \"id\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"ID-ul pacientului (format: pa2508-00007)\"\n        },\n        \"name\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"Numele complet al pacientului\"\n        }\n      }\n    },\n    \"service\": {\n      \"type\": \"object\",\n      \"required\": true,\n      \"properties\": {\n        \"id\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"ID-ul serviciului/tratamentului (format: tr2508-00005)\"\n        },\n        \"name\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"Numele tratamentului\"\n        },\n        \"duration\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"Durata în minute (string)\"\n        }\n      }\n    },\n    \"price\": {\n      \"type\": \"number\",\n      \"required\": false,\n      \"default\": 0,\n      \"description\": \"Prețul programării\"\n    },\n    \"status\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"scheduled\",\n        \"confirmed\",\n        \"completed\",\n        \"cancelled\",\n        \"no_show\"\n      ],\n      \"default\": \"scheduled\",\n      \"description\": \"Statusul programării\"\n    },\n    \"serviceDuration\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"description\": \"Durata serviciului în minute (string, copie din service.duration)\"\n    },\n    \"prescription\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"default\": \"\",\n      \"description\": \"Prescripție medicală\"\n    },\n    \"postOperativeNotes\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"default\": \"\",\n      \"description\": \"Note post-operatorii\"\n    },\n    \"images\": {\n      \"type\": \"array\",\n      \"required\": false,\n      \"default\": [],\n      \"description\": \"Array cu imagini (URLs sau referințe)\"\n    },\n    \"createdAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true,\n      \"description\": \"Data creării (auto-generated)\"\n    },\n    \"updatedAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true,\n      \"description\": \"Data ultimei actualizări (auto-generated)\"\n    }\n  },\n  \"fullResourceExample\": {\n    \"id\": \"B0100001-L0100001-apt_12345\",\n    \"businessId\": \"B0100001\",\n    \"locationId\": \"L0100001\",\n    \"resourceType\": \"appointment\",\n    \"resourceId\": \"apt_12345\",\n    \"data\": {\n      \"date\": \"2025-10-01\",\n      \"time\": \"08:40\",\n      \"doctor\": {\n        \"id\": \"33948842-b061-7036-f02f-79b9c0b4225b\",\n        \"name\": \"Dr. George Bush\"\n      },\n      \"patient\": {\n        \"id\": \"pa2508-00007\",\n        \"name\": \"Cristi Geamanu\"\n      },\n      \"service\": {\n        \"id\": \"tr2508-00005\",\n        \"name\": \"Consultatie Ortodontica\",\n        \"duration\": \"15\"\n      },\n      \"price\": 0,\n      \"status\": \"scheduled\",\n      \"serviceDuration\": \"15\",\n      \"prescription\": \"\",\n      \"postOperativeNotes\": \"\",\n      \"images\": [],\n      \"createdAt\": \"2025-10-01T01:42:00.176Z\",\n      \"updatedAt\": \"2025-10-01T01:42:00.176Z\"\n    },\n    \"timestamp\": \"2025-10-01T01:42:00.176Z\",\n    \"lastUpdated\": \"2025-10-01T01:42:00.176Z\"\n  },\n  \"dataFieldExample\": {\n    \"date\": \"2025-10-01\",\n    \"time\": \"08:40\",\n    \"doctor\": {\n      \"id\": \"33948842-b061-7036-f02f-79b9c0b4225b\",\n      \"name\": \"Dr. George Bush\"\n    },\n    \"patient\": {\n      \"id\": \"pa2508-00007\",\n      \"name\": \"Cristi Geamanu\"\n    },\n    \"service\": {\n      \"id\": \"tr2508-00005\",\n      \"name\": \"Consultatie Ortodontica\",\n      \"duration\": \"15\"\n    },\n    \"price\": 0,\n    \"status\": \"scheduled\",\n    \"serviceDuration\": \"15\",\n    \"prescription\": \"\",\n    \"postOperativeNotes\": \"\",\n    \"images\": []\n  },\n  \"frontendFunctionExample\": {\n    \"description\": \"Când creezi o resursă prin call_frontend_function, trimiți DOAR câmpul 'data'\",\n    \"functionName\": \"createResource\",\n    \"parameters\": {\n      \"resourceType\": \"appointment\",\n      \"data\": {\n        \"date\": \"2025-10-20\",\n        \"time\": \"14:00\",\n        \"doctor\": {\n          \"id\": \"33948842-b061-7036-f02f-79b9c0b4225b\",\n          \"name\": \"Dr. Tucean\"\n        },\n        \"patient\": {\n          \"id\": \"pa2508-00007\",\n          \"name\": \"Ion Popescu\"\n        },\n        \"service\": {\n          \"id\": \"tr2508-00005\",\n          \"name\": \"Consultatie\",\n          \"duration\": \"30\"\n        },\n        \"price\": 150,\n        \"status\": \"scheduled\",\n        \"serviceDuration\": \"30\"\n      }\n    }\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "appointment",
+        "displayName": "Programare"
+      }
+    },
+    {
+      "id": "dental-resource-medic",
+      "title": "Resource Type: Medic/Doctor",
+      "content": "{\n  \"displayName\": \"Medic/Doctor\",\n  \"description\": \"Medici și doctori din clinică\",\n  \"resourceIdFormat\": \"UUID (ex: 33948842-b061-7036-f02f-79b9c0b4225b)\",\n  \"note\": \"IMPORTANT: resourceId pentru medic este același cu userId din conversație dacă operatorul este medic!\",\n  \"dataSchema\": {\n    \"medicName\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"Numele medicului\"\n    },\n    \"email\": {\n      \"type\": \"string\",\n      \"format\": \"email\",\n      \"required\": false,\n      \"description\": \"Email medic\"\n    },\n    \"phone\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"description\": \"Telefon medic\"\n    },\n    \"role\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"description\": \"Rol în clinică (Administrator, Medic, etc.)\"\n    },\n    \"dutyDays\": {\n      \"type\": \"array\",\n      \"items\": \"string\",\n      \"required\": false,\n      \"description\": \"Zilele în care medicul este disponibil (Luni, Marți, etc.)\"\n    },\n    \"createdAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    },\n    \"updatedAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    }\n  },\n  \"fullResourceExample\": {\n    \"id\": \"B0100001-L0100001-33948842-b061-7036-f02f-79b9c0b4225b\",\n    \"businessId\": \"B0100001\",\n    \"locationId\": \"L0100001\",\n    \"resourceType\": \"medic\",\n    \"resourceId\": \"33948842-b061-7036-f02f-79b9c0b4225b\",\n    \"data\": {\n      \"medicName\": \"Tucean\",\n      \"email\": \"tucean@test.com\",\n      \"phone\": \"0736999960\",\n      \"role\": \"Administrator\",\n      \"dutyDays\": [\n        \"Luni\",\n        \"Miercuri\",\n        \"Vineri\"\n      ],\n      \"createdAt\": \"2025-10-01T02:13:30.045Z\",\n      \"updatedAt\": \"2025-10-01T02:13:30.045Z\"\n    },\n    \"timestamp\": \"2025-10-01T02:13:30.045Z\",\n    \"lastUpdated\": \"2025-10-01T02:13:30.045Z\"\n  },\n  \"dataFieldExample\": {\n    \"medicName\": \"Tucean\",\n    \"email\": \"tucean@test.com\",\n    \"phone\": \"0736999960\",\n    \"role\": \"Administrator\",\n    \"dutyDays\": [\n      \"Luni\",\n      \"Miercuri\",\n      \"Vineri\"\n    ]\n  },\n  \"frontendFunctionExample\": {\n    \"functionName\": \"createResource\",\n    \"parameters\": {\n      \"resourceType\": \"medic\",\n      \"data\": {\n        \"medicName\": \"Dr. Ionescu\",\n        \"email\": \"ionescu@clinica.ro\",\n        \"phone\": \"0721234567\",\n        \"role\": \"Medic\",\n        \"dutyDays\": [\n          \"Luni\",\n          \"Marți\",\n          \"Joi\",\n          \"Vineri\"\n        ]\n      }\n    }\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "medic",
+        "displayName": "Medic/Doctor"
+      }
+    },
+    {
+      "id": "dental-resource-patient",
+      "title": "Resource Type: Pacient",
+      "content": "{\n  \"displayName\": \"Pacient\",\n  \"description\": \"Pacienți ai clinicii\",\n  \"resourceIdFormat\": \"paYYMM-XXXXX (ex: pa2508-00007)\",\n  \"dataSchema\": {\n    \"patientName\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"Numele complet al pacientului\"\n    },\n    \"phone\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"Număr de telefon\"\n    },\n    \"email\": {\n      \"type\": \"string\",\n      \"format\": \"email\",\n      \"required\": false,\n      \"description\": \"Email pacient\"\n    },\n    \"gender\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"male\",\n        \"female\",\n        \"other\"\n      ],\n      \"required\": false,\n      \"description\": \"Gen pacient\"\n    },\n    \"birthYear\": {\n      \"type\": \"number\",\n      \"required\": false,\n      \"description\": \"Anul nașterii (ex: 1994)\"\n    },\n    \"address\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"description\": \"Adresa pacientului\"\n    },\n    \"status\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"active\",\n        \"inactive\"\n      ],\n      \"default\": \"active\",\n      \"description\": \"Status pacient\"\n    },\n    \"notes\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"default\": null,\n      \"description\": \"Note despre pacient\"\n    },\n    \"tags\": {\n      \"type\": \"array\",\n      \"items\": \"string\",\n      \"required\": false,\n      \"default\": [],\n      \"description\": \"Tag-uri pentru organizare\"\n    },\n    \"createdAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    },\n    \"updatedAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    }\n  },\n  \"fullResourceExample\": {\n    \"id\": \"B0100001-L0100001-pa2508-00007\",\n    \"businessId\": \"B0100001\",\n    \"locationId\": \"L0100001\",\n    \"resourceType\": \"patient\",\n    \"resourceId\": \"pa2508-00007\",\n    \"data\": {\n      \"patientName\": \"Drobre Ioana\",\n      \"phone\": \"07999999999\",\n      \"email\": \"dobre.io@test.com\",\n      \"gender\": \"female\",\n      \"birthYear\": 1994,\n      \"address\": \"Iasi\",\n      \"status\": \"active\",\n      \"notes\": null,\n      \"tags\": [],\n      \"createdAt\": \"2025-08-27T21:22:03.358Z\",\n      \"updatedAt\": \"2025-08-27T21:22:03.358Z\"\n    },\n    \"timestamp\": \"2025-08-27T21:22:03.358Z\",\n    \"lastUpdated\": \"2025-08-27T21:22:03.358Z\"\n  },\n  \"dataFieldExample\": {\n    \"patientName\": \"Drobre Ioana\",\n    \"phone\": \"07999999999\",\n    \"email\": \"dobre.io@test.com\",\n    \"gender\": \"female\",\n    \"birthYear\": 1994,\n    \"address\": \"Iasi\",\n    \"status\": \"active\",\n    \"notes\": null,\n    \"tags\": []\n  },\n  \"frontendFunctionExample\": {\n    \"functionName\": \"createResource\",\n    \"parameters\": {\n      \"resourceType\": \"patient\",\n      \"data\": {\n        \"patientName\": \"Ion Popescu\",\n        \"phone\": \"0712345678\",\n        \"email\": \"ion.popescu@email.com\",\n        \"gender\": \"male\",\n        \"birthYear\": 1985,\n        \"address\": \"București, Sector 1\",\n        \"status\": \"active\",\n        \"notes\": \"Alergie la penicilină\",\n        \"tags\": [\n          \"urgent\",\n          \"vip\"\n        ]\n      }\n    }\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "patient",
+        "displayName": "Pacient"
+      }
+    },
+    {
+      "id": "dental-resource-treatment",
+      "title": "Resource Type: Tratament/Serviciu",
+      "content": "{\n  \"displayName\": \"Tratament/Serviciu\",\n  \"description\": \"Tratamente și servicii oferite de clinică\",\n  \"resourceIdFormat\": \"trYYMM-XXXXX (ex: tr2508-00005)\",\n  \"dataSchema\": {\n    \"treatmentType\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"Tipul/numele tratamentului\"\n    },\n    \"price\": {\n      \"type\": \"number\",\n      \"required\": true,\n      \"description\": \"Prețul tratamentului în RON\"\n    },\n    \"duration\": {\n      \"type\": \"number\",\n      \"required\": true,\n      \"description\": \"Durata în minute (number)\"\n    },\n    \"category\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"description\": \"Categoria tratamentului (ex: Tratamente conservatoare, Chirurgie, etc.)\"\n    },\n    \"description\": {\n      \"type\": \"string\",\n      \"required\": false,\n      \"default\": \"\",\n      \"description\": \"Descriere tratament\"\n    },\n    \"createdAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    },\n    \"updatedAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    }\n  },\n  \"fullResourceExample\": {\n    \"id\": \"B0100001-L0100001-tr2508-00005\",\n    \"businessId\": \"B0100001\",\n    \"locationId\": \"L0100001\",\n    \"resourceType\": \"treatment\",\n    \"resourceId\": \"tr2508-00005\",\n    \"data\": {\n      \"treatmentType\": \"Gutieră de protecție\",\n      \"price\": 200,\n      \"duration\": 15,\n      \"category\": \"Tratamente conservatoare\",\n      \"description\": \"\",\n      \"createdAt\": \"2025-10-01T02:34:21.010Z\",\n      \"updatedAt\": \"2025-10-01T02:34:21.010Z\"\n    },\n    \"timestamp\": \"2025-10-01T02:34:21.010Z\",\n    \"lastUpdated\": \"2025-10-01T02:34:21.010Z\"\n  },\n  \"dataFieldExample\": {\n    \"treatmentType\": \"Gutieră de protecție\",\n    \"price\": 200,\n    \"duration\": 15,\n    \"category\": \"Tratamente conservatoare\",\n    \"description\": \"\"\n  },\n  \"commonTreatments\": [\n    {\n      \"treatmentType\": \"Consultație\",\n      \"price\": 150,\n      \"duration\": 30,\n      \"category\": \"Consultații\"\n    },\n    {\n      \"treatmentType\": \"Consultație Ortodontică\",\n      \"price\": 200,\n      \"duration\": 30,\n      \"category\": \"Ortodonție\"\n    },\n    {\n      \"treatmentType\": \"Detartraj\",\n      \"price\": 200,\n      \"duration\": 45,\n      \"category\": \"Igienă dentară\"\n    },\n    {\n      \"treatmentType\": \"Tratament endodontic\",\n      \"price\": 400,\n      \"duration\": 90,\n      \"category\": \"Endodonție\"\n    },\n    {\n      \"treatmentType\": \"Implant dentar\",\n      \"price\": 1200,\n      \"duration\": 120,\n      \"category\": \"Chirurgie\"\n    },\n    {\n      \"treatmentType\": \"Albire dentară\",\n      \"price\": 600,\n      \"duration\": 60,\n      \"category\": \"Estetică\"\n    }\n  ],\n  \"frontendFunctionExample\": {\n    \"functionName\": \"createResource\",\n    \"parameters\": {\n      \"resourceType\": \"treatment\",\n      \"data\": {\n        \"treatmentType\": \"Consultație generală\",\n        \"price\": 150,\n        \"duration\": 30,\n        \"category\": \"Consultații\",\n        \"description\": \"Consultație stomatologică generală cu examinare completă\"\n      }\n    }\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "treatment",
+        "displayName": "Tratament/Serviciu"
+      }
+    },
+    {
+      "id": "dental-resource-dental-chart",
+      "title": "Resource Type: Fișă Dentară",
+      "content": "{\n  \"displayName\": \"Fișă Dentară\",\n  \"description\": \"Fișa dentară cu starea dinților pacientului\",\n  \"resourceIdFormat\": \"dc-XXXXX sau UUID\",\n  \"dataSchema\": {\n    \"patientId\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"ID-ul pacientului (format: pa2510-00005)\"\n    },\n    \"chart\": {\n      \"type\": \"array\",\n      \"required\": true,\n      \"description\": \"Lista dinților cu starea lor\",\n      \"items\": {\n        \"toothNumber\": {\n          \"type\": \"number\",\n          \"required\": true,\n          \"description\": \"Numărul dintelui (11-18, 21-28, 31-38, 41-48)\",\n          \"enum\": [\n            11,\n            12,\n            13,\n            14,\n            15,\n            16,\n            17,\n            18,\n            21,\n            22,\n            23,\n            24,\n            25,\n            26,\n            27,\n            28,\n            31,\n            32,\n            33,\n            34,\n            35,\n            36,\n            37,\n            38,\n            41,\n            42,\n            43,\n            44,\n            45,\n            46,\n            47,\n            48\n          ]\n        },\n        \"condition\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"Starea dintelui\",\n          \"enum\": [\n            \"sound\",\n            \"filled\",\n            \"compromised\",\n            \"endo\",\n            \"missing\",\n            \"rotated\",\n            \"displaced\",\n            \"gum-recessed\"\n          ]\n        },\n        \"treatments\": {\n          \"type\": \"array\",\n          \"required\": false,\n          \"default\": [],\n          \"description\": \"Lista tratamentelor asociate acestui dinte\"\n        }\n      }\n    },\n    \"createdAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    },\n    \"updatedAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    }\n  },\n  \"fullResourceExample\": {\n    \"id\": \"B0100001-L0100001-dc-00001\",\n    \"businessId\": \"B0100001\",\n    \"locationId\": \"L0100001\",\n    \"resourceType\": \"dental-chart\",\n    \"resourceId\": \"dc-00001\",\n    \"data\": {\n      \"patientId\": \"pa2510-00005\",\n      \"chart\": [\n        {\n          \"toothNumber\": 27,\n          \"condition\": \"compromised\",\n          \"treatments\": []\n        },\n        {\n          \"toothNumber\": 17,\n          \"condition\": \"filled\",\n          \"treatments\": []\n        },\n        {\n          \"toothNumber\": 23,\n          \"condition\": \"endo\",\n          \"treatments\": []\n        }\n      ],\n      \"createdAt\": \"2025-10-13T22:59:53.065Z\",\n      \"updatedAt\": \"2025-10-13T22:59:53.065Z\"\n    },\n    \"timestamp\": \"2025-10-13T22:59:53.065Z\",\n    \"lastUpdated\": \"2025-10-13T22:59:53.065Z\"\n  },\n  \"dataFieldExample\": {\n    \"patientId\": \"pa2510-00005\",\n    \"chart\": [\n      {\n        \"toothNumber\": 27,\n        \"condition\": \"compromised\",\n        \"treatments\": []\n      }\n    ]\n  },\n  \"conditionsExplanation\": {\n    \"sound\": \"Sănătos - dintele este în stare bună\",\n    \"filled\": \"Plombat - dintele are o plombă/obturație\",\n    \"compromised\": \"Compromis - dintele este deteriorat și necesită tratament\",\n    \"endo\": \"Endodontic - dintele a avut tratament de canal\",\n    \"missing\": \"Lipsă - dintele lipsește\",\n    \"rotated\": \"Rotit - dintele este rotit din poziția normală\",\n    \"displaced\": \"Deplasat - dintele este deplasat din poziția normală\",\n    \"gum-recessed\": \"Gingie retractată - gingiile s-au retras de la dinte\"\n  },\n  \"toothNumbering\": {\n    \"system\": \"FDI (Federation Dentaire Internationale)\",\n    \"quadrants\": {\n      \"11-18\": \"Cadran superior dreapta (adulți)\",\n      \"21-28\": \"Cadran superior stânga (adulți)\",\n      \"31-38\": \"Cadran inferior stânga (adulți)\",\n      \"41-48\": \"Cadran inferior dreapta (adulți)\"\n    },\n    \"note\": \"Prima cifră indică cadranul (1-4), a doua cifră indică poziția dintelui (1-8)\"\n  },\n  \"frontendFunctionExample\": {\n    \"functionName\": \"createResource\",\n    \"parameters\": {\n      \"resourceType\": \"dental-chart\",\n      \"data\": {\n        \"patientId\": \"pa2510-00005\",\n        \"chart\": [\n          {\n            \"toothNumber\": 27,\n            \"condition\": \"compromised\",\n            \"treatments\": []\n          }\n        ]\n      }\n    }\n  },\n  \"usageNotes\": [\n    \"Fiecare pacient are o singură fișă dentară activă\",\n    \"Actualizează fișa când identifici probleme noi la dinți\",\n    \"Folosește pentru a urmări evoluția tratamentelor\",\n    \"Consultă fișa înainte de a crea un plan de tratament\"\n  ]\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "dental-chart",
+        "displayName": "Fișă Dentară"
+      }
+    },
+    {
+      "id": "dental-resource-plan",
+      "title": "Resource Type: Plan de Tratament",
+      "content": "{\n  \"displayName\": \"Plan de Tratament\",\n  \"description\": \"Plan de tratament cu ordinea și detaliile tratamentelor pentru pacient\",\n  \"resourceIdFormat\": \"pl-XXXXX sau UUID\",\n  \"dataSchema\": {\n    \"patientId\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"ID-ul pacientului (format: pa2510-00005)\"\n    },\n    \"plan\": {\n      \"type\": \"array\",\n      \"required\": true,\n      \"description\": \"Lista tratamentelor în ordinea de execuție\",\n      \"items\": {\n        \"id\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"ID unic pentru acest item (ex: chart-27-tr2510-00004 sau custom-uuid)\"\n        },\n        \"order\": {\n          \"type\": \"number\",\n          \"required\": true,\n          \"description\": \"Ordinea în plan (0, 1, 2, ...)\"\n        },\n        \"treatmentId\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"ID-ul tratamentului din sistem (format: tr2510-00004)\"\n        },\n        \"title\": {\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"Numele tratamentului\"\n        },\n        \"price\": {\n          \"type\": \"number\",\n          \"required\": true,\n          \"description\": \"Prețul tratamentului în RON\"\n        },\n        \"durationMinutes\": {\n          \"type\": \"number\",\n          \"required\": true,\n          \"description\": \"Durata tratamentului în minute\"\n        },\n        \"isFromChart\": {\n          \"type\": \"boolean\",\n          \"required\": true,\n          \"description\": \"Dacă tratamentul provine din fișa dentară\"\n        },\n        \"toothNumber\": {\n          \"type\": \"number\",\n          \"required\": false,\n          \"description\": \"Numărul dintelui (doar dacă isFromChart: true)\"\n        },\n        \"notes\": {\n          \"type\": \"string\",\n          \"required\": false,\n          \"default\": \"\",\n          \"description\": \"Note suplimentare despre tratament\"\n        }\n      }\n    },\n    \"totalPrice\": {\n      \"type\": \"number\",\n      \"required\": false,\n      \"description\": \"Prețul total al planului (suma tuturor tratamentelor)\"\n    },\n    \"totalDuration\": {\n      \"type\": \"number\",\n      \"required\": false,\n      \"description\": \"Durata totală estimată în minute\"\n    },\n    \"status\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"draft\",\n        \"proposed\",\n        \"accepted\",\n        \"in_progress\",\n        \"completed\"\n      ],\n      \"default\": \"draft\",\n      \"description\": \"Statusul planului de tratament\"\n    },\n    \"createdAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    },\n    \"updatedAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    }\n  },\n  \"fullResourceExample\": {\n    \"id\": \"B0100001-L0100001-pl-00001\",\n    \"businessId\": \"B0100001\",\n    \"locationId\": \"L0100001\",\n    \"resourceType\": \"plan\",\n    \"resourceId\": \"pl-00001\",\n    \"data\": {\n      \"patientId\": \"pa2510-00005\",\n      \"plan\": [\n        {\n          \"id\": \"chart-27-tr2510-00004\",\n          \"order\": 0,\n          \"treatmentId\": \"tr2510-00004\",\n          \"title\": \"Tratament hidroxid de calciu\",\n          \"price\": 200,\n          \"durationMinutes\": 20,\n          \"isFromChart\": true,\n          \"toothNumber\": 27,\n          \"notes\": \"\"\n        },\n        {\n          \"id\": \"chart-17-tr2510-00003\",\n          \"order\": 1,\n          \"treatmentId\": \"tr2510-00003\",\n          \"title\": \"Gutieră de protecție\",\n          \"price\": 200,\n          \"durationMinutes\": 15,\n          \"isFromChart\": true,\n          \"toothNumber\": 17,\n          \"notes\": \"\"\n        },\n        {\n          \"id\": \"chart-23-tr2510-00005\",\n          \"order\": 2,\n          \"treatmentId\": \"tr2510-00005\",\n          \"title\": \"Reconstructie cu pivot din fibra de sticla\",\n          \"price\": 500,\n          \"durationMinutes\": 45,\n          \"isFromChart\": true,\n          \"toothNumber\": 23,\n          \"notes\": \"\"\n        },\n        {\n          \"id\": \"custom-detartraj-001\",\n          \"order\": 3,\n          \"treatmentId\": \"tr2510-00001\",\n          \"title\": \"Detartraj profesional\",\n          \"price\": 200,\n          \"durationMinutes\": 45,\n          \"isFromChart\": false,\n          \"notes\": \"Recomandat înainte de celelalte tratamente\"\n        }\n      ],\n      \"totalPrice\": 1100,\n      \"totalDuration\": 125,\n      \"status\": \"proposed\",\n      \"createdAt\": \"2025-10-13T23:32:24.096Z\",\n      \"updatedAt\": \"2025-10-13T23:32:24.096Z\"\n    },\n    \"timestamp\": \"2025-10-13T23:32:24.096Z\",\n    \"lastUpdated\": \"2025-10-13T23:32:24.096Z\"\n  },\n  \"dataFieldExample\": {\n    \"patientId\": \"pa2510-00005\",\n    \"plan\": [\n      {\n        \"id\": \"chart-27-tr2510-00004\",\n        \"order\": 0,\n        \"treatmentId\": \"tr2510-00004\",\n        \"title\": \"Tratament hidroxid de calciu\",\n        \"price\": 200,\n        \"durationMinutes\": 20,\n        \"isFromChart\": true,\n        \"toothNumber\": 27,\n        \"notes\": \"\"\n      }\n    ],\n    \"totalPrice\": 200,\n    \"totalDuration\": 20,\n    \"status\": \"draft\"\n  },\n  \"frontendFunctionExample\": {\n    \"functionName\": \"createResource\",\n    \"parameters\": {\n      \"resourceType\": \"plan\",\n      \"data\": {\n        \"patientId\": \"pa2510-00005\",\n        \"plan\": [\n          {\n            \"id\": \"chart-27-tr2510-00004\",\n            \"order\": 0,\n            \"treatmentId\": \"tr2510-00004\",\n            \"title\": \"Tratament hidroxid de calciu\",\n            \"price\": 200,\n            \"durationMinutes\": 20,\n            \"isFromChart\": true,\n            \"toothNumber\": 27,\n            \"notes\": \"\"\n          }\n        ],\n        \"totalPrice\": 200,\n        \"totalDuration\": 20,\n        \"status\": \"draft\"\n      }\n    }\n  },\n  \"usageNotes\": [\n    \"Planul poate include tratamente din fișa dentară (isFromChart: true) și tratamente generale (isFromChart: false)\",\n    \"Ordinea tratamentelor este importantă - folosește câmpul 'order'\",\n    \"Calculează automat totalPrice și totalDuration când adaugi tratamente\",\n    \"Statusul 'proposed' înseamnă că planul a fost trimis pacientului pentru aprobare\",\n    \"Tratamentele din chart au ID format: chart-{toothNumber}-{treatmentId}\",\n    \"Tratamentele generale au ID custom: custom-{description}-{uuid}\"\n  ],\n  \"workflowExample\": {\n    \"description\": \"Flux tipic de lucru cu planul de tratament\",\n    \"steps\": [\n      \"1. Medicul examinează pacientul și completează fișa dentară (dental-chart)\",\n      \"2. Pe baza fișei dentare, AI sau medicul creează un plan de tratament (plan) cu status 'draft'\",\n      \"3. Medicul revizuiește planul, poate adăuga tratamente generale (detartraj, consultații)\",\n      \"4. Reordonează tratamentele în ordinea optimă de execuție\",\n      \"5. Trimite planul pacientului (status devine 'proposed')\",\n      \"6. Pacientul acceptă planul (status devine 'accepted')\",\n      \"7. Pe măsură ce tratamentele sunt efectuate, status devine 'in_progress'\",\n      \"8. Când toate tratamentele sunt finalizate, status devine 'completed'\"\n    ]\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "plan",
+        "displayName": "Plan de Tratament"
+      }
+    },
+    {
+      "id": "dental-resource-setting",
+      "title": "Resource Type: Setări",
+      "content": "{\n  \"displayName\": \"Setări\",\n  \"description\": \"Setări și configurații pentru clinică\",\n  \"resourceIdFormat\": \"UUID sau string descriptiv\",\n  \"note\": \"Resursa setting poate avea multiple tipuri (settingType). Cel mai important: working-hours\",\n  \"dataSchema\": {\n    \"settingType\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"Tipul setării (working-hours, clinic-info, etc.)\",\n      \"examples\": [\n        \"working-hours\",\n        \"clinic-info\",\n        \"notification-settings\"\n      ]\n    },\n    \"name\": {\n      \"type\": \"string\",\n      \"required\": true,\n      \"description\": \"Numele setării\"\n    },\n    \"isActive\": {\n      \"type\": \"boolean\",\n      \"default\": true,\n      \"description\": \"Dacă setarea este activă\"\n    },\n    \"days\": {\n      \"type\": \"array\",\n      \"required\": \"pentru working-hours\",\n      \"description\": \"Program pe zile (pentru working-hours)\",\n      \"items\": {\n        \"key\": \"string (monday, tuesday, etc.)\",\n        \"name\": \"string (Luni, Marți, etc.)\",\n        \"startTime\": \"string (HH:mm)\",\n        \"endTime\": \"string (HH:mm)\",\n        \"isWorking\": \"boolean\"\n      }\n    },\n    \"locationDetails\": {\n      \"type\": \"object\",\n      \"required\": false,\n      \"description\": \"Detalii despre locație (pentru working-hours)\",\n      \"properties\": {\n        \"name\": \"string - Numele clinicii\",\n        \"email\": \"string - Email contact\",\n        \"phone\": \"string - Telefon contact\",\n        \"address\": \"string - Adresa completă\",\n        \"description\": \"string - Descriere clinică\"\n      }\n    },\n    \"createdAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    },\n    \"updatedAt\": {\n      \"type\": \"string\",\n      \"format\": \"ISO8601\",\n      \"auto\": true\n    }\n  },\n  \"fullResourceExample\": {\n    \"id\": \"B0100001-L0100001-st-001\",\n    \"businessId\": \"B0100001\",\n    \"locationId\": \"L0100001\",\n    \"resourceType\": \"setting\",\n    \"resourceId\": \"st-001\",\n    \"data\": {\n      \"settingType\": \"working-hours\",\n      \"name\": \"Program de funcționare\",\n      \"isActive\": true,\n      \"days\": [\n        {\n          \"key\": \"monday\",\n          \"name\": \"Luni\",\n          \"startTime\": \"09:00\",\n          \"endTime\": \"17:00\",\n          \"isWorking\": true\n        },\n        {\n          \"key\": \"tuesday\",\n          \"name\": \"Marți\",\n          \"startTime\": \"09:00\",\n          \"endTime\": \"17:00\",\n          \"isWorking\": true\n        },\n        {\n          \"key\": \"wednesday\",\n          \"name\": \"Miercuri\",\n          \"startTime\": \"09:00\",\n          \"endTime\": \"17:00\",\n          \"isWorking\": true\n        },\n        {\n          \"key\": \"thursday\",\n          \"name\": \"Joi\",\n          \"startTime\": \"09:00\",\n          \"endTime\": \"17:00\",\n          \"isWorking\": true\n        },\n        {\n          \"key\": \"friday\",\n          \"name\": \"Vineri\",\n          \"startTime\": \"09:00\",\n          \"endTime\": \"17:00\",\n          \"isWorking\": true\n        },\n        {\n          \"key\": \"saturday\",\n          \"name\": \"Sâmbătă\",\n          \"startTime\": \"09:00\",\n          \"endTime\": \"17:00\",\n          \"isWorking\": false\n        },\n        {\n          \"key\": \"sunday\",\n          \"name\": \"Duminică\",\n          \"startTime\": \"09:00\",\n          \"endTime\": \"17:00\",\n          \"isWorking\": false\n        }\n      ],\n      \"locationDetails\": {\n        \"name\": \"Cabinet Medical Dr. Popescu\",\n        \"email\": \"contact@cabinet.ro\",\n        \"phone\": \"+40 21 123 4567\",\n        \"address\": \"Str. Mihai Viteazu nr. 10, București\",\n        \"description\": \"Cabinet medical specializat în stomatologie generală și estetică\"\n      },\n      \"createdAt\": \"2025-10-01T02:00:00.000Z\",\n      \"updatedAt\": \"2025-10-01T02:00:00.000Z\"\n    },\n    \"timestamp\": \"2025-10-01T02:00:00.000Z\",\n    \"lastUpdated\": \"2025-10-01T02:00:00.000Z\"\n  },\n  \"dataFieldExample\": {\n    \"settingType\": \"working-hours\",\n    \"name\": \"Program de funcționare\",\n    \"isActive\": true,\n    \"days\": [\n      {\n        \"key\": \"monday\",\n        \"name\": \"Luni\",\n        \"startTime\": \"09:00\",\n        \"endTime\": \"17:00\",\n        \"isWorking\": true\n      },\n      {\n        \"key\": \"tuesday\",\n        \"name\": \"Marți\",\n        \"startTime\": \"09:00\",\n        \"endTime\": \"17:00\",\n        \"isWorking\": true\n      },\n      {\n        \"key\": \"wednesday\",\n        \"name\": \"Miercuri\",\n        \"startTime\": \"09:00\",\n        \"endTime\": \"17:00\",\n        \"isWorking\": true\n      },\n      {\n        \"key\": \"thursday\",\n        \"name\": \"Joi\",\n        \"startTime\": \"09:00\",\n        \"endTime\": \"17:00\",\n        \"isWorking\": true\n      },\n      {\n        \"key\": \"friday\",\n        \"name\": \"Vineri\",\n        \"startTime\": \"09:00\",\n        \"endTime\": \"17:00\",\n        \"isWorking\": true\n      },\n      {\n        \"key\": \"saturday\",\n        \"name\": \"Sâmbătă\",\n        \"startTime\": \"09:00\",\n        \"endTime\": \"17:00\",\n        \"isWorking\": false\n      },\n      {\n        \"key\": \"sunday\",\n        \"name\": \"Duminică\",\n        \"startTime\": \"09:00\",\n        \"endTime\": \"17:00\",\n        \"isWorking\": false\n      }\n    ],\n    \"locationDetails\": {\n      \"name\": \"Cabinet Medical Dr. Popescu\",\n      \"email\": \"contact@cabinet.ro\",\n      \"phone\": \"+40 21 123 4567\",\n      \"address\": \"Str. Mihai Viteazu nr. 10, București\",\n      \"description\": \"Cabinet medical specializat în stomatologie generală și estetică\"\n    }\n  },\n  \"usageInstructions\": {\n    \"purpose\": \"Setting-ul working-hours este CRUCIAL pentru verificarea disponibilității și programări\",\n    \"whenToQuery\": [\n      \"Când pacient/operator întreabă 'La ce oră deschideți?'\",\n      \"Când verifici dacă o oră este în programul de lucru\",\n      \"Când creezi o programare nouă - verifică că ora e în interval\",\n      \"Când răspunzi la întrebări despre program\"\n    ],\n    \"howToQuery\": {\n      \"tool\": \"query_app_server\",\n      \"parameters\": {\n        \"module\": \"resources\",\n        \"action\": \"list\",\n        \"resourceType\": \"setting\",\n        \"params\": {\n          \"data.settingType\": \"working-hours\"\n        }\n      }\n    },\n    \"examples\": [\n      {\n        \"query\": \"La ce oră deschideți luni?\",\n        \"steps\": [\n          \"1. Query setting cu settingType: 'working-hours'\",\n          \"2. Găsește ziua 'monday' în array-ul days\",\n          \"3. Verifică isWorking: true/false\",\n          \"4. Returnează startTime și endTime\"\n        ],\n        \"response\": \"Luni deschidem de la 09:00 până la 17:00.\"\n      },\n      {\n        \"query\": \"Putem programa sâmbătă?\",\n        \"steps\": [\n          \"1. Query working-hours\",\n          \"2. Găsește 'saturday'\",\n          \"3. Verifică isWorking: false\"\n        ],\n        \"response\": \"Din păcate, sâmbăta nu lucrăm. Suntem deschiși Luni-Vineri 09:00-17:00. Vă convine o altă zi?\"\n      },\n      {\n        \"query\": \"Programare astăzi la 18:00\",\n        \"steps\": [\n          \"1. Identifică ziua curentă\",\n          \"2. Query working-hours\",\n          \"3. Verifică că 18:00 > endTime (17:00)\",\n          \"4. Respinge - în afara programului\"\n        ],\n        \"response\": \"Din păcate, ora 18:00 este în afara programului nostru de lucru (09:00-17:00). Avem disponibil mâine la 14:00. Vă convine?\"\n      }\n    ]\n  },\n  \"frontendFunctionExample\": {\n    \"note\": \"Setting-uri sunt de obicei gestionate de administratori, rar modificate prin AI\",\n    \"functionName\": \"updateResource\",\n    \"parameters\": {\n      \"resourceType\": \"setting\",\n      \"resourceId\": \"working-hours-001\",\n      \"data\": {\n        \"days\": [\n          {\n            \"key\": \"monday\",\n            \"name\": \"Luni\",\n            \"startTime\": \"08:00\",\n            \"endTime\": \"18:00\",\n            \"isWorking\": true\n          }\n        ]\n      }\n    }\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "resource-type",
+        "resourceType": "setting",
+        "displayName": "Setări"
+      }
+    },
+    {
+      "id": "dental-context-usage",
+      "title": "Context Usage - userId and Frontend Context",
+      "content": "{\n  \"userId\": {\n    \"description\": \"userId din conversație identifică cine vorbește cu AI-ul\",\n    \"usage\": [\n      \"Dacă userId este un UUID, probabil este un medic (resourceId la medic)\",\n      \"Poate identifica medicul curent pentru query-uri personalizate\",\n      \"Folosește userId pentru a găsi informații despre operatorul curent\"\n    ],\n    \"examples\": [\n      {\n        \"scenario\": \"Operator (care este medic) întreabă 'Când am următorul loc pentru implant?'\",\n        \"steps\": [\n          \"1. Extrage userId din context (ex: 33948842-b061-7036-f02f-79b9c0b4225b)\",\n          \"2. Caută medic cu resourceId === userId\",\n          \"3. Confirmă că este medic: query_app_server(resources, get, medic, {resourceId: userId})\",\n          \"4. Caută programări viitoare: query_app_server(resources, list, appointment, {params: {doctor.id: userId, date: future, status: scheduled}})\",\n          \"5. Găsește prima programare de tip 'implant' în lista sortată\"\n        ],\n        \"response\": \"Următorul implant este pe 25 octombrie la 10:00 cu pacientul Ion Popescu.\"\n      },\n      {\n        \"scenario\": \"Operator întreabă 'Câte programări am astăzi?'\",\n        \"steps\": [\n          \"1. Extrage userId din context\",\n          \"2. Verifică dacă userId corespunde unui medic\",\n          \"3. Query programări pentru medicul respectiv: params: {date: today, 'data.doctor.id': userId}\",\n          \"4. Numără rezultatele\"\n        ],\n        \"response\": \"Astăzi ai 8 programări: 5 consultații, 2 tratamente endodontice, 1 implant.\"\n      },\n      {\n        \"scenario\": \"Operator (non-medic) întreabă 'Câte programări avem astăzi?'\",\n        \"steps\": [\n          \"1. userId nu corespunde unui medic\",\n          \"2. Query toate programările: params: {date: today}\",\n          \"3. Numără rezultatele\"\n        ],\n        \"response\": \"Astăzi clinica are 23 programări în total.\"\n      }\n    ]\n  },\n  \"frontendContext\": {\n    \"description\": \"Frontend trimite context suplimentar când user deschide chat\",\n    \"possibleFields\": [\n      \"editingResource: {type, resourceId}\",\n      \"openForm: string\",\n      \"selectedDate: string\",\n      \"currentView: string\"\n    ],\n    \"usage\": \"Folosește context-ul pentru a identifica ce resursă editează user-ul și pentru a face modificări precise\"\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "context-usage"
+      }
+    },
+    {
+      "id": "dental-query-example-listAppointmentsToday",
+      "title": "Query Example: Listează toate programările de astăzi",
+      "content": "{\n  \"description\": \"Listează toate programările de astăzi\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"appointment\",\n    \"params\": {\n      \"startDate\": \"{{today}}\",\n      \"endDate\": \"{{today}}\"\n    }\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "listAppointmentsToday"
+      }
+    },
+    {
+      "id": "dental-query-example-searchPatient",
+      "title": "Query Example: Caută pacient după nume",
+      "content": "{\n  \"description\": \"Caută pacient după nume\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"patient\",\n    \"params\": {\n      \"name\": \"{{searchTerm}}\"\n    }\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "searchPatient"
+      }
+    },
+    {
+      "id": "dental-query-example-listMedics",
+      "title": "Query Example: Listează toți medicii",
+      "content": "{\n  \"description\": \"Listează toți medicii\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"medic\"\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "listMedics"
+      }
+    },
+    {
+      "id": "dental-query-example-getTreatments",
+      "title": "Query Example: Obține toate tratamentele disponibile",
+      "content": "{\n  \"description\": \"Obține toate tratamentele disponibile\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"treatment\"\n  }\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getTreatments"
+      }
+    },
+    {
+      "id": "dental-query-example-getMyAppointments",
+      "title": "Query Example: Obține programările medicului curent (userId din context)",
+      "content": "{\n  \"description\": \"Obține programările medicului curent (userId din context)\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"appointment\",\n    \"params\": {\n      \"data.doctor.id\": \"{{userId}}\",\n      \"startDate\": \"{{today}}\",\n      \"endDate\": \"{{today}}\"\n    }\n  },\n  \"note\": \"Folosește userId din context ca data.doctor.id pentru filtrare\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getMyAppointments"
+      }
+    },
+    {
+      "id": "dental-query-example-getMedicByUserId",
+      "title": "Query Example: Identifică medicul curent bazat pe userId",
+      "content": "{\n  \"description\": \"Identifică medicul curent bazat pe userId\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"get\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"medic\",\n    \"resourceId\": \"{{userId}}\"\n  },\n  \"note\": \"userId din context === resourceId pentru medic\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getMedicByUserId"
+      }
+    },
+    {
+      "id": "dental-query-example-getWorkingHours",
+      "title": "Query Example: Obține programul de funcționare al clinicii",
+      "content": "{\n  \"description\": \"Obține programul de funcționare al clinicii\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"setting\",\n    \"params\": {\n      \"data.settingType\": \"working-hours\"\n    }\n  },\n  \"note\": \"FOARTE IMPORTANT: Verifică working-hours înainte de a crea programări sau când răspunzi la întrebări despre program\",\n  \"usage\": \"Pentru a verifica dacă o oră e în programul de lucru, parsează array-ul days și verifică startTime/endTime pentru ziua respectivă\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getWorkingHours"
+      }
+    },
+    {
+      "id": "dental-query-example-getDentalChartByPatient",
+      "title": "Query Example: Obține fișa dentară a unui pacient",
+      "content": "{\n  \"description\": \"Obține fișa dentară a unui pacient\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"dental-chart\",\n    \"params\": {\n      \"data.patientId\": \"{{patientId}}\"\n    }\n  },\n  \"note\": \"Fiecare pacient ar trebui să aibă o singură fișă dentară activă. Consultă fișa înainte de a crea un plan de tratament.\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getDentalChartByPatient"
+      }
+    },
+    {
+      "id": "dental-query-example-getTreatmentPlanByPatient",
+      "title": "Query Example: Obține planul de tratament al unui pacient",
+      "content": "{\n  \"description\": \"Obține planul de tratament al unui pacient\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"plan\",\n    \"params\": {\n      \"data.patientId\": \"{{patientId}}\"\n    }\n  },\n  \"note\": \"Un pacient poate avea multiple planuri de tratament (draft, proposed, accepted, etc.). Filtrează după status dacă e necesar.\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "query-example",
+        "exampleKey": "getTreatmentPlanByPatient"
+      }
+    },
+    {
+      "id": "dental-conversation-pattern-createAppointment",
+      "title": "Conversation Pattern: Operator vrea să creeze o programare nouă",
+      "content": "{\n  \"scenario\": \"Operator vrea să creeze o programare nouă\",\n  \"critical\": \"NU poți crea programare fără pacient și tratament existent!\",\n  \"steps\": [\n    {\n      \"step\": 1,\n      \"action\": \"Identifică pacientul\",\n      \"question\": \"Pentru cine este programarea? (nume pacient)\"\n    },\n    {\n      \"step\": 2,\n      \"action\": \"VERIFICĂ OBLIGATORIU dacă pacientul există\",\n      \"tool\": \"query_app_server\",\n      \"parameters\": {\n        \"module\": \"resources\",\n        \"action\": \"list\",\n        \"resourceType\": \"patient\",\n        \"params\": {\n          \"name\": \"nume_pacient\"\n        }\n      },\n      \"critical\": \"DACĂ PACIENTUL NU EXISTĂ:\",\n      \"ifNotExists\": [\n        \"NU crea programarea!\",\n        \"Informează operatorul: 'Pacientul [nume] nu există în sistem.'\",\n        \"Sugerează: 'Trebuie să creăm mai întâi pacientul. Aveți datele de contact (telefon, email)?'\",\n        \"Ghidează crearea pacientului: call_frontend_function('createResource', {resourceType: 'patient', data: {...}})\",\n        \"După crearea pacientului, APOI continuă cu programarea\"\n      ],\n      \"ifExists\": \"Salvează patient.id și patient.name pentru programare\"\n    },\n    {\n      \"step\": 3,\n      \"action\": \"Identifică tratamentul necesar\",\n      \"question\": \"Ce tratament/serviciu? (consultație, detartraj, implant, etc.)\"\n    },\n    {\n      \"step\": 4,\n      \"action\": \"VERIFICĂ OBLIGATORIU dacă tratamentul există\",\n      \"tool\": \"query_app_server\",\n      \"parameters\": {\n        \"module\": \"resources\",\n        \"action\": \"list\",\n        \"resourceType\": \"treatment\"\n      },\n      \"critical\": \"DACĂ TRATAMENTUL NU EXISTĂ:\",\n      \"ifNotExists\": [\n        \"NU crea programarea!\",\n        \"Informează operatorul: 'Tratamentul [nume] nu există în sistem.'\",\n        \"Sugerează: 'Trebuie să adăugăm tratamentul. Ce preț și durată are?'\",\n        \"Ghidează crearea tratamentului: call_frontend_function('createResource', {resourceType: 'treatment', data: {treatmentType: '...', price: X, duration: Y}})\",\n        \"După crearea tratamentului, APOI continuă cu programarea\"\n      ],\n      \"ifExists\": \"Salvează treatment.id, treatment.name, treatment.duration pentru programare\"\n    },\n    {\n      \"step\": 5,\n      \"action\": \"VERIFICĂ working-hours și disponibilitate\",\n      \"substeps\": [\n        \"1. Query working-hours: verifică că ziua și ora sunt în programul de lucru\",\n        \"2. Dacă ora e în afara programului, RESPINGE și sugerează alternative\",\n        \"3. Query programări existente pentru data/ora dorită\",\n        \"4. Verifică că nu se suprapune cu alte programări\"\n      ]\n    },\n    {\n      \"step\": 6,\n      \"action\": \"Selectează medicul disponibil\",\n      \"tool\": \"query_app_server\",\n      \"parameters\": {\n        \"module\": \"resources\",\n        \"action\": \"list\",\n        \"resourceType\": \"medic\"\n      },\n      \"note\": \"Verifică disponibilitatea medicului pentru data/ora selectată\"\n    },\n    {\n      \"step\": 7,\n      \"action\": \"DOAR ACUM creează programarea\",\n      \"tool\": \"call_frontend_function\",\n      \"function\": \"createResource\",\n      \"requirements\": [\n        \"Pacient TREBUIE să existe (verificat în step 2)\",\n        \"Tratament TREBUIE să existe (verificat în step 4)\",\n        \"Ora TREBUIE să fie în working-hours (verificat în step 5)\",\n        \"Medic TREBUIE să fie disponibil (verificat în step 6)\"\n      ],\n      \"parameters\": {\n        \"resourceType\": \"appointment\",\n        \"data\": {\n          \"date\": \"YYYY-MM-DD\",\n          \"time\": \"HH:mm\",\n          \"patient\": {\n            \"id\": \"from_step_2\",\n            \"name\": \"from_step_2\"\n          },\n          \"service\": {\n            \"id\": \"from_step_4\",\n            \"name\": \"from_step_4\",\n            \"duration\": \"from_step_4\"\n          },\n          \"doctor\": {\n            \"id\": \"from_step_6\",\n            \"name\": \"from_step_6\"\n          },\n          \"price\": \"from_treatment\",\n          \"status\": \"scheduled\",\n          \"serviceDuration\": \"from_treatment_duration\"\n        }\n      }\n    },\n    {\n      \"step\": 8,\n      \"action\": \"Confirmă succesul\",\n      \"response\": \"Programare creată cu succes pentru [pacient], [data] la [ora], [tratament] cu [doctor].\"\n    }\n  ],\n  \"example\": \"User: 'Programare pentru Maria Ionescu mâine la 14:00, consultație'\\n\\nAI Process:\\n1. [query patient 'Maria Ionescu'] → NU EXISTĂ\\n2. AI: 'Pacientul Maria Ionescu nu există. Trebuie să-l creăm. Aveți număr de telefon?'\\n3. User: '0712345678'\\n4. [call_frontend_function('createResource', {resourceType: 'patient', data: {patientName: 'Maria Ionescu', phone: '0712345678'}})] → CREAT cu id: pa2508-00015\\n5. [query treatment 'consultație'] → EXISTĂ (tr2508-00001, duration: 30, price: 150)\\n6. [query working-hours] → Mâine (Marți) 09:00-17:00, 14:00 OK\\n7. [query appointments mâine] → Slot liber la 14:00\\n8. [query medics] → Dr. Tucean disponibil\\n9. [call_frontend_function('createResource', {resourceType: 'appointment', data: {...}})] → SUCCESS\\n10. AI: 'Perfect! Programare creată pentru Maria Ionescu, mâine la 14:00, consultație cu Dr. Tucean.'\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "conversation-pattern",
+        "patternKey": "createAppointment",
+        "scenario": "Operator vrea să creeze o programare nouă"
+      }
+    },
+    {
+      "id": "dental-conversation-pattern-updateAppointment",
+      "title": "Conversation Pattern: User editează o programare existentă",
+      "content": "{\n  \"scenario\": \"User editează o programare existentă\",\n  \"context\": \"Frontend trimite appointmentId în context când user deschide edit form\",\n  \"steps\": [\n    {\n      \"step\": 1,\n      \"action\": \"Identifică ce să modifice\",\n      \"examples\": [\n        \"Schimbă ora la 15:00\",\n        \"Modifică doctorul\",\n        \"Schimbă data\"\n      ]\n    },\n    {\n      \"step\": 2,\n      \"action\": \"Verifică context din frontend\",\n      \"note\": \"appointmentId vine din context\"\n    },\n    {\n      \"step\": 3,\n      \"action\": \"Actualizează programarea\",\n      \"tool\": \"call_frontend_function\",\n      \"function\": \"updateResource\",\n      \"note\": \"Trimite doar câmpurile modificate\"\n    },\n    {\n      \"step\": 4,\n      \"action\": \"Confirmă modificarea\",\n      \"tool\": \"send_elixir_notification\"\n    }\n  ],\n  \"example\": \"Context: {appointmentId: 'apt_123', editing: 'appointment'}\\nUser: 'Schimbă ora la 15:00'\\nAI: [call_frontend_function('updateResource', {type: 'appointment', id: 'apt_123', data: {time: '15:00'}})] → 'Done! Programarea e acum la 15:00.'\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "conversation-pattern",
+        "patternKey": "updateAppointment",
+        "scenario": "User editează o programare existentă"
+      }
+    },
+    {
+      "id": "dental-conversation-pattern-searchAndDisplay",
+      "title": "Conversation Pattern: User caută informații",
+      "content": "{\n  \"scenario\": \"User caută informații\",\n  \"examples\": [\n    {\n      \"query\": \"Câte programări avem astăzi?\",\n      \"action\": \"query_app_server(resources, list, appointment, {date: today})\",\n      \"response\": \"Astăzi: 12 programări. 8 consultații, 3 tratamente, 1 implant. Prima la 9:00.\"\n    },\n    {\n      \"query\": \"Cine este programat mâine cu Dr. Tucean?\",\n      \"action\": \"query_app_server(resources, list, appointment, {date: tomorrow, medicId: '...'})\",\n      \"response\": \"Mâine Dr. Tucean are 8 pacienți: Ion Popescu (9:00), Maria Ionescu (10:00), ...\"\n    },\n    {\n      \"query\": \"Arată-mi pacienții cu numele Popescu\",\n      \"action\": \"query_app_server(resources, list, patient, {name: 'Popescu'})\",\n      \"response\": \"Am găsit 3 pacienți: 1) Ion Popescu (0712...), 2) Maria Popescu (0723...), 3) ...\"\n    }\n  ]\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "conversation-pattern",
+        "patternKey": "searchAndDisplay",
+        "scenario": "User caută informații"
+      }
+    },
+    {
+      "id": "dental-terminology-medical",
+      "title": "Terminology - Medical Terms",
+      "content": "{\n  \"consultație\": \"Examinare stomatologică generală\",\n  \"detartraj\": \"Curățare profesională a dinților, îndepărtare tartru\",\n  \"tratament endodontic\": \"Tratament de canal radicular\",\n  \"implant\": \"Implant dentar pentru înlocuirea dinților lipsă\",\n  \"coroană\": \"Capsulă dentară pentru acoperirea dintelui\",\n  \"extracție\": \"Scoaterea unui dinte\",\n  \"obturație\": \"Plombă dentară\",\n  \"albire\": \"Albire profesională a dinților\",\n  \"proteza\": \"Dinte artificial, preteză dentară\",\n  \"gutieră\": \"Aparat de protecție pentru dinți\",\n  \"ortodonție\": \"Tratamente pentru alinierea dinților (aparate dentare)\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "terminology",
+        "category": "medical"
+      }
+    },
+    {
+      "id": "dental-terminology-status",
+      "title": "Terminology - Status Terms",
+      "content": "{\n  \"scheduled\": \"Programat - programarea este planificată\",\n  \"confirmed\": \"Confirmat - pacientul a confirmat prezența\",\n  \"completed\": \"Finalizat - tratamentul a fost efectuat\",\n  \"cancelled\": \"Anulat - programarea a fost anulată\",\n  \"no_show\": \"Nu s-a prezentat - pacientul nu a venit\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "terminology",
+        "category": "status"
+      }
+    },
+    {
+      "id": "dental-data-field-structure",
+      "title": "Data Field Structure",
+      "content": "{\n  \"important\": \"TOATE datele resursei merg în câmpul 'data'. resourceId este generat automat de sistem.\",\n  \"whenCreating\": \"call_frontend_function('createResource', {resourceType: '...', data: {...}})\",\n  \"whenUpdating\": \"call_frontend_function('updateResource', {resourceType: '...', resourceId: '...', data: {...}})\",\n  \"whenQuerying\": \"Filtrezi după câmpuri din 'data' folosind dot notation: 'data.doctor.id', 'data.patientName', etc.\",\n  \"note\": \"Nu trimiți businessId, locationId, resourceId, timestamp când creezi - acestea sunt auto-generate\"\n}",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "data-field-structure"
+      }
+    },
+    {
+      "id": "dental-best-practices-general",
+      "title": "Best Practices: general",
+      "content": "[\n  \"Toate datele resursei sunt în câmpul 'data'\",\n  \"resourceId este generat automat - nu îl trimiți când creezi resurse\",\n  \"Pentru query-uri, folosește dot notation pentru câmpuri nested: 'data.doctor.id'\",\n  \"userId din context poate fi resourceId al medicului - verifică întotdeauna\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "general"
+      }
+    },
+    {
+      "id": "dental-best-practices-appointments",
+      "title": "Best Practices: appointments",
+      "content": "[\n  \"⚠️ CRITICĂ: NU poți crea programare fără pacient și tratament EXISTENT în sistem!\",\n  \"⚠️ CRITICĂ: ÎNTOTDEAUNA verifică dacă pacientul există ÎNAINTE de programare\",\n  \"⚠️ CRITICĂ: ÎNTOTDEAUNA verifică dacă tratamentul există ÎNAINTE de programare\",\n  \"⚠️ CRITICĂ: Dacă pacientul NU există, GHIDEAZĂ operatorul să-l creeze MAI ÎNTÂI\",\n  \"⚠️ CRITICĂ: Dacă tratamentul NU există, GHIDEAZĂ operatorul să-l creeze MAI ÎNTÂI\",\n  \"VERIFICĂ WORKING-HOURS ÎNTOTDEAUNA înainte de programare - ora trebuie să fie între startTime și endTime pentru ziua respectivă\",\n  \"Verifică că ziua are isWorking: true (nu programa în zilele libere)\",\n  \"Verifică disponibilitatea medicului (nu suprapune programări)\",\n  \"Asigură-te că medicul există și este disponibil\",\n  \"Folosește serviceDuration = service.duration (string)\",\n  \"Status implicit: 'scheduled'\",\n  \"Completează doctor.id, doctor.name, patient.id, patient.name, service.id, service.name, service.duration\",\n  \"FLUX OBLIGATORIU: 1) Verifică pacient → 2) Dacă lipsește, creează-l → 3) Verifică tratament → 4) Dacă lipsește, creează-l → 5) Apoi creează programarea\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "appointments"
+      }
+    },
+    {
+      "id": "dental-best-practices-patients",
+      "title": "Best Practices: patients",
+      "content": "[\n  \"patientName și phone sunt OBLIGATORII\",\n  \"Verifică dacă pacientul există înainte de a crea unul nou (evită duplicate)\",\n  \"Email este opțional dar recomandat pentru comunicare\",\n  \"Salvează note importante despre alergii sau condiții medicale\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "patients"
+      }
+    },
+    {
+      "id": "dental-best-practices-medics",
+      "title": "Best Practices: medics",
+      "content": "[\n  \"medicName este OBLIGATORIU\",\n  \"dutyDays ajută la planificarea programărilor\",\n  \"Role poate fi: Administrator, Medic, Asistent\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "medics"
+      }
+    },
+    {
+      "id": "dental-best-practices-treatments",
+      "title": "Best Practices: treatments",
+      "content": "[\n  \"treatmentType, price și duration sunt OBLIGATORII\",\n  \"Folosește categorii consistente pentru organizare\",\n  \"Duration este în minute (number pentru treatment, string pentru service în appointment)\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "treatments"
+      }
+    },
+    {
+      "id": "dental-best-practices-modules",
+      "title": "Best Practices: modules",
+      "content": "[\n  \"⚠️ PENTRU OPERATORS: Folosește module='resources' în query_app_server\",\n  \"⚠️ PENTRU CUSTOMERS: Folosește DOAR module='patient-booking' în query_app_server\",\n  \"Customers NU au acces la module='resources' - returnează eroare dacă încearcă\",\n  \"call_frontend_function este DOAR pentru operators, NU pentru customers\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "modules"
+      }
+    },
+    {
+      "id": "dental-best-practices-dentalCharts",
+      "title": "Best Practices: dentalCharts",
+      "content": "[\n  \"Fiecare pacient ar trebui să aibă o singură fișă dentară activă\",\n  \"Dinții sunt numerotați conform sistemului FDI: 11-18 (superior dreapta), 21-28 (superior stânga), 31-38 (inferior stânga), 41-48 (inferior dreapta)\",\n  \"Condiții disponibile: sound (sănătos), filled (plombat), compromised (compromis), endo (endodontic), missing (lipsă), rotated (rotit), displaced (deplasat), gum-recessed (gingie retractată)\",\n  \"Actualizează fișa dentară după fiecare consultație când identifici probleme noi\",\n  \"Folosește fișa dentară ca bază pentru crearea planurilor de tratament\",\n  \"Array-ul 'treatments' din fiecare dinte poate conține ID-uri de tratamente aplicate sau planificate\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "dentalCharts"
+      }
+    },
+    {
+      "id": "dental-best-practices-treatmentPlans",
+      "title": "Best Practices: treatmentPlans",
+      "content": "[\n  \"Planul de tratament se creează pe baza fișei dentare (dental-chart)\",\n  \"Planul poate include atât tratamente specifice dinților (isFromChart: true) cât și tratamente generale (isFromChart: false)\",\n  \"Ordinea tratamentelor este crucială - folosește câmpul 'order' pentru secvențiere\",\n  \"Tratamentele din chart au ID format: chart-{toothNumber}-{treatmentId}\",\n  \"Tratamentele generale au ID custom: custom-{description}-{uuid}\",\n  \"Calculează automat totalPrice (suma tuturor prețurilor) și totalDuration (suma tuturor duratelor)\",\n  \"Statusuri disponibile: draft (ciornă), proposed (propus pacientului), accepted (acceptat), in_progress (în desfășurare), completed (finalizat)\",\n  \"Verifică că toate tratamentele din plan există în sistem înainte de creare\",\n  \"Permite reordonarea tratamentelor - medicul poate decide ordinea optimă de execuție\"\n]",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-10",
+        "type": "best-practices",
+        "category": "treatmentPlans"
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "dental-best-practices-patients",
+  "title": "Best Practices: patients",
+  "content": "[\n  \"patientName și phone sunt OBLIGATORII\",\n  \"Verifică dacă pacientul există înainte de a crea unul nou (evită duplicate)\",\n  \"Email este opțional dar recomandat pentru comunicare\",\n  \"Salvează note importante despre alergii sau condiții medicale\"\n]",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "patients"
+  }
+}

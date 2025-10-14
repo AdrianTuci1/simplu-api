@@ -1,0 +1,12 @@
+{
+  "id": "dental-query-example-searchPatient",
+  "title": "Query Example: Caută pacient după nume",
+  "content": "{\n  \"description\": \"Caută pacient după nume\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"patient\",\n    \"params\": {\n      \"name\": \"{{searchTerm}}\"\n    }\n  }\n}",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "searchPatient"
+  }
+}

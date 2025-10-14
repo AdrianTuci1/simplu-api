@@ -1,0 +1,12 @@
+{
+  "id": "dental-query-example-getDentalChartByPatient",
+  "title": "Query Example: Obține fișa dentară a unui pacient",
+  "content": "{\n  \"description\": \"Obține fișa dentară a unui pacient\",\n  \"tool\": \"query_app_server\",\n  \"parameters\": {\n    \"module\": \"resources\",\n    \"action\": \"list\",\n    \"businessId\": \"{{businessId}}\",\n    \"locationId\": \"{{locationId}}\",\n    \"resourceType\": \"dental-chart\",\n    \"params\": {\n      \"data.patientId\": \"{{patientId}}\"\n    }\n  },\n  \"note\": \"Fiecare pacient ar trebui să aibă o singură fișă dentară activă. Consultă fișa înainte de a crea un plan de tratament.\"\n}",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "query-example",
+    "exampleKey": "getDentalChartByPatient"
+  }
+}

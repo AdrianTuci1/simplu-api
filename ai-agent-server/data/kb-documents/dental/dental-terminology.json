@@ -1,9 +1,0 @@
-{
-  "id": "dental-terminology",
-  "content": "DENTAL TERMINOLOGY\n\nMEDICAL TERMS:\n- consultație: Examinare stomatologică generală\n- detartraj: Curățare profesională a dinților, îndepărtare tartru\n- tratament endodontic: Tratament de canal radicular\n- implant: Implant dentar pentru înlocuirea dinților lipsă\n- coroană: Capsulă dentară pentru acoperirea dintelui\n- extracție: Scoaterea unui dinte\n- obturație: Plombă dentară\n- albire: Albire profesională a dinților\n- proteza: Dinte artificial, preteză dentară\n- gutieră: Aparat de protecție pentru dinți\n- ortodonție: Tratamente pentru alinierea dinților (aparate dentare)\n\nSTATUS VALUES:\n- scheduled: Programat - programarea este planificată\n- confirmed: Confirmat - pacientul a confirmat prezența\n- completed: Finalizat - tratamentul a fost efectuat\n- cancelled: Anulat - programarea a fost anulată\n- no_show: Nu s-a prezentat - pacientul nu a venit\n",
-  "metadata": {
-    "category": "terminology",
-    "businessType": "dental",
-    "priority": "medium"
-  }
-}

@@ -1,0 +1,12 @@
+{
+  "id": "dental-best-practices-dentalCharts",
+  "title": "Best Practices: dentalCharts",
+  "content": "[\n  \"Fiecare pacient ar trebui să aibă o singură fișă dentară activă\",\n  \"Dinții sunt numerotați conform sistemului FDI: 11-18 (superior dreapta), 21-28 (superior stânga), 31-38 (inferior stânga), 41-48 (inferior dreapta)\",\n  \"Condiții disponibile: sound (sănătos), filled (plombat), compromised (compromis), endo (endodontic), missing (lipsă), rotated (rotit), displaced (deplasat), gum-recessed (gingie retractată)\",\n  \"Actualizează fișa dentară după fiecare consultație când identifici probleme noi\",\n  \"Folosește fișa dentară ca bază pentru crearea planurilor de tratament\",\n  \"Array-ul 'treatments' din fiecare dinte poate conține ID-uri de tratamente aplicate sau planificate\"\n]",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "dentalCharts"
+  }
+}

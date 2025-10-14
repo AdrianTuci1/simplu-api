@@ -1,0 +1,13 @@
+{
+  "id": "dental-conversation-pattern-searchAndDisplay",
+  "title": "Conversation Pattern: User caută informații",
+  "content": "{\n  \"scenario\": \"User caută informații\",\n  \"examples\": [\n    {\n      \"query\": \"Câte programări avem astăzi?\",\n      \"action\": \"query_app_server(resources, list, appointment, {date: today})\",\n      \"response\": \"Astăzi: 12 programări. 8 consultații, 3 tratamente, 1 implant. Prima la 9:00.\"\n    },\n    {\n      \"query\": \"Cine este programat mâine cu Dr. Tucean?\",\n      \"action\": \"query_app_server(resources, list, appointment, {date: tomorrow, medicId: '...'})\",\n      \"response\": \"Mâine Dr. Tucean are 8 pacienți: Ion Popescu (9:00), Maria Ionescu (10:00), ...\"\n    },\n    {\n      \"query\": \"Arată-mi pacienții cu numele Popescu\",\n      \"action\": \"query_app_server(resources, list, patient, {name: 'Popescu'})\",\n      \"response\": \"Am găsit 3 pacienți: 1) Ion Popescu (0712...), 2) Maria Popescu (0723...), 3) ...\"\n    }\n  ]\n}",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "conversation-pattern",
+    "patternKey": "searchAndDisplay",
+    "scenario": "User caută informații"
+  }
+}

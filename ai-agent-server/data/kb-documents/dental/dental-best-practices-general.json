@@ -1,0 +1,12 @@
+{
+  "id": "dental-best-practices-general",
+  "title": "Best Practices: general",
+  "content": "[\n  \"Toate datele resursei sunt în câmpul 'data'\",\n  \"resourceId este generat automat - nu îl trimiți când creezi resurse\",\n  \"Pentru query-uri, folosește dot notation pentru câmpuri nested: 'data.doctor.id'\",\n  \"userId din context poate fi resourceId al medicului - verifică întotdeauna\"\n]",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "general"
+  }
+}

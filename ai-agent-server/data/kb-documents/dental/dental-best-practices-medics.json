@@ -1,0 +1,12 @@
+{
+  "id": "dental-best-practices-medics",
+  "title": "Best Practices: medics",
+  "content": "[\n  \"medicName este OBLIGATORIU\",\n  \"dutyDays ajută la planificarea programărilor\",\n  \"Role poate fi: Administrator, Medic, Asistent\"\n]",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "medics"
+  }
+}

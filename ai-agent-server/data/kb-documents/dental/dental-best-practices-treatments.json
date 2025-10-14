@@ -1,0 +1,12 @@
+{
+  "id": "dental-best-practices-treatments",
+  "title": "Best Practices: treatments",
+  "content": "[\n  \"treatmentType, price și duration sunt OBLIGATORII\",\n  \"Folosește categorii consistente pentru organizare\",\n  \"Duration este în minute (number pentru treatment, string pentru service în appointment)\"\n]",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "treatments"
+  }
+}

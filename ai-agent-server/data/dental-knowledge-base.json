@@ -620,6 +620,356 @@
       }
     },
 
+    "dental-chart": {
+      "displayName": "Fișă Dentară",
+      "description": "Fișa dentară cu starea dinților pacientului",
+      "resourceIdFormat": "dc-XXXXX sau UUID",
+      "dataSchema": {
+        "patientId": {
+          "type": "string",
+          "required": true,
+          "description": "ID-ul pacientului (format: pa2510-00005)"
+        },
+        "chart": {
+          "type": "array",
+          "required": true,
+          "description": "Lista dinților cu starea lor",
+          "items": {
+            "toothNumber": {
+              "type": "number",
+              "required": true,
+              "description": "Numărul dintelui (11-18, 21-28, 31-38, 41-48)",
+              "enum": [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48]
+            },
+            "condition": {
+              "type": "string",
+              "required": true,
+              "description": "Starea dintelui",
+              "enum": ["sound", "filled", "compromised", "endo", "missing", "rotated", "displaced", "gum-recessed"]
+            },
+            "treatments": {
+              "type": "array",
+              "required": false,
+              "default": [],
+              "description": "Lista tratamentelor asociate acestui dinte"
+            }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        }
+      },
+      "fullResourceExample": {
+        "id": "B0100001-L0100001-dc-00001",
+        "businessId": "B0100001",
+        "locationId": "L0100001",
+        "resourceType": "dental-chart",
+        "resourceId": "dc-00001",
+        "data": {
+          "patientId": "pa2510-00005",
+          "chart": [
+            {
+              "toothNumber": 27,
+              "condition": "compromised",
+              "treatments": []
+            },
+            {
+              "toothNumber": 17,
+              "condition": "filled",
+              "treatments": []
+            },
+            {
+              "toothNumber": 23,
+              "condition": "endo",
+              "treatments": []
+            }
+          ],
+          "createdAt": "2025-10-13T22:59:53.065Z",
+          "updatedAt": "2025-10-13T22:59:53.065Z"
+        },
+        "timestamp": "2025-10-13T22:59:53.065Z",
+        "lastUpdated": "2025-10-13T22:59:53.065Z"
+      },
+      "dataFieldExample": {
+        "patientId": "pa2510-00005",
+        "chart": [
+          {
+            "toothNumber": 27,
+            "condition": "compromised",
+            "treatments": []
+          }
+        ]
+      },
+      "conditionsExplanation": {
+        "sound": "Sănătos - dintele este în stare bună",
+        "filled": "Plombat - dintele are o plombă/obturație",
+        "compromised": "Compromis - dintele este deteriorat și necesită tratament",
+        "endo": "Endodontic - dintele a avut tratament de canal",
+        "missing": "Lipsă - dintele lipsește",
+        "rotated": "Rotit - dintele este rotit din poziția normală",
+        "displaced": "Deplasat - dintele este deplasat din poziția normală",
+        "gum-recessed": "Gingie retractată - gingiile s-au retras de la dinte"
+      },
+      "toothNumbering": {
+        "system": "FDI (Federation Dentaire Internationale)",
+        "quadrants": {
+          "11-18": "Cadran superior dreapta (adulți)",
+          "21-28": "Cadran superior stânga (adulți)",
+          "31-38": "Cadran inferior stânga (adulți)",
+          "41-48": "Cadran inferior dreapta (adulți)"
+        },
+        "note": "Prima cifră indică cadranul (1-4), a doua cifră indică poziția dintelui (1-8)"
+      },
+      "frontendFunctionExample": {
+        "functionName": "createResource",
+        "parameters": {
+          "resourceType": "dental-chart",
+          "data": {
+            "patientId": "pa2510-00005",
+            "chart": [
+              {
+                "toothNumber": 27,
+                "condition": "compromised",
+                "treatments": []
+              }
+            ]
+          }
+        }
+      },
+      "usageNotes": [
+        "Fiecare pacient are o singură fișă dentară activă",
+        "Actualizează fișa când identifici probleme noi la dinți",
+        "Folosește pentru a urmări evoluția tratamentelor",
+        "Consultă fișa înainte de a crea un plan de tratament"
+      ]
+    },
+
+    "plan": {
+      "displayName": "Plan de Tratament",
+      "description": "Plan de tratament cu ordinea și detaliile tratamentelor pentru pacient",
+      "resourceIdFormat": "pl-XXXXX sau UUID",
+      "dataSchema": {
+        "patientId": {
+          "type": "string",
+          "required": true,
+          "description": "ID-ul pacientului (format: pa2510-00005)"
+        },
+        "plan": {
+          "type": "array",
+          "required": true,
+          "description": "Lista tratamentelor în ordinea de execuție",
+          "items": {
+            "id": {
+              "type": "string",
+              "required": true,
+              "description": "ID unic pentru acest item (ex: chart-27-tr2510-00004 sau custom-uuid)"
+            },
+            "order": {
+              "type": "number",
+              "required": true,
+              "description": "Ordinea în plan (0, 1, 2, ...)"
+            },
+            "treatmentId": {
+              "type": "string",
+              "required": true,
+              "description": "ID-ul tratamentului din sistem (format: tr2510-00004)"
+            },
+            "title": {
+              "type": "string",
+              "required": true,
+              "description": "Numele tratamentului"
+            },
+            "price": {
+              "type": "number",
+              "required": true,
+              "description": "Prețul tratamentului în RON"
+            },
+            "durationMinutes": {
+              "type": "number",
+              "required": true,
+              "description": "Durata tratamentului în minute"
+            },
+            "isFromChart": {
+              "type": "boolean",
+              "required": true,
+              "description": "Dacă tratamentul provine din fișa dentară"
+            },
+            "toothNumber": {
+              "type": "number",
+              "required": false,
+              "description": "Numărul dintelui (doar dacă isFromChart: true)"
+            },
+            "notes": {
+              "type": "string",
+              "required": false,
+              "default": "",
+              "description": "Note suplimentare despre tratament"
+            }
+          }
+        },
+        "totalPrice": {
+          "type": "number",
+          "required": false,
+          "description": "Prețul total al planului (suma tuturor tratamentelor)"
+        },
+        "totalDuration": {
+          "type": "number",
+          "required": false,
+          "description": "Durata totală estimată în minute"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "proposed", "accepted", "in_progress", "completed"],
+          "default": "draft",
+          "description": "Statusul planului de tratament"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "ISO8601",
+          "auto": true
+        }
+      },
+      "fullResourceExample": {
+        "id": "B0100001-L0100001-pl-00001",
+        "businessId": "B0100001",
+        "locationId": "L0100001",
+        "resourceType": "plan",
+        "resourceId": "pl-00001",
+        "data": {
+          "patientId": "pa2510-00005",
+          "plan": [
+            {
+              "id": "chart-27-tr2510-00004",
+              "order": 0,
+              "treatmentId": "tr2510-00004",
+              "title": "Tratament hidroxid de calciu",
+              "price": 200,
+              "durationMinutes": 20,
+              "isFromChart": true,
+              "toothNumber": 27,
+              "notes": ""
+            },
+            {
+              "id": "chart-17-tr2510-00003",
+              "order": 1,
+              "treatmentId": "tr2510-00003",
+              "title": "Gutieră de protecție",
+              "price": 200,
+              "durationMinutes": 15,
+              "isFromChart": true,
+              "toothNumber": 17,
+              "notes": ""
+            },
+            {
+              "id": "chart-23-tr2510-00005",
+              "order": 2,
+              "treatmentId": "tr2510-00005",
+              "title": "Reconstructie cu pivot din fibra de sticla",
+              "price": 500,
+              "durationMinutes": 45,
+              "isFromChart": true,
+              "toothNumber": 23,
+              "notes": ""
+            },
+            {
+              "id": "custom-detartraj-001",
+              "order": 3,
+              "treatmentId": "tr2510-00001",
+              "title": "Detartraj profesional",
+              "price": 200,
+              "durationMinutes": 45,
+              "isFromChart": false,
+              "notes": "Recomandat înainte de celelalte tratamente"
+            }
+          ],
+          "totalPrice": 1100,
+          "totalDuration": 125,
+          "status": "proposed",
+          "createdAt": "2025-10-13T23:32:24.096Z",
+          "updatedAt": "2025-10-13T23:32:24.096Z"
+        },
+        "timestamp": "2025-10-13T23:32:24.096Z",
+        "lastUpdated": "2025-10-13T23:32:24.096Z"
+      },
+      "dataFieldExample": {
+        "patientId": "pa2510-00005",
+        "plan": [
+          {
+            "id": "chart-27-tr2510-00004",
+            "order": 0,
+            "treatmentId": "tr2510-00004",
+            "title": "Tratament hidroxid de calciu",
+            "price": 200,
+            "durationMinutes": 20,
+            "isFromChart": true,
+            "toothNumber": 27,
+            "notes": ""
+          }
+        ],
+        "totalPrice": 200,
+        "totalDuration": 20,
+        "status": "draft"
+      },
+      "frontendFunctionExample": {
+        "functionName": "createResource",
+        "parameters": {
+          "resourceType": "plan",
+          "data": {
+            "patientId": "pa2510-00005",
+            "plan": [
+              {
+                "id": "chart-27-tr2510-00004",
+                "order": 0,
+                "treatmentId": "tr2510-00004",
+                "title": "Tratament hidroxid de calciu",
+                "price": 200,
+                "durationMinutes": 20,
+                "isFromChart": true,
+                "toothNumber": 27,
+                "notes": ""
+              }
+            ],
+            "totalPrice": 200,
+            "totalDuration": 20,
+            "status": "draft"
+          }
+        }
+      },
+      "usageNotes": [
+        "Planul poate include tratamente din fișa dentară (isFromChart: true) și tratamente generale (isFromChart: false)",
+        "Ordinea tratamentelor este importantă - folosește câmpul 'order'",
+        "Calculează automat totalPrice și totalDuration când adaugi tratamente",
+        "Statusul 'proposed' înseamnă că planul a fost trimis pacientului pentru aprobare",
+        "Tratamentele din chart au ID format: chart-{toothNumber}-{treatmentId}",
+        "Tratamentele generale au ID custom: custom-{description}-{uuid}"
+      ],
+      "workflowExample": {
+        "description": "Flux tipic de lucru cu planul de tratament",
+        "steps": [
+          "1. Medicul examinează pacientul și completează fișa dentară (dental-chart)",
+          "2. Pe baza fișei dentare, AI sau medicul creează un plan de tratament (plan) cu status 'draft'",
+          "3. Medicul revizuiește planul, poate adăuga tratamente generale (detartraj, consultații)",
+          "4. Reordonează tratamentele în ordinea optimă de execuție",
+          "5. Trimite planul pacientului (status devine 'proposed')",
+          "6. Pacientul acceptă planul (status devine 'accepted')",
+          "7. Pe măsură ce tratamentele sunt efectuate, status devine 'in_progress'",
+          "8. Când toate tratamentele sunt finalizate, status devine 'completed'"
+        ]
+      }
+    },
+
     "setting": {
       "displayName": "Setări",
       "description": "Setări și configurații pentru clinică",
@@ -989,6 +1339,36 @@
       },
       "note": "FOARTE IMPORTANT: Verifică working-hours înainte de a crea programări sau când răspunzi la întrebări despre program",
       "usage": "Pentru a verifica dacă o oră e în programul de lucru, parsează array-ul days și verifică startTime/endTime pentru ziua respectivă"
+    },
+    "getDentalChartByPatient": {
+      "description": "Obține fișa dentară a unui pacient",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "dental-chart",
+        "params": {
+          "data.patientId": "{{patientId}}"
+        }
+      },
+      "note": "Fiecare pacient ar trebui să aibă o singură fișă dentară activă. Consultă fișa înainte de a crea un plan de tratament."
+    },
+    "getTreatmentPlanByPatient": {
+      "description": "Obține planul de tratament al unui pacient",
+      "tool": "query_app_server",
+      "parameters": {
+        "module": "resources",
+        "action": "list",
+        "businessId": "{{businessId}}",
+        "locationId": "{{locationId}}",
+        "resourceType": "plan",
+        "params": {
+          "data.patientId": "{{patientId}}"
+        }
+      },
+      "note": "Un pacient poate avea multiple planuri de tratament (draft, proposed, accepted, etc.). Filtrează după status dacă e necesar."
     }
   },
 
@@ -1225,6 +1605,25 @@
       "⚠️ PENTRU CUSTOMERS: Folosește DOAR module='patient-booking' în query_app_server",
       "Customers NU au acces la module='resources' - returnează eroare dacă încearcă",
       "call_frontend_function este DOAR pentru operators, NU pentru customers"
+    ],
+    "dentalCharts": [
+      "Fiecare pacient ar trebui să aibă o singură fișă dentară activă",
+      "Dinții sunt numerotați conform sistemului FDI: 11-18 (superior dreapta), 21-28 (superior stânga), 31-38 (inferior stânga), 41-48 (inferior dreapta)",
+      "Condiții disponibile: sound (sănătos), filled (plombat), compromised (compromis), endo (endodontic), missing (lipsă), rotated (rotit), displaced (deplasat), gum-recessed (gingie retractată)",
+      "Actualizează fișa dentară după fiecare consultație când identifici probleme noi",
+      "Folosește fișa dentară ca bază pentru crearea planurilor de tratament",
+      "Array-ul 'treatments' din fiecare dinte poate conține ID-uri de tratamente aplicate sau planificate"
+    ],
+    "treatmentPlans": [
+      "Planul de tratament se creează pe baza fișei dentare (dental-chart)",
+      "Planul poate include atât tratamente specifice dinților (isFromChart: true) cât și tratamente generale (isFromChart: false)",
+      "Ordinea tratamentelor este crucială - folosește câmpul 'order' pentru secvențiere",
+      "Tratamentele din chart au ID format: chart-{toothNumber}-{treatmentId}",
+      "Tratamentele generale au ID custom: custom-{description}-{uuid}",
+      "Calculează automat totalPrice (suma tuturor prețurilor) și totalDuration (suma tuturor duratelor)",
+      "Statusuri disponibile: draft (ciornă), proposed (propus pacientului), accepted (acceptat), in_progress (în desfășurare), completed (finalizat)",
+      "Verifică că toate tratamentele din plan există în sistem înainte de creare",
+      "Permite reordonarea tratamentelor - medicul poate decide ordinea optimă de execuție"
     ]
   }
 }

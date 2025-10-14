@@ -1,0 +1,12 @@
+{
+  "id": "dental-terminology-medical",
+  "title": "Terminology - Medical Terms",
+  "content": "{\n  \"consultație\": \"Examinare stomatologică generală\",\n  \"detartraj\": \"Curățare profesională a dinților, îndepărtare tartru\",\n  \"tratament endodontic\": \"Tratament de canal radicular\",\n  \"implant\": \"Implant dentar pentru înlocuirea dinților lipsă\",\n  \"coroană\": \"Capsulă dentară pentru acoperirea dintelui\",\n  \"extracție\": \"Scoaterea unui dinte\",\n  \"obturație\": \"Plombă dentară\",\n  \"albire\": \"Albire profesională a dinților\",\n  \"proteza\": \"Dinte artificial, preteză dentară\",\n  \"gutieră\": \"Aparat de protecție pentru dinți\",\n  \"ortodonție\": \"Tratamente pentru alinierea dinților (aparate dentare)\"\n}",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "terminology",
+    "category": "medical"
+  }
+}

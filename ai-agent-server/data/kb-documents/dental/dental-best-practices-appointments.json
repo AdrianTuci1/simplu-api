@@ -1,0 +1,12 @@
+{
+  "id": "dental-best-practices-appointments",
+  "title": "Best Practices: appointments",
+  "content": "[\n  \"⚠️ CRITICĂ: NU poți crea programare fără pacient și tratament EXISTENT în sistem!\",\n  \"⚠️ CRITICĂ: ÎNTOTDEAUNA verifică dacă pacientul există ÎNAINTE de programare\",\n  \"⚠️ CRITICĂ: ÎNTOTDEAUNA verifică dacă tratamentul există ÎNAINTE de programare\",\n  \"⚠️ CRITICĂ: Dacă pacientul NU există, GHIDEAZĂ operatorul să-l creeze MAI ÎNTÂI\",\n  \"⚠️ CRITICĂ: Dacă tratamentul NU există, GHIDEAZĂ operatorul să-l creeze MAI ÎNTÂI\",\n  \"VERIFICĂ WORKING-HOURS ÎNTOTDEAUNA înainte de programare - ora trebuie să fie între startTime și endTime pentru ziua respectivă\",\n  \"Verifică că ziua are isWorking: true (nu programa în zilele libere)\",\n  \"Verifică disponibilitatea medicului (nu suprapune programări)\",\n  \"Asigură-te că medicul există și este disponibil\",\n  \"Folosește serviceDuration = service.duration (string)\",\n  \"Status implicit: 'scheduled'\",\n  \"Completează doctor.id, doctor.name, patient.id, patient.name, service.id, service.name, service.duration\",\n  \"FLUX OBLIGATORIU: 1) Verifică pacient → 2) Dacă lipsește, creează-l → 3) Verifică tratament → 4) Dacă lipsește, creează-l → 5) Apoi creează programarea\"\n]",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-10",
+    "type": "best-practices",
+    "category": "appointments"
+  }
+}
