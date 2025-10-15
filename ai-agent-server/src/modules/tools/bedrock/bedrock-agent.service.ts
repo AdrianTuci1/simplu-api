@@ -110,6 +110,17 @@ export class BedrockAgentService {
       const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
       const currentTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
       
+      // Build view context if available
+      let viewContext = '';
+      if (context.view) {
+        viewContext = `
+- view:
+  - dashboardView: ${context.view.dashboardView || 'N/A'}
+  - drawer: ${context.view.drawer || 'N/A'}
+  - drawerType: ${context.view.drawerType || 'N/A'}
+  - drawerData: ${context.view.drawerData ? JSON.stringify(context.view.drawerData) : 'N/A'}`;
+      }
+      
       const contextPrefix = `[System Context - Use these exact values in tool calls:
 - businessId: ${context.businessId}
 - locationId: ${context.locationId}
@@ -118,7 +129,14 @@ export class BedrockAgentService {
 - businessType: ${context.businessType}
 - currentDate: ${currentDate}
 - currentTime: ${currentTime}
-- timestamp: ${currentDateTime}]
+- timestamp: ${currentDateTime}
+- activeView: ${viewContext}
+
+IMPORTANT RULES:
+- NEVER use user__askuser or any tool to ask questions to the user
+- When you need information from the user, respond directly in the conversation with your question
+- Tools are ONLY for querying data, creating resources, or sending notifications
+- Questions to users must be part of your direct text response, NOT tool calls]
 
 `;
       

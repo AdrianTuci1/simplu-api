@@ -1,0 +1,15 @@
+{
+  "id": "dental-query-example-listAppointmentsByPatientName",
+  "title": "Query Example: Listă programări după numele pacientului (nested field)",
+  "text": "# Query Example: Listă programări după numele pacientului\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Caută programări după numele pacientului folosind nested field search pe data.patient.name. Poți combina cu date range și alte filtre.\n\n**Tool:** query_resources\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** appointment\n\n  **Params:**\n    **Data.patient.name:** {{patientName}}\n    **StartDate:** {{startDate}} (optional)\n    **EndDate:** {{endDate}} (optional)\n    **Data.status:** {{status}} (optional)\n\n**Examples:**\n- Query: \"Arată-mi programările pentru Maria Ionescu\" → params: {data.patient.name: \"Maria Ionescu\"}\n- Query: \"Câte programări are Ion Popescu săptămâna asta?\" → params: {data.patient.name: \"Ion Popescu\", startDate: \"2025-10-14\", endDate: \"2025-10-20\"}\n\n**Alternative Search Fields:**\n- data.patient.id - Caută după patient ID (dacă îl ai)\n- data.medic.name - Caută după nume medic\n- data.treatment.name - Caută după nume tratament\n\n**Important:** Search-ul este case-insensitive și suportă partial matches. Dacă nu găsești rezultate, încearcă să cauți pacientul mai întâi pentru a obține patientId.\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-14",
+    "type": "query-example",
+    "exampleKey": "listAppointmentsByPatientName",
+    "documentId": "dental-query-example-listAppointmentsByPatientName",
+    "source": "dental-knowledge-base"
+  }
+}
+

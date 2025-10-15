@@ -1,9 +1,9 @@
 {
-  "totalDocuments": 34,
+  "totalDocuments": 36,
   "businessType": "dental",
-  "version": "1.0.0",
-  "lastUpdated": "2025-10-10",
-  "generatedAt": "2025-10-14T00:03:20.114Z",
+  "version": "1.1.0",
+  "lastUpdated": "2025-10-14",
+  "generatedAt": "2025-10-14T20:00:00.000Z",
   "documents": [
     {
       "id": "dental-system-instructions-operator",
@@ -195,6 +195,30 @@
       }
     },
     {
+      "id": "dental-query-example-listPatientsByName",
+      "title": "Query Example: Listă pacienți după nume (nested field)",
+      "file": "dental-query-example-listPatientsByName.json",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-14",
+        "type": "query-example",
+        "exampleKey": "listPatientsByName"
+      }
+    },
+    {
+      "id": "dental-query-example-listAppointmentsByPatientName",
+      "title": "Query Example: Listă programări după numele pacientului (nested field)",
+      "file": "dental-query-example-listAppointmentsByPatientName.json",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-14",
+        "type": "query-example",
+        "exampleKey": "listAppointmentsByPatientName"
+      }
+    },
+    {
       "id": "dental-query-example-listMedics",
       "title": "Query Example: Listează toți medicii",
       "file": "dental-query-example-listMedics.json",
@@ -256,24 +280,24 @@
     },
     {
       "id": "dental-query-example-getDentalChartByPatient",
-      "title": "Query Example: Obține fișa dentară a unui pacient",
+      "title": "Query Example: Obține fișa dentară a unui pacient (2-step workflow)",
       "file": "dental-query-example-getDentalChartByPatient.json",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "1.1.0",
+        "lastUpdated": "2025-10-14",
         "type": "query-example",
         "exampleKey": "getDentalChartByPatient"
       }
     },
     {
       "id": "dental-query-example-getTreatmentPlanByPatient",
-      "title": "Query Example: Obține planul de tratament al unui pacient",
+      "title": "Query Example: Obține planul de tratament al unui pacient (2-step workflow)",
       "file": "dental-query-example-getTreatmentPlanByPatient.json",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "1.1.0",
+        "lastUpdated": "2025-10-14",
         "type": "query-example",
         "exampleKey": "getTreatmentPlanByPatient"
       }

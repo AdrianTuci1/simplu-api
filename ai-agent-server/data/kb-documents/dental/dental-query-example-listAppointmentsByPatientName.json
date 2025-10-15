@@ -1,0 +1,73 @@
+{
+  "id": "dental-query-example-listAppointmentsByPatientName",
+  "businessType": "dental",
+  "category": "query-example",
+  "title": "Query Example: Listă programări după numele pacientului",
+  "description": "Caută programări după numele pacientului folosind nested field search",
+  "content": {
+    "exampleKey": "listAppointmentsByPatientName",
+    "tool": "query_resources",
+    "description": "Caută programări după numele pacientului. Folosește nested field search pe data.patient.name pentru a filtra programările.",
+    "parameters": {
+      "module": "resources",
+      "action": "list",
+      "businessId": "{{businessId}}",
+      "locationId": "{{locationId}}",
+      "resourceType": "appointment",
+      "params": {
+        "data.patient.name": "{{patientName}}"
+      }
+    },
+    "examples": [
+      {
+        "query": "Arată-mi programările pentru Maria Ionescu",
+        "steps": [
+          {
+            "tool": "query_resources",
+            "params": {
+              "businessId": "B0100001",
+              "locationId": "L0100001",
+              "action": "list",
+              "resourceType": "appointment",
+              "params": {
+                "data.patient.name": "Maria Ionescu"
+              }
+            },
+            "note": "Caută direct după data.patient.name - nested field search"
+          }
+        ]
+      },
+      {
+        "query": "Câte programări are Ion Popescu săptămâna asta?",
+        "steps": [
+          {
+            "tool": "query_resources",
+            "params": {
+              "businessId": "B0100001",
+              "locationId": "L0100001",
+              "action": "list",
+              "resourceType": "appointment",
+              "params": {
+                "data.patient.name": "Ion Popescu",
+                "startDate": "2025-10-14",
+                "endDate": "2025-10-20"
+              }
+            },
+            "note": "Combină nested field search cu date range"
+          }
+        ]
+      }
+    ],
+    "notes": [
+      "Folosește nested field notation: data.patient.name pentru appointments",
+      "Poți combina cu alte filtre (startDate, endDate, status)",
+      "Search-ul este case-insensitive și suportă partial matches",
+      "Dacă nu găsești rezultate, încearcă să cauți pacientul mai întâi pentru a obține patientId"
+    ]
+  },
+  "keywords": ["appointment", "search", "patient name", "nested field", "programări", "listă"],
+  "priority": "high",
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-14"
+}
+

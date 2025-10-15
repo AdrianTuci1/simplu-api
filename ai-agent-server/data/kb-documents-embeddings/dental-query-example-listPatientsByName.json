@@ -1,0 +1,15 @@
+{
+  "id": "dental-query-example-listPatientsByName",
+  "title": "Query Example: Listă pacienți după nume (nested field)",
+  "text": "# Query Example: Listă pacienți după nume\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Caută pacienți după nume folosind nested field search pe data.patientName. Search-ul este case-insensitive și suportă partial matches.\n\n**Tool:** query_resources\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** patient\n\n  **Params:**\n    **Data.patientName:** {{patientName}}\n\n**Examples:**\n- Query: \"Găsește pacientul Maria Ionescu\" → params: {data.patientName: \"Maria Ionescu\"}\n- Query: \"Caută toți pacienții cu numele Popescu\" → params: {data.patientName: \"Popescu\"} (partial match)\n\n**Alternative Search Fields:**\n- data.patientPhone - Caută după telefon\n- data.patientEmail - Caută după email\n\n**Important:** Dacă găsești pacientul, salvează patientId pentru query-uri ulterioare (dental-chart, plan).\n",
+  "metadata": {
+    "businessType": "dental",
+    "version": "1.0.0",
+    "lastUpdated": "2025-10-14",
+    "type": "query-example",
+    "exampleKey": "listPatientsByName",
+    "documentId": "dental-query-example-listPatientsByName",
+    "source": "dental-knowledge-base"
+  }
+}
+

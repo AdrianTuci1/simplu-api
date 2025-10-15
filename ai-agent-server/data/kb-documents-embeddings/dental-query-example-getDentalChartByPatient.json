@@ -1,11 +1,11 @@
 {
   "id": "dental-query-example-getDentalChartByPatient",
-  "title": "Query Example: Obține fișa dentară a unui pacient",
-  "text": "# Query Example: Obține fișa dentară a unui pacient\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Obține fișa dentară a unui pacient\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** dental-chart\n\n  **Params:**\n    **Data.patient Id:** {{patientId}}\n**Note:** Fiecare pacient ar trebui să aibă o singură fișă dentară activă. Consultă fișa înainte de a crea un plan de tratament.\n",
+  "title": "Query Example: Obține fișa dentară a unui pacient (2-step workflow)",
+  "text": "# Query Example: Obține fișa dentară a unui pacient\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Obține fișa dentară a unui pacient folosind un FLUX OBLIGATORIU în 2 pași: identifică pacient → obține fișă dentară\n\n**WORKFLOW:**\n\n**STEP 1 - Identifică pacientul după nume:**\n**Tool:** query_resources\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** patient\n  **Params:**\n    **Data.patientName:** {{patientName}}\n**Output:** Extract patientId from result\n\n**STEP 2 - Obține fișa dentară folosind patientId:**\n**Tool:** query_resources\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** dental-chart\n  **Params:**\n    **Data.patientId:** {{patientId}}\n\n**Examples:**\n- Query: \"Arată-mi fișa dentară pentru Maria Ionescu\"\n  Step 1: query patient (data.patientName: \"Maria Ionescu\") → patientId: \"P0100123\"\n  Step 2: query dental-chart (data.patientId: \"P0100123\")\n\n**IMPORTANT:**\n- NU poți căuta direct dental-chart după nume pacient - TREBUIE să folosești data.patientId\n- FLUX OBLIGATORIU: Identifică pacient → Obține patientId → Caută dental-chart\n- Fiecare pacient ar trebui să aibă o singură fișă dentară activă\n- Consultă fișa dentară înainte de a crea un plan de tratament\n- Dacă pacientul nu există, oprește-te și informează utilizatorul\n",
   "metadata": {
     "businessType": "dental",
-    "version": "1.0.0",
-    "lastUpdated": "2025-10-10",
+    "version": "1.1.0",
+    "lastUpdated": "2025-10-14",
     "type": "query-example",
     "exampleKey": "getDentalChartByPatient",
     "documentId": "dental-query-example-getDentalChartByPatient",

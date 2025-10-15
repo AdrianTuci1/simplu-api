@@ -1,11 +1,11 @@
 {
   "id": "dental-query-example-getTreatmentPlanByPatient",
-  "title": "Query Example: Obține planul de tratament al unui pacient",
-  "text": "# Query Example: Obține planul de tratament al unui pacient\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Obține planul de tratament al unui pacient\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** plan\n\n  **Params:**\n    **Data.patient Id:** {{patientId}}\n**Note:** Un pacient poate avea multiple planuri de tratament (draft, proposed, accepted, etc.). Filtrează după status dacă e necesar.\n",
+  "title": "Query Example: Obține planul de tratament al unui pacient (2-step workflow)",
+  "text": "# Query Example: Obține planul de tratament al unui pacient\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Obține planul de tratament al unui pacient folosind un FLUX OBLIGATORIU în 2 pași: identifică pacient → obține plan\n\n**WORKFLOW:**\n\n**STEP 1 - Identifică pacientul după nume:**\n**Tool:** query_resources\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** patient\n  **Params:**\n    **Data.patientName:** {{patientName}}\n**Output:** Extract patientId from result\n\n**STEP 2 - Obține planul de tratament folosind patientId:**\n**Tool:** query_resources\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** plan\n  **Params:**\n    **Data.patientId:** {{patientId}}\n    **Data.status:** {{status}} (optional: draft, proposed, accepted, in_progress, completed, cancelled)\n\n**Examples:**\n- Query: \"Arată-mi planul de tratament pentru Maria Ionescu\"\n  Step 1: query patient (data.patientName: \"Maria Ionescu\") → patientId: \"P0100123\"\n  Step 2: query plan (data.patientId: \"P0100123\")\n\n- Query: \"Care e planul acceptat pentru Ion Popescu?\"\n  Step 1: query patient (data.patientName: \"Ion Popescu\") → patientId: \"P0100456\"\n  Step 2: query plan (data.patientId: \"P0100456\", data.status: \"accepted\")\n\n**IMPORTANT:**\n- NU poți căuta direct plan după nume pacient - TREBUIE să folosești data.patientId\n- FLUX OBLIGATORIU: Identifică pacient → Obține patientId → Caută plan\n- Un pacient poate avea multiple planuri cu status diferit\n- Status-uri posibile: draft, proposed, accepted, in_progress, completed, cancelled\n- Dacă pacientul nu există, oprește-te și informează utilizatorul\n",
   "metadata": {
     "businessType": "dental",
-    "version": "1.0.0",
-    "lastUpdated": "2025-10-10",
+    "version": "1.1.0",
+    "lastUpdated": "2025-10-14",
     "type": "query-example",
     "exampleKey": "getTreatmentPlanByPatient",
     "documentId": "dental-query-example-getTreatmentPlanByPatient",
