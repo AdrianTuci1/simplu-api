@@ -1,37 +1,73 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { ExternalApisService } from '../external-apis.service';
 
 @Injectable()
 export class MetaService {
-  constructor(private readonly externalApis: ExternalApisService) {}
+  private readonly logger = new Logger(MetaService.name);
 
-  generateAuthUrl(businessId: string, locationId: string): string {
+  constructor(
+    private readonly externalApis: ExternalApisService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  generateAuthUrl(
+    businessId: string, 
+    locationId: string, 
+    customRedirectUri?: string
+  ): { url: string; clientId: string; redirectUri: string } {
     if (!businessId || !locationId) throw new BadRequestException('Missing businessId or locationId');
-    const clientId = process.env.META_APP_ID as string;
-    const redirectUri = process.env.META_REDIRECT_URI || 'http://localhost:3003/external/meta/callback';
-    const scopes = [
-      'pages_messaging',
-      'pages_show_list',
-      'pages_manage_metadata',
-      'instagram_basic',
-      'instagram_manage_messages',
-    ];
-    const state = Buffer.from(JSON.stringify({ businessId, locationId })).toString('base64url');
+    const clientId = this.configService.get<string>('meta.appId');
+    
+    // Use custom redirect_uri if provided (for dynamic frontend URLs), otherwise use default from config
+    const redirectUri = customRedirectUri || this.configService.get<string>('meta.redirectUri');
+    
+    if (!clientId) {
+      this.logger.error('META_APP_ID is not configured');
+      throw new BadRequestException('Meta App ID is not configured');
+    }
+    
+    if (!redirectUri) {
+      this.logger.error('redirect_uri is not provided and META_REDIRECT_URI is not configured');
+      throw new BadRequestException('Redirect URI is required. Provide it via query parameter or configure META_REDIRECT_URI');
+    }
+    
+    // Get scopes from config (comma-separated string)
+    // Default scopes for Meta API v19.0+ (Facebook Pages)
+    // Note: Ensure these permissions are enabled in your Meta App Dashboard
+    const scopesString = this.configService.get<string>('meta.scopes');
+    const scopes = scopesString.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    
+    // Store redirect_uri in state so we can use the same one during token exchange
+    const state = Buffer.from(JSON.stringify({ businessId, locationId, redirectUri })).toString('base64url');
     const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('scope', scopes.join(','));
     url.searchParams.set('state', state);
-    return url.toString();
+    
+    this.logger.log(`Meta OAuth URL generated for businessId: ${businessId}, locationId: ${locationId}, clientId: ${clientId}, redirectUri: ${redirectUri}`);
+    
+    return {
+      url: url.toString(),
+      clientId,
+      redirectUri,
+    };
   }
 
   async handleCallback(code: string, state: string): Promise<any> {
     if (!code || !state) throw new BadRequestException('Missing code/state');
-    const { businessId, locationId } = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-    const clientId = process.env.META_APP_ID as string;
-    const clientSecret = process.env.META_APP_SECRET as string;
-    const redirectUri = process.env.META_REDIRECT_URI || 'http://localhost:3003/external/meta/callback';
+    
+    // Extract redirect_uri from state - this ensures we use the SAME redirect_uri
+    // that was used in the authorization request
+    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+    const { businessId, locationId, redirectUri } = stateData;
+    
+    const clientId = this.configService.get<string>('meta.appId');
+    const clientSecret = this.configService.get<string>('meta.appSecret');
+
+    this.logger.log(`Processing Meta OAuth callback for businessId: ${businessId}, locationId: ${locationId}, redirectUri: ${redirectUri}`);
 
     // Use default agents (no keep-alive) for one-off OAuth exchanges to avoid lingering sockets
     const axiosInstance = axios.create({
@@ -40,43 +76,72 @@ export class MetaService {
     });
 
     // Exchange code for short-lived token
-    const tokenResp = await axiosInstance.get('https://graph.facebook.com/v19.0/oauth/access_token', {
-      params: { client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, code },
-    });
-    const accessToken = tokenResp.data?.access_token as string;
-
-    // Optional: exchange for long-lived token
-    let longLived = accessToken;
+    // NOTE: redirect_uri MUST match the one used in authorization request
     try {
-      const ll = await axiosInstance.get('https://graph.facebook.com/v19.0/oauth/access_token', {
-        params: { grant_type: 'fb_exchange_token', client_id: clientId, client_secret: clientSecret, fb_exchange_token: accessToken },
+      this.logger.log(`Exchanging code for token with params: clientId=${clientId}, redirectUri=${redirectUri}`);
+      const tokenResp = await axiosInstance.get('https://graph.facebook.com/v19.0/oauth/access_token', {
+        params: { 
+          client_id: clientId, 
+          client_secret: clientSecret, 
+          redirect_uri: redirectUri, // REQUIRED by Meta API - must match authorization request
+          code 
+        },
       });
-      longLived = ll.data?.access_token || accessToken;
-    } catch {}
+      const accessToken = tokenResp.data?.access_token as string;
+      this.logger.log(`Short-lived access token obtained for businessId: ${businessId}`);
 
-    // Store per-location Meta token under serviceType meta#locationId
-    await this.externalApis.saveMetaCredentials(businessId, {
-      accessToken: longLived,
-      phoneNumberId: '',
-      appSecret: clientSecret,
-      phoneNumber: '',
-    } as any);
+      // Optional: exchange for long-lived token
+      let longLived = accessToken;
+      try {
+        const ll = await axiosInstance.get('https://graph.facebook.com/v19.0/oauth/access_token', {
+          params: { grant_type: 'fb_exchange_token', client_id: clientId, client_secret: clientSecret, fb_exchange_token: accessToken },
+        });
+        longLived = ll.data?.access_token || accessToken;
+        this.logger.log(`Long-lived access token obtained for businessId: ${businessId}`);
+      } catch (error) {
+        this.logger.warn(`Failed to exchange for long-lived token for businessId: ${businessId}, using short-lived token`);
+      }
 
-    return { success: true };
+      // Store per-location Meta token under serviceType meta#locationId
+      await this.externalApis.saveMetaCredentials(businessId, {
+        accessToken: longLived,
+        phoneNumberId: '',
+        appSecret: clientSecret,
+        phoneNumber: '',
+      } as any);
+
+      this.logger.log(`Meta credentials saved successfully for businessId: ${businessId}`);
+
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Meta OAuth token exchange failed for businessId: ${businessId}`, {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        params: { clientId, redirectUri, hasCode: !!code }
+      });
+      throw new BadRequestException(
+        error.response?.data?.error?.message || 
+        'Failed to exchange OAuth code for access token. Please ensure redirect_uri matches the one configured in Meta App.'
+      );
+    }
   }
 
   async getCredentialsStatus(businessId: string, locationId: string): Promise<any> {
     try {
+      this.logger.log(`Checking Meta credentials status for businessId: ${businessId}, locationId: ${locationId}`);
       const credentials = await this.externalApis.getMetaCredentials(businessId);
-      return {
+      const status = {
         connected: !!credentials,
         hasAccessToken: !!credentials?.accessToken,
         hasPhoneNumberId: !!credentials?.phoneNumberId,
         hasPhoneNumber: !!credentials?.phoneNumber,
         phoneNumber: credentials?.phoneNumber || null,
       };
+      this.logger.log(`Meta credentials status for businessId ${businessId}: connected=${status.connected}`);
+      return status;
     } catch (error) {
-      console.error('Error getting Meta credentials status:', error);
+      this.logger.error(`Error getting Meta credentials status for businessId: ${businessId}`, error.stack);
       return {
         connected: false,
         hasAccessToken: false,

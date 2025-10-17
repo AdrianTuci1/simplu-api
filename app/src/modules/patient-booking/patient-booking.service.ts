@@ -47,7 +47,9 @@ export class PatientBookingService {
     return { success: true, data: items.map(i => ({ id: i.resourceId, ...i.data })) };
   }
 
-  async getAvailableDates(
+
+
+  async getAvailableDatesWithSlots(
     businessId: string,
     locationId: string,
     from: string,
@@ -57,13 +59,14 @@ export class PatientBookingService {
   ) {
     const businessLocationId = `${businessId}-${locationId}`;
     
-    this.logger.debug(`Getting available dates for ${businessLocationId} from ${from} to ${to}, serviceId: ${serviceId}, medicId: ${medicId}`);
+    this.logger.debug(`Getting available dates with slots for ${businessLocationId} from ${from} to ${to}, serviceId: ${serviceId}, medicId: ${medicId}`);
 
     // Build medic query
     const medicQuery = this.resourceRepo
       .createQueryBuilder('resource')
       .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-      .andWhere('resource.resourceType = :type', { type: 'medic' });
+      .andWhere('resource.resourceType = :type', { type: 'medic' })
+      .andWhere('resource.data->>canTakeAppointments = :canTakeAppointments', { canTakeAppointments: true });
     
     // Filter by specific medic if provided
     if (medicId) {
@@ -90,16 +93,9 @@ export class PatientBookingService {
       serviceId ? this.getServiceDetails(businessLocationId, serviceId) : Promise.resolve(null)
     ]);
 
-    this.logger.debug(`Found working hours settings: ${!!workingHoursSettings}`);
-    this.logger.debug(`Found medics: ${medics.length}`);
-    this.logger.debug(`Found appointments: ${appointments.length}`);
-    this.logger.debug(`Found service: ${!!service}`);
-
     // Parse working hours from settings
     const workingHours = workingHoursSettings?.data?.days || [];
     const workingHoursMap = this.buildWorkingHoursMap(workingHours);
-    
-    this.logger.debug(`Working hours map: ${JSON.stringify(workingHoursMap)}`);
 
     // Group appointments by date and medic
     const appointmentsByDate = this.groupAppointmentsByDateAndMedic(appointments);
@@ -107,7 +103,7 @@ export class PatientBookingService {
     // Get service duration
     const serviceDuration = service?.data?.duration || 0;
 
-    const availableDates: string[] = [];
+    const availableDatesWithSlots: Array<{ date: string; slots: Slot[] }> = [];
     const dateCursor = new Date(from + 'T00:00:00Z');
     const endDate = new Date(to + 'T00:00:00Z');
 
@@ -115,12 +111,9 @@ export class PatientBookingService {
       const dateStr = dateCursor.toISOString().slice(0, 10);
       const weekday = this.getWeekdayKey(dateCursor);
       
-      this.logger.debug(`Checking date ${dateStr}, weekday: ${weekday}`);
-      
       // Check if business is open on this day
       const dayWorkingHours = workingHoursMap[weekday];
       if (!dayWorkingHours || !dayWorkingHours.isWorking) {
-        this.logger.debug(`Business not open on ${weekday}: ${JSON.stringify(dayWorkingHours)}`);
         dateCursor.setUTCDate(dateCursor.getUTCDate() + 1);
         continue;
       }
@@ -130,21 +123,13 @@ export class PatientBookingService {
         this.isMedicAvailableOnDay(medic, weekday)
       );
 
-      this.logger.debug(`Available medics for ${weekday}: ${availableMedics.length}`);
-      this.logger.debug(`Medics duty days: ${JSON.stringify(medics.map(m => ({ 
-        id: m.resourceId, 
-        name: m.data?.name, 
-        dutyDays: m.data?.dutyDays
-      })))}`);
-
       if (availableMedics.length === 0) {
-        this.logger.debug(`No medics available on ${weekday}`);
         dateCursor.setUTCDate(dateCursor.getUTCDate() + 1);
         continue;
       }
 
-      // Check if there are available slots considering medic duty and appointments
-      const hasAvailableSlots = this.checkDateAvailability(
+      // Calculate slots for this date
+      const slots = this.calculateSlotsForDate(
         dateStr,
         dayWorkingHours,
         availableMedics,
@@ -152,98 +137,28 @@ export class PatientBookingService {
         serviceDuration
       );
 
-      this.logger.debug(`Has available slots for ${dateStr}: ${hasAvailableSlots}`);
-
-      if (hasAvailableSlots) {
-        availableDates.push(dateStr);
+      // Only include dates with available slots
+      if (slots.length > 0) {
+        availableDatesWithSlots.push({
+          date: dateStr,
+          slots
+        });
       }
 
       dateCursor.setUTCDate(dateCursor.getUTCDate() + 1);
     }
 
-    this.logger.debug(`Final available dates: ${JSON.stringify(availableDates)}`);
-    return { success: true, data: availableDates };
+    this.logger.debug(`Final available dates with slots: ${availableDatesWithSlots.length} dates`);
+    return { success: true, data: availableDatesWithSlots };
   }
 
-  async getDaySlots(
-    businessId: string,
-    locationId: string,
-    date: string,
-    serviceId?: string,
-    medicId?: string,
-  ) {
-    const businessLocationId = `${businessId}-${locationId}`;
-    const day = new Date(date + 'T00:00:00Z');
-    const weekday = this.getWeekdayKey(day);
-
-    // Build medic query
-    const medicQuery = this.resourceRepo
-      .createQueryBuilder('resource')
-      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-      .andWhere('resource.resourceType = :type', { type: 'medic' });
-    
-    // Filter by specific medic if provided
-    if (medicId) {
-      medicQuery.andWhere('resource.resourceId = :medicId', { medicId });
-    }
-
-    // Build appointment query
-    const appointmentQuery = this.resourceRepo
-      .createQueryBuilder('resource')
-      .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-      .andWhere('resource.resourceType = :type', { type: 'appointment' })
-      .andWhere('resource.startDate = :date', { date });
-    
-    // Filter by specific medic if provided
-    if (medicId) {
-      appointmentQuery.andWhere("resource.data->'medic'->>'id' = :medicId", { medicId });
-    }
-
-    // Fetch all required data in parallel
-    const [workingHoursSettings, medics, appointments, service] = await Promise.all([
-      // Get working hours from settings resource
-      this.resourceRepo
-        .createQueryBuilder('resource')
-        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
-        .andWhere('resource.resourceType = :type', { type: 'setting' })
-        .andWhere("resource.data->>'settingType' = 'working-hours'")
-        .getOne(),
-      
-      // Get all medics (or specific medic) with duty days
-      medicQuery.getMany(),
-      
-      // Fetch appointments for the specific day
-      appointmentQuery.getMany(),
-      
-      // Get service details if serviceId provided
-      serviceId ? this.getServiceDetails(businessLocationId, serviceId) : Promise.resolve(null)
-    ]);
-
-    // Parse working hours from settings
-    const workingHours = workingHoursSettings?.data?.days || [];
-    const workingHoursMap = this.buildWorkingHoursMap(workingHours);
-    const dayWorkingHours = workingHoursMap[weekday];
-
-    if (!dayWorkingHours || !dayWorkingHours.isWorking) {
-      return { success: true, data: [] };
-    }
-
-    // Get available medics for this day
-    const availableMedics = medics.filter(medic => 
-      this.isMedicAvailableOnDay(medic, weekday)
-    );
-
-    if (availableMedics.length === 0) {
-      return { success: true, data: [] };
-    }
-
-    // Group appointments by medic
-    const appointmentsByMedic = this.groupAppointmentsByMedic(appointments);
-
-    // Get service duration
-    const serviceDuration = service?.data?.duration || 0;
-
-    // Calculate available slots across all medics and merge them (no per-medic duplication)
+  private calculateSlotsForDate(
+    dateStr: string,
+    dayWorkingHours: any,
+    availableMedics: ResourceEntity[],
+    appointmentsByMedic: Record<string, ResourceEntity[]>,
+    serviceDuration: number
+  ): Slot[] {
     const candidateSlots: Slot[] = [];
 
     for (const medic of availableMedics) {
@@ -274,9 +189,10 @@ export class PatientBookingService {
     }
 
     // Deduplicate by time window (start+end), ignoring medic
-    const uniqueSlots = this.deduplicateSlots(candidateSlots);
-    return { success: true, data: uniqueSlots };
+    return this.deduplicateSlots(candidateSlots);
   }
+
+
 
   async reserve(
     businessId: string,

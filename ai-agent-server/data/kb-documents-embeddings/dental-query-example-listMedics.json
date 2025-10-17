@@ -1,11 +1,11 @@
 {
   "id": "dental-query-example-listMedics",
-  "title": "Query Example: Listează toți medicii",
-  "text": "# Query Example: Listează toți medicii\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Listează toți medicii\n**Tool:** query_app_server\n\n**Parameters:**\n  **Module:** resources\n  **Action:** list\n  **Business Id:** {{businessId}}\n  **Location Id:** {{locationId}}\n  **Resource Type:** medic\n",
+  "title": "Query Example: Listează medici disponibili pentru programări",
+  "text": "# Query Example: Listează medici disponibili pentru programări\n\n**Document Type:** query-example\n**Business Type:** dental\n\n---\n\n**Description:** Listează medici care pot primi programări\n**Tool:** query_resources\n\n**Parameters:**\n  **resourceType:** medic\n  **action:** list\n  **params:**\n    **data.canTakeAppointments:** true\n\n**IMPORTANT:** ÎNTOTDEAUNA filtrează după canTakeAppointments: true când cauți medici pentru programări!\n\n**Rezultat Așteptat:** Lista de medici care au canTakeAppointments: true (pot primi programări)\n\n**Note:**\n- Medicii cu canTakeAppointments: false NU pot primi programări\n- Default pentru canTakeAppointments este true (backward compatibility)\n- Pentru a lista TOȚI medicii (inclusiv cei inactivi), omite filtrul\n\n**Exemple de Queries:**\n\n**1. Lista medici care pot primi programări:**\n```\nquery_resources(\n  resourceType: 'medic',\n  action: 'list',\n  params: {\n    'data.canTakeAppointments': true\n  }\n)\n```\n\n**2. Lista medici după specializare care pot primi programări:**\n```\nquery_resources(\n  resourceType: 'medic',\n  action: 'list',\n  params: {\n    'data.canTakeAppointments': true,\n    'data.specialization': 'Ortodonție'\n  }\n)\n```\n\n**3. Caută medic specific după nume (care poate primi programări):**\n```\nquery_resources(\n  resourceType: 'medic',\n  action: 'list',\n  params: {\n    'data.medicName': 'Dr. Popescu',\n    'data.canTakeAppointments': true\n  }\n)\n```\n\n**4. Lista TOȚI medicii (inclusiv cei care NU pot primi programări):**\n```\nquery_resources(\n  resourceType: 'medic',\n  action: 'list'\n)\n```\nNote: Folosește doar pentru raportare sau administrare, NU pentru asignarea programărilor!\n",
   "metadata": {
     "businessType": "dental",
-    "version": "1.0.0",
-    "lastUpdated": "2025-10-10",
+    "version": "2.0.0",
+    "lastUpdated": "2025-10-16",
     "type": "query-example",
     "exampleKey": "listMedics",
     "documentId": "dental-query-example-listMedics",

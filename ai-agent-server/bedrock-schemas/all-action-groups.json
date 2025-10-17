@@ -40,8 +40,8 @@
           },
           "/query_patient_booking": {
             "post": {
-              "summary": "Query patient-booking endpoints",
-              "description": "READ-ONLY. Actions: available-dates (from,to), day-slots (date, optional: serviceId, medicId), history (x-access-code optional). For services/treatments listing, use query_resources with resourceType=treatment.",
+              "summary": "Patient booking operations",
+              "description": "Actions: available-dates-with-slots (from,to,optional:serviceId,medicId), reserve (date,time,serviceId,customer,optional:medicId,duration), cancel-appointment (appointmentId,patientId,accessCode). For services listing, use query_resources with resourceType=treatment.",
               "operationId": "query_patient_booking",
               "requestBody": {
                 "required": true,
@@ -49,26 +49,18 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": ["businessId", "locationId", "action"],
+                      "required": ["businessId", "locationId", "action", "params"],
                       "properties": {
                         "businessId": { "type": "string" },
                         "locationId": { "type": "string" },
-                        "action": { "type": "string", "enum": ["available-dates", "day-slots", "history"] },
-                        "params": {
-                          "type": "object",
-                          "properties": {
-                            "date": { "type": "string", "description": "YYYY-MM-DD (required for day-slots)" },
-                            "serviceId": { "type": "string" },
-                            "medicId": { "type": "string" }
-                          }
-                        },
-                        "accessCode": { "type": "string" }
+                        "action": { "type": "string", "enum": ["available-dates-with-slots", "reserve", "cancel-appointment"] },
+                        "params": { "type": "object" }
                       }
                     }
                   }
                 }
               },
-              "responses": { "200": { "description": "Successful query" } }
+              "responses": { "200": { "description": "Successful operation" } }
             }
           }
         }

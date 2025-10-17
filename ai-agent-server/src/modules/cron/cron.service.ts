@@ -257,19 +257,7 @@ export class CronService {
         }
       }
 
-      // Validare credențiale Twilio
-      const twilioCredentials = await this.externalApisService.getTwilioCredentials(businessId);
-      if (twilioCredentials) {
-        const twilioTest = await this.externalApisService.sendSMS(
-          '+40712345678',
-          'Credential validation test',
-          businessId
-        );
-        
-        if (!twilioTest.success) {
-          this.logger.warn(`Invalid Twilio credentials for business: ${businessId}`);
-        }
-      }
+
     } catch (error) {
       this.logger.error(`Error validating credentials for business ${businessId}:`, error);
     }

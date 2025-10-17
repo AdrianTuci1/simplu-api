@@ -18,4 +18,5 @@ export const tableNames = {
   rag: process.env.DYNAMODB_RAG_TABLE || 'rag-instructions',
   externalCredentials: process.env.DYNAMODB_EXTERNAL_CREDENTIALS_TABLE || 'business-external-credentials',
   externalApiConfig: process.env.DYNAMODB_EXTERNAL_API_CONFIG_TABLE || 'business-external-api-config',
+  elevenLabsAgents: process.env.DYNAMODB_ELEVENLABS_AGENTS_TABLE || 'elevenlabs-agents',
 }; 

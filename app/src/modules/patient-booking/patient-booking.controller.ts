@@ -40,16 +40,16 @@ export class PatientBookingController {
     return this.bookingService.listPublicServices(businessId, locationId, page ? parseInt(page, 10) : 1, limit ? parseInt(limit, 10) : 50);
   }
 
-  @Get('available-dates/:businessId-:locationId')
+  @Get('available-dates-with-slots/:businessId-:locationId')
   @Public()
-  @ApiOperation({ summary: 'Get available dates with any free slots' })
+  @ApiOperation({ summary: 'Get available dates with time slots included' })
   @ApiParam({ name: 'businessId' })
   @ApiParam({ name: 'locationId' })
   @ApiQuery({ name: 'from', required: true, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'to', required: true, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'serviceId', required: false })
   @ApiQuery({ name: 'medicId', required: false })
-  async getAvailableDates(
+  async getAvailableDatesWithSlots(
     @Param('businessId') businessId: string,
     @Param('locationId') locationId: string,
     @Query('from') from: string,
@@ -57,25 +57,7 @@ export class PatientBookingController {
     @Query('serviceId') serviceId?: string,
     @Query('medicId') medicId?: string,
   ) {
-    return this.bookingService.getAvailableDates(businessId, locationId, from, to, serviceId, medicId);
-  }
-
-  @Get('day-slots/:businessId-:locationId/:date')
-  @Public()
-  @ApiOperation({ summary: 'Get available time slots for a given day' })
-  @ApiParam({ name: 'businessId' })
-  @ApiParam({ name: 'locationId' })
-  @ApiParam({ name: 'date', description: 'YYYY-MM-DD' })
-  @ApiQuery({ name: 'serviceId', required: false })
-  @ApiQuery({ name: 'medicId', required: false })
-  async getDaySlots(
-    @Param('businessId') businessId: string,
-    @Param('locationId') locationId: string,
-    @Param('date') date: string,
-    @Query('serviceId') serviceId?: string,
-    @Query('medicId') medicId?: string,
-  ) {
-    return this.bookingService.getDaySlots(businessId, locationId, date, serviceId, medicId);
+    return this.bookingService.getAvailableDatesWithSlots(businessId, locationId, from, to, serviceId, medicId);
   }
 
   @Post('reserve/:businessId-:locationId')

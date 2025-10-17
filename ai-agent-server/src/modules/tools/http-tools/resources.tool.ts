@@ -20,6 +20,12 @@ export class ResourcesQueryTool implements ToolExecutor {
 
 REQUIRES header x-resource-type with the resource kind (appointment, patient, treatment, medic, service, setting, ...).
 Supports filters, pagination, and date ranges via query params.
+
+Specialization for treatments (resourceType=treatment):
+- Default limit = 60 if not provided
+- Filters:
+  * treatmentType → maps to data.treatmentType
+  * name → maps to data.treatmentName
 `,
       inputSchema: {
         json: {
@@ -58,18 +64,39 @@ Supports filters, pagination, and date ranges via query params.
 
     const safeParams: Record<string, unknown> | undefined = typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : undefined;
 
+    // Normalize params for treatments: set default limit and map friendly keys
+    const normalizedParams: Record<string, unknown> | undefined = (() => {
+      if (!safeParams) return undefined;
+      if (resourceType !== 'treatment') return safeParams;
+
+      const copy: Record<string, unknown> = { ...safeParams };
+
+      if (copy['treatmentType'] && copy['data.treatmentType'] === undefined) {
+        copy['data.treatmentType'] = copy['treatmentType'];
+        delete copy['treatmentType'];
+      }
+      if (copy['name'] && copy['data.treatmentName'] === undefined) {
+        copy['data.treatmentName'] = copy['name'];
+        delete copy['name'];
+      }
+      if (copy['limit'] === undefined) {
+        copy['limit'] = 60;
+      }
+      return copy;
+    })();
+
     let finalUrl = url;
-    if (safeParams && Object.keys(safeParams).length > 0) {
+    if (normalizedParams && Object.keys(normalizedParams).length > 0) {
       const queryParts: string[] = [];
 
-      if ((safeParams as any).startDate !== undefined && (safeParams as any).startDate !== null) {
-        queryParts.push(`startDate=${encodeURIComponent(String((safeParams as any).startDate))}`);
+      if ((normalizedParams as any).startDate !== undefined && (normalizedParams as any).startDate !== null) {
+        queryParts.push(`startDate=${encodeURIComponent(String((normalizedParams as any).startDate))}`);
       }
-      if ((safeParams as any).endDate !== undefined && (safeParams as any).endDate !== null) {
-        queryParts.push(`endDate=${encodeURIComponent(String((safeParams as any).endDate))}`);
+      if ((normalizedParams as any).endDate !== undefined && (normalizedParams as any).endDate !== null) {
+        queryParts.push(`endDate=${encodeURIComponent(String((normalizedParams as any).endDate))}`);
       }
 
-      for (const [key, value] of Object.entries(safeParams)) {
+      for (const [key, value] of Object.entries(normalizedParams)) {
         if (key !== 'startDate' && key !== 'endDate' && value !== undefined && value !== null) {
           queryParts.push(`${key}=${encodeURIComponent(String(value))}`);
         }

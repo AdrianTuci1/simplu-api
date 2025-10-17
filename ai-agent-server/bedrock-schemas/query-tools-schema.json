@@ -9,7 +9,7 @@
     "/query_resources": {
       "post": {
         "summary": "Query resources (operators) via /api/resources",
-        "description": "READ-ONLY queries for all resource types. Supports:\n\n**Resource Types:** appointment, patient, treatment, medic, service, setting, plan, dental-chart\n\n**Actions:**\n- list: Get multiple resources with filters\n- get: Get single resource by resourceId\n\n**Nested Field Search:**\nYou can filter by nested fields using dot notation in params:\n\n**For appointments:**\n- data.patient.name - Patient name in appointment\n- data.patient.id - Patient ID in appointment  \n- data.medic.name - Medic name in appointment\n- data.treatment.name - Treatment name in appointment\n- data.status - Appointment status (scheduled, confirmed, completed, cancelled)\n- startDate/endDate - Date range filters\n\n**For patients:**\n- data.patientName - Patient full name\n- data.patientPhone - Patient phone number\n- data.patientEmail - Patient email\n\n**For plans (treatment plans):**\n- data.patientId - Patient ID (REQUIRED - cannot search by name directly)\n- data.status - Plan status (draft, proposed, accepted, in_progress, completed, cancelled)\n\n**For dental-chart:**\n- data.patientId - Patient ID (REQUIRED - cannot search by name directly)\n\n**For treatments/services:**\n- data.treatmentName - Treatment name\n- data.price - Treatment price\n- data.duration - Treatment duration\n\n**For medics:**\n- data.medicName - Medic name\n- data.userId - User ID linked to medic\n\n**IMPORTANT WORKFLOW for plans and dental-charts:**\n1. First query patient by name: resourceType=patient, params={data.patientName: 'Name'}\n2. Extract patientId from result\n3. Then query plan/chart: resourceType=plan, params={data.patientId: 'extracted_id'}\n\n**Search Features:**\n- Case-insensitive partial matching\n- Combine multiple filters\n- Date range support (startDate/endDate for appointments)\n- Sort and pagination support",
+        "description": "READ-ONLY queries for all resource types. Supports:\n\n**Resource Types:** appointment, patient, treatment, medic, service, setting, plan, dental-chart\n\n**Actions:**\n- list: Get multiple resources with filters\n- get: Get single resource by resourceId\n\n**Nested Field Search:**\nYou can filter by nested fields using dot notation in params:\n\n**For appointments:**\n- data.patient.name - Patient name in appointment\n- data.patient.id - Patient ID in appointment  \n- data.doctor.name or data.medic.name - Doctor/Medic name in appointment\n- data.services[].name - Service/treatment name (NEW structure - array)\n- data.service.name - Service name (backward compatibility - old structure)\n- data.status - Appointment status (scheduled, confirmed, completed, cancelled, no_show)\n- startDate/endDate - Date range filters (TOP-LEVEL, not in data.*)\n\n**For patients:**\n- data.patientName - Patient full name\n- data.patientPhone - Patient phone number\n- data.patientEmail - Patient email\n\n**For plans (treatment plans):**\n- data.patientId - Patient ID (REQUIRED - cannot search by name directly)\n- data.status - Plan status (draft, proposed, accepted, in_progress, completed, cancelled)\n\n**For dental-chart:**\n- data.patientId - Patient ID (REQUIRED - cannot search by name directly)\n\n**For treatments/services:**\n- data.treatmentName - Treatment name\n- data.price - Treatment price\n- data.duration - Treatment duration\n\n**For medics:**\n- data.medicName - Medic name\n- data.userId - User ID linked to medic\n\n**IMPORTANT WORKFLOW for plans and dental-charts:**\n1. First query patient by name: resourceType=patient, params={data.patientName: 'Name'}\n2. Extract patientId from result\n3. Then query plan/chart: resourceType=plan, params={data.patientId: 'extracted_id'}\n\n**Search Features:**\n- Case-insensitive partial matching\n- Combine multiple filters\n- Date range support (startDate/endDate for appointments)\n- Sort and pagination support",
         "operationId": "query_resources",
         "requestBody": {
           "required": true,
@@ -144,8 +144,8 @@
     },
     "/query_patient_booking": {
       "post": {
-        "summary": "Query patient-booking endpoints",
-        "description": "READ-ONLY queries for patient booking system.\n\n**Actions:**\n- available-dates: Get available dates in a range (requires from, to params)\n- day-slots: Get available time slots for a specific day (requires date param, optional: serviceId, medicId)\n- history: Get booking history for a patient (optional: accessCode for patient authentication)\n\n**Use Cases:**\n- Patient wants to book appointment: Use available-dates → pick date → use day-slots → show available times\n- Check medic availability: Use day-slots with medicId filter\n- Check service availability: Use day-slots with serviceId filter\n- View patient's past appointments: Use history with accessCode\n\n**Note:** For listing services/treatments, use query_resources with resourceType=treatment instead.",
+        "summary": "Patient booking operations",
+        "description": "Complete patient booking system operations.\n\n**Actions:**\n- available-dates-with-slots: Get available dates with time slots (requires from, to params, optional: serviceId, medicId)\n- reserve: Create appointment booking (requires date, time, serviceId, customer object with name/email/phone, optional: medicId, duration)\n- cancel-appointment: Cancel patient appointment (requires appointmentId, patientId, accessCode)\n\n**Workflow Examples:**\n1. **New Booking:** available-dates-with-slots → patient selects → reserve\n2. **Check Availability:** available-dates-with-slots with serviceId/medicId filters\n3. **Cancel Booking:** cancel-appointment with patient credentials\n\n**Note:** For listing services/treatments, use query_resources with resourceType=treatment instead.",
         "operationId": "query_patient_booking",
         "requestBody": {
           "required": true,
@@ -153,7 +153,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["businessId", "locationId", "action"],
+                "required": ["businessId", "locationId", "action", "params"],
                 "properties": {
                   "businessId": { 
                     "type": "string",
@@ -165,62 +165,109 @@
                   },
                   "action": { 
                     "type": "string", 
-                    "enum": ["available-dates", "day-slots", "history"],
-                    "description": "Action to perform: available-dates (date range), day-slots (time slots for day), history (booking history)"
+                    "enum": ["available-dates-with-slots", "reserve", "cancel-appointment"],
+                    "description": "Action: available-dates-with-slots (query), reserve (create), cancel-appointment (cancel)"
                   },
                   "params": {
                     "type": "object",
+                    "description": "Action-specific parameters",
                     "properties": {
                       "from": {
                         "type": "string",
-                        "description": "Start date for available-dates (YYYY-MM-DD)"
+                        "description": "Start date for available-dates-with-slots (YYYY-MM-DD)"
                       },
                       "to": {
                         "type": "string",
-                        "description": "End date for available-dates (YYYY-MM-DD)"
+                        "description": "End date for available-dates-with-slots (YYYY-MM-DD)"
                       },
                       "date": { 
                         "type": "string", 
-                        "description": "Date for day-slots (YYYY-MM-DD, required for day-slots)" 
+                        "description": "Appointment date for reserve (YYYY-MM-DD)" 
+                      },
+                      "time": {
+                        "type": "string",
+                        "description": "Appointment time for reserve (HH:mm, e.g., '14:30')"
                       },
                       "serviceId": { 
                         "type": "string",
-                        "description": "Filter by service/treatment ID"
+                        "description": "Service/treatment ID (filter for availability or required for reserve)"
                       },
                       "medicId": { 
                         "type": "string",
-                        "description": "Filter by medic ID"
+                        "description": "Medic ID (filter for availability or optional for reserve)"
+                      },
+                      "duration": {
+                        "type": "number",
+                        "description": "Service duration in minutes (optional for reserve)"
+                      },
+                      "customer": {
+                        "type": "object",
+                        "description": "Customer details for reserve",
+                        "properties": {
+                          "name": { "type": "string", "description": "Patient name" },
+                          "email": { "type": "string", "description": "Patient email (required for confirmation)" },
+                          "phone": { "type": "string", "description": "Patient phone number" }
+                        }
+                      },
+                      "appointmentId": {
+                        "type": "string",
+                        "description": "Appointment ID for cancel-appointment"
+                      },
+                      "patientId": {
+                        "type": "string",
+                        "description": "Patient ID for cancel-appointment"
+                      },
+                      "accessCode": {
+                        "type": "string",
+                        "description": "6-digit patient access code for cancel-appointment"
                       }
                     }
-                  },
-                  "accessCode": { 
-                    "type": "string",
-                    "description": "Patient access code (for history action)"
                   }
                 }
               },
               "examples": {
-                "getAvailableDates": {
-                  "summary": "Get available dates",
+                "checkAvailability": {
+                  "summary": "Check available dates and time slots",
                   "value": {
                     "businessId": "B0100001",
                     "locationId": "L0100001",
-                    "action": "available-dates",
+                    "action": "available-dates-with-slots",
                     "params": {
-                      "from": "2025-10-14",
-                      "to": "2025-10-30"
+                      "from": "2025-10-17",
+                      "to": "2025-10-30",
+                      "serviceId": "T0100001"
                     }
                   }
                 },
-                "getTimeSlotsForDay": {
-                  "summary": "Get time slots for specific day",
+                "createBooking": {
+                  "summary": "Create appointment reservation",
                   "value": {
                     "businessId": "B0100001",
                     "locationId": "L0100001",
-                    "action": "day-slots",
+                    "action": "reserve",
                     "params": {
-                      "date": "2025-10-15",
-                      "serviceId": "T0100001"
+                      "date": "2025-10-20",
+                      "time": "14:30",
+                      "serviceId": "T0100001",
+                      "medicId": "M0100001",
+                      "customer": {
+                        "name": "Ion Popescu",
+                        "email": "ion@example.com",
+                        "phone": "0712345678"
+                      }
+                    }
+                  }
+                },
+                "cancelAppointment": {
+                  "summary": "Cancel patient appointment",
+                  "value": {
+                    "businessId": "B0100001",
+                    "locationId": "L0100001",
+                    "action": "cancel-appointment",
+                    "params": {
+                      "appointmentId": "A0100123",
+                      "patientId": "P0100045",
+                      "accessCode": "123456"
                     }
                   }
                 }
@@ -228,7 +275,7 @@
             }
           }
         },
-        "responses": { "200": { "description": "Successful query" } }
+        "responses": { "200": { "description": "Successful operation" } }
       }
     }
   }

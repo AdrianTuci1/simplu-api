@@ -12,11 +12,7 @@ export interface MetaCredentials {
   phoneNumber: string;
 }
 
-export interface TwilioCredentials {
-  accountSid: string;
-  authToken: string;
-  phoneNumber: string;
-}
+
 
 export interface GmailCredentials {
   accessToken: string;
@@ -28,7 +24,7 @@ export interface GmailCredentials {
 export interface ExternalCredentials {
   businessId: string;
   serviceType: string;
-  credentials: MetaCredentials | TwilioCredentials | GmailCredentials | Record<string, any>;
+  credentials: MetaCredentials | GmailCredentials | Record<string, any>;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -140,7 +136,7 @@ export class ExternalApisService {
     }
   }
 
-  // Twilio API Methods
+  // API Methods
   async sendSMS(
     to: string,
     message: string,
@@ -166,26 +162,7 @@ export class ExternalApisService {
         data: response,
       };
     } catch (snsError: any) {
-      console.warn('AWS SNS SMS error, attempting Twilio fallback:', snsError?.message || snsError);
-      // Fallback to Twilio only if credentials exist for business
-      try {
-        const twilioClient = await this.getTwilioClient(businessId);
-        const credentials = await this.getTwilioCredentials(businessId);
-        if (twilioClient && credentials?.phoneNumber) {
-          const twilioResp = await twilioClient.messages.create({
-            body: message,
-            from: credentials.phoneNumber,
-            to: to,
-          });
-          return {
-            success: true,
-            messageId: twilioResp.sid,
-            data: twilioResp,
-          };
-        }
-      } catch (twilioError: any) {
-        console.warn('Twilio fallback failed:', twilioError?.message || twilioError);
-      }
+      console.warn('AWS SNS SMS error:', snsError?.message || snsError);
 
       return {
         success: false,
@@ -340,29 +317,7 @@ export class ExternalApisService {
     return externalCredentials;
   }
 
-  async saveTwilioCredentials(
-    businessId: string,
-    credentials: TwilioCredentials
-  ): Promise<ExternalCredentials> {
-    const externalCredentials: ExternalCredentials = {
-      businessId,
-      serviceType: 'twilio',
-      credentials,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      metadata: {}
-    };
 
-    await this.dynamoClient.send(new PutCommand({
-      TableName: tableNames.externalCredentials,
-      Item: externalCredentials
-    }));
-
-    // No in-memory clients to clear
-
-    return externalCredentials;
-  }
 
   async saveGmailCredentials(
     businessId: string,
@@ -416,37 +371,9 @@ export class ExternalApisService {
     }
   }
 
-  async getTwilioCredentials(businessId: string): Promise<TwilioCredentials | null> {
-    try {
-      const result = await this.dynamoClient.send(new GetCommand({
-        TableName: tableNames.externalCredentials,
-        Key: {
-          businessId,
-          serviceType: 'twilio'
-        }
-      }));
 
-      if (!result.Item) {
-        return null;
-      }
 
-      const credentials = result.Item as ExternalCredentials;
-      return credentials.isActive ? credentials.credentials as TwilioCredentials : null;
-    } catch (error) {
-      console.error('Error getting Twilio credentials:', error);
-      return null;
-    }
-  }
 
-  async getBusinessPhoneNumber(businessId: string, serviceType: 'meta' | 'twilio'): Promise<string | null> {
-    if (serviceType === 'meta') {
-      const credentials = await this.getMetaCredentials(businessId);
-      return credentials?.phoneNumber || null;
-    } else {
-      const credentials = await this.getTwilioCredentials(businessId);
-      return credentials?.phoneNumber || null;
-    }
-  }
 
   async getGmailCredentials(
     businessId: string,
@@ -519,14 +446,4 @@ export class ExternalApisService {
     
     return client;
   }
-
-  private async getTwilioClient(businessId: string): Promise<any> {
-    const credentials = await this.getTwilioCredentials(businessId);
-    if (!credentials) {
-      throw new Error(`No Twilio credentials found for business ${businessId}`);
-    }
-    const twilio = require('twilio');
-    return twilio(credentials.accountSid, credentials.authToken);
-  }
-  // No long-lived clients maintained; nothing to clean up
-} 
+}

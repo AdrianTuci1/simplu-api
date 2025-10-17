@@ -45,16 +45,36 @@ export default () => ({
   },
   
   // External APIs
+  elevenlabs: {
+    apiKey: process.env.ELEVENLABS_API_KEY,
+    toolIds: {
+      dental: (process.env.ELEVENLABS_TOOL_IDS_DENTAL || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+      gym: (process.env.ELEVENLABS_TOOL_IDS_GYM || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+      hotel: (process.env.ELEVENLABS_TOOL_IDS_HOTEL || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    },
+  },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,
   },
   
   meta: {
+    appId: process.env.META_APP_ID,
+    appSecret: process.env.META_APP_SECRET,
+    redirectUri: process.env.META_REDIRECT_URI || 'http://localhost:3003/external/meta/callback',
+    scopes: process.env.META_OAUTH_SCOPES || 'pages_show_list, business_management, pages_messaging, pages_manage_metadata, public_profile, pages_read_engagement',
     accessToken: process.env.META_ACCESS_TOKEN,
     phoneNumberId: process.env.META_PHONE_NUMBER_ID,
     webhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN,
-    appSecret: process.env.META_APP_SECRET,
   },
   
   // OpenAI Configuration

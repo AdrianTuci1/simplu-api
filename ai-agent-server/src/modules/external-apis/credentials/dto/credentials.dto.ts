@@ -22,16 +22,3 @@ export class MetaCredentialsDto {
   phoneNumber: string;
 }
 
-export class TwilioCredentialsDto {
-  @IsString()
-  @IsNotEmpty()
-  accountSid: string;
-
-  @IsString()
-  @IsNotEmpty()
-  authToken: string;
-
-  @IsString()
-  @IsNotEmpty()
-  phoneNumber: string;
-} 

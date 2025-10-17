@@ -1,9 +1,9 @@
 {
-  "version": "1.1.0",
+  "version": "1.3.0",
   "businessType": "dental",
-  "lastUpdated": "2025-10-14",
-  "preparedAt": "2025-10-14T20:00:00.000Z",
-  "totalDocuments": 36,
+  "lastUpdated": "2025-10-16",
+  "preparedAt": "2025-10-16T20:30:00.000Z",
+  "totalDocuments": 38,
   "documents": [
     {
       "id": "dental-system-instructions-operator",
@@ -38,8 +38,8 @@
       "title": "System Instructions - Customer",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "system-instructions",
         "role": "customer",
         "capabilities": {
@@ -76,8 +76,8 @@
       "title": "Resource Type: Programare",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "resource-type",
         "resourceType": "appointment",
         "displayName": "Programare",
@@ -90,8 +90,8 @@
       "title": "Resource Type: Medic/Doctor",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "resource-type",
         "resourceType": "medic",
         "displayName": "Medic/Doctor",
@@ -235,11 +235,11 @@
     },
     {
       "id": "dental-query-example-listMedics",
-      "title": "Query Example: Listează toți medicii",
+      "title": "Query Example: Listează medici disponibili pentru programări",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "query-example",
         "exampleKey": "listMedics",
         "documentId": "dental-query-example-listMedics",
@@ -329,12 +329,27 @@
       "title": "Conversation Pattern: Operator vrea să creeze o programare nouă",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "conversation-pattern",
         "patternKey": "createAppointment",
         "scenario": "Operator vrea să creeze o programare nouă",
         "documentId": "dental-conversation-pattern-createAppointment",
+        "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-conversation-pattern-customerBooking",
+      "title": "Conversation Pattern: Pacient/Client vrea să facă o programare",
+      "metadata": {
+        "businessType": "dental",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
+        "type": "conversation-pattern",
+        "role": "customer",
+        "patternKey": "customerBooking",
+        "scenario": "Pacient/Client vrea să facă o programare online",
+        "documentId": "dental-conversation-pattern-customerBooking",
         "source": "dental-knowledge-base"
       }
     },
@@ -397,11 +412,25 @@
       "title": "Data Field Structure",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "data-field-structure",
         "documentId": "dental-data-field-structure",
         "source": "dental-knowledge-base"
+      }
+    },
+    {
+      "id": "dental-nested-field-search-guide",
+      "title": "Nested Field Search Guide",
+      "metadata": {
+        "businessType": "dental",
+        "version": "1.0.0",
+        "lastUpdated": "2025-10-16",
+        "type": "guide",
+        "category": "nested-field-search",
+        "documentId": "dental-nested-field-search-guide",
+        "source": "dental-knowledge-base",
+        "importance": "critical"
       }
     },
     {
@@ -422,8 +451,8 @@
       "title": "Best Practices: appointments",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "best-practices",
         "category": "appointments",
         "documentId": "dental-best-practices-appointments",
@@ -448,8 +477,8 @@
       "title": "Best Practices: medics",
       "metadata": {
         "businessType": "dental",
-        "version": "1.0.0",
-        "lastUpdated": "2025-10-10",
+        "version": "2.0.0",
+        "lastUpdated": "2025-10-16",
         "type": "best-practices",
         "category": "medics",
         "documentId": "dental-best-practices-medics",

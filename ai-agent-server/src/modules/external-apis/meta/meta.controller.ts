@@ -6,8 +6,12 @@ export class MetaController {
   constructor(private readonly meta: MetaService) {}
 
   @Get('auth-url')
-  getAuthUrl(@Query('businessId') businessId: string, @Query('locationId') locationId: string) {
-    return { url: this.meta.generateAuthUrl(businessId, locationId) };
+  getAuthUrl(
+    @Query('businessId') businessId: string, 
+    @Query('locationId') locationId: string,
+    @Query('redirectUri') redirectUri?: string,
+  ) {
+    return this.meta.generateAuthUrl(businessId, locationId, redirectUri);
   }
 
   @Get('status')

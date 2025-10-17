@@ -18,11 +18,17 @@ import { FrontendInteractionTool } from './websocket-tools/frontend-interaction.
 // Import ExternalApisModule pentru ExternalApiTool
 import { ExternalApisModule } from '../external-apis/external-apis.module';
 
+// Shared Services
+import { KinesisLoggerService } from '@/shared/services/kinesis-logger.service';
+
 @Module({
   imports: [
     ExternalApisModule, // Pentru ExternalApiTool
   ],
   providers: [
+    // Shared Services
+    KinesisLoggerService,
+    
     // Main Services
     ToolsService,
     BedrockAgentService,
