@@ -55,7 +55,7 @@ describe('CronService', () => {
         {
           provide: WebSocketGateway,
           useValue: {
-            broadcastToBusiness: jest.fn()
+            broadcastToUser: jest.fn()
           }
         }
       ],
@@ -147,11 +147,11 @@ describe('CronService', () => {
 
   describe('generateDailyActivityReport', () => {
     it('should generate daily activity report', async () => {
-      const broadcastSpy = jest.spyOn(websocketGateway, 'broadcastToBusiness');
+      const reportSpy = jest.spyOn(service as any, 'createDailyActivityReport');
 
       await service.generateDailyActivityReport();
 
-      expect(broadcastSpy).toHaveBeenCalled();
+      expect(reportSpy).toHaveBeenCalled();
     });
 
     it('should handle errors during report generation', async () => {

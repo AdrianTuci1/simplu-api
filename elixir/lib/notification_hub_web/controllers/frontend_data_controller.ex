@@ -30,14 +30,16 @@ defmodule NotificationHubWeb.FrontendDataController do
         request_type = request["requestType"]
         parameters = request["parameters"] || %{}
         location_id = request["locationId"] || "default"
+        user_id = request["userId"] || request["user_id"] || parameters["userId"] || parameters["user_id"]
 
         Logger.info("Session ID: #{session_id}")
         Logger.info("Request type: #{request_type}")
         Logger.info("Parameters: #{inspect(parameters)}")
         Logger.info("Location ID: #{location_id}")
+        Logger.info("Target User ID: #{inspect(user_id)}")
 
         # Request data from frontend via WebSocket
-        case request_frontend_data_via_websocket(business_id, session_id, request_type, parameters) do
+        case request_frontend_data_via_websocket(business_id, user_id, session_id, request_type, parameters) do
           {:ok, resources} ->
             Logger.info("Successfully retrieved frontend data")
             {:ok, resources}
@@ -62,15 +64,16 @@ defmodule NotificationHubWeb.FrontendDataController do
     {:error, :unknown_format}
   end
 
-  defp request_frontend_data_via_websocket(business_id, session_id, request_type, parameters) do
+  defp request_frontend_data_via_websocket(business_id, user_id, session_id, request_type, parameters) do
     try do
       Logger.info("Requesting frontend data via WebSocket")
       Logger.info("Business ID: #{business_id}")
+      Logger.info("User ID: #{inspect(user_id)}")
       Logger.info("Session ID: #{session_id}")
       Logger.info("Request type: #{request_type}")
 
       # Create channel topic for the business
-      channel_topic = "messages:#{business_id}"
+      channel_topic = "messages:#{user_id || business_id}"
 
       # Create request payload
       request_payload = %{
@@ -79,7 +82,7 @@ defmodule NotificationHubWeb.FrontendDataController do
         timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
         sessionId: session_id,
         businessId: business_id,
-        userId: "ai-agent",
+        userId: user_id || "ai-agent",
         type: "frontend_data_request",
         requestData: %{
           requestType: request_type,
@@ -88,7 +91,7 @@ defmodule NotificationHubWeb.FrontendDataController do
         }
       }
 
-      Logger.info("Broadcasting frontend data request: #{inspect(request_payload)}")
+      Logger.info("Broadcasting frontend data request to #{channel_topic}: #{inspect(request_payload)}")
 
       # Broadcast request to WebSocket channel
       NotificationHubWeb.Endpoint.broadcast(channel_topic, "frontend_data_request", request_payload)

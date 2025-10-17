@@ -149,10 +149,10 @@ export class CronService {
         updatedAt: new Date().toISOString()
       });
 
-      // Notificare coordonatori
-      this.websocketGateway.broadcastToBusiness(session.businessId, 'session_closed', {
+      // Notificare utilizator (canal user)
+      this.websocketGateway.broadcastToUser(session.userId, 'session_closed', {
         sessionId: session.sessionId,
-        userId: session.userId,
+        businessId: session.businessId,
         reason: 'inactive',
         timestamp: new Date().toISOString()
       });
@@ -294,14 +294,7 @@ export class CronService {
 ${report.businesses.map(b => `• ${b.businessName}: ${b.sessions} sesiuni`).join('\n')}
     `;
 
-    // Trimitere către toate business-urile
-    for (const business of report.businesses) {
-      this.websocketGateway.broadcastToBusiness(
-        business.businessId,
-        'daily_report',
-        { report, message: reportMessage }
-      );
-    }
+    // Broadcast la nivel de business eliminat
   }
 
   private async collectSystemMetrics(): Promise<any> {

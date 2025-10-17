@@ -18,19 +18,19 @@ export class BroadcastTool implements ToolExecutor {
   getDefinition(): ToolDefinition {
     return {
       name: 'broadcast_websocket_message',
-      description: 'Broadcasts a message to WebSocket clients connected to a specific business or user. Use this to send real-time updates, notifications, or AI responses to operators or customers.',
+      description: 'Broadcasts a message to WebSocket clients connected to a specific user. Use this to send real-time updates, notifications, or AI responses.',
       inputSchema: {
         json: {
           type: 'object',
           properties: {
             target: {
               type: 'string',
-              enum: ['business', 'user'],
-              description: 'Broadcast target: "business" broadcasts to all business connections, "user" broadcasts to specific user',
+              enum: ['user'],
+              description: 'Broadcast target: only "user" is supported',
             },
             businessId: {
               type: 'string',
-              description: 'Business ID to broadcast to (required if target is "business")',
+              description: 'Deprecated: business broadcast not supported',
             },
             userId: {
               type: 'string',
@@ -66,22 +66,7 @@ export class BroadcastTool implements ToolExecutor {
 
       this.logger.log(`📡 Broadcasting to ${target}: ${event}`);
 
-      if (target === 'business') {
-        const targetBusinessId = businessId || context.businessId;
-        this.wsGateway.broadcastToBusiness(targetBusinessId, event, data);
-        
-        this.logger.log(`✅ Broadcast sent to business: ${targetBusinessId}`);
-        
-        return {
-          success: true,
-          data: {
-            target: 'business',
-            businessId: targetBusinessId,
-            event,
-            timestamp: new Date().toISOString(),
-          },
-        };
-      } else if (target === 'user') {
+      if (target === 'user') {
         const targetUserId = userId || context.userId;
         this.wsGateway.broadcastToUser(targetUserId, event, data);
         
@@ -99,7 +84,7 @@ export class BroadcastTool implements ToolExecutor {
       } else {
         return {
           success: false,
-          error: `Invalid broadcast target: ${target}`,
+          error: `Invalid broadcast target: ${target}. Only "user" is supported.`,
         };
       }
     } catch (error: any) {

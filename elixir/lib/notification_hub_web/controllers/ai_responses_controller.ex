@@ -56,10 +56,10 @@ defmodule NotificationHubWeb.AiResponsesController do
   end
 
   defp broadcast_ai_response(tenant_id, response) do
-    # Broadcast to messages channel
-    channel_topic = "messages:#{tenant_id}"
+    # Broadcast to messages channel by user id
+    channel_topic = "messages:#{response["user_id"]}"
 
-    Logger.info("Broadcasting AI response to channel: #{channel_topic}")
+    Logger.info("Broadcasting AI response to channel (user): #{channel_topic}")
     Logger.info("Response content: #{response["content"]}")
 
     # Extract context information
@@ -93,10 +93,10 @@ defmodule NotificationHubWeb.AiResponsesController do
   end
 
   defp broadcast_function_call(tenant_id, response) do
-    # Broadcast function call to messages channel
-    channel_topic = "messages:#{tenant_id}"
+    # Broadcast function call to messages channel by user id
+    channel_topic = "messages:#{response["user_id"]}"
 
-    Logger.info("Broadcasting function call to channel: #{channel_topic}")
+    Logger.info("Broadcasting function call to channel (user): #{channel_topic}")
     Logger.info("Function call content: #{response["content"]}")
 
     # Extract function call data from context

@@ -98,8 +98,8 @@ defmodule NotificationHub.AiAgentClient do
       Logger.info("Resources: #{inspect(resources)}")
       Logger.info("Parameters: #{inspect(parameters)}")
 
-      # Broadcast frontend data to WebSocket clients
-      channel_topic = "messages:#{tenant_id}"
+      # Broadcast frontend data to WebSocket clients (user-scoped when available)
+      channel_topic = "messages:#{frontend_data["userId"] || frontend_data["user_id"] || tenant_id}"
 
       broadcast_payload = %{
         messageId: generate_message_id(),
@@ -117,7 +117,7 @@ defmodule NotificationHub.AiAgentClient do
         }
       }
 
-      Logger.info("Broadcasting frontend data: #{inspect(broadcast_payload)}")
+      Logger.info("Broadcasting frontend data to channel: #{channel_topic} | payload: #{inspect(broadcast_payload)}")
 
       # Broadcast to WebSocket channel
       NotificationHubWeb.Endpoint.broadcast(channel_topic, "frontend_data_available", broadcast_payload)
@@ -132,51 +132,7 @@ defmodule NotificationHub.AiAgentClient do
     end
   end
 
-  @doc """
-  Handle draft operations from AI Agent Server
-  """
-  def handle_draft_operation(tenant_id, draft_data) do
-    try do
-      Logger.info("=== HANDLING DRAFT OPERATION ===")
-      Logger.info("Tenant ID: #{tenant_id}")
-      Logger.info("Draft data: #{inspect(draft_data)}")
 
-      # Extract draft operation details
-      operation_type = draft_data["type"]
-      draft_info = draft_data["draftData"]
-
-      Logger.info("Operation type: #{operation_type}")
-      Logger.info("Draft info: #{inspect(draft_info)}")
-
-      # Broadcast draft operation to WebSocket clients
-      channel_topic = "messages:#{tenant_id}"
-
-      broadcast_payload = %{
-        messageId: generate_message_id(),
-        message: "Draft operation: #{operation_type}",
-        timestamp: draft_info["timestamp"] || DateTime.utc_now() |> DateTime.to_iso8601(),
-        sessionId: draft_data["sessionId"],
-        businessId: tenant_id,
-        locationId: draft_info["locationId"] || "default",
-        userId: draft_data["userId"] || "system",
-        type: operation_type,
-        draftData: draft_info
-      }
-
-      Logger.info("Broadcasting draft operation: #{inspect(broadcast_payload)}")
-
-      # Broadcast to WebSocket channel
-      NotificationHubWeb.Endpoint.broadcast(channel_topic, operation_type, broadcast_payload)
-
-      Logger.info("Successfully broadcasted draft operation to channel: #{channel_topic}")
-      {:ok, broadcast_payload}
-
-    rescue
-      error ->
-        Logger.error("Error handling draft operation: #{inspect(error)}")
-        {:error, error}
-    end
-  end
 
   # Helper function to generate message ID
   defp generate_message_id do

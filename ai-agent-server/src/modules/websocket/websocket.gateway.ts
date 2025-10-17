@@ -61,7 +61,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() data: { topic: string; payload: any; ref: string }
   ) {
     const { topic, payload, ref } = data;
-    const connectionKey = `${topic}:${payload.businessId || 'unknown'}`;
+    // Folosim topic-ul ca atare, ex: "user:{userId}"
+    const connectionKey = `${topic}`;
     this.connections.set(connectionKey, client);
 
     console.log(`Client joined topic: ${topic}`);
@@ -131,12 +132,10 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         }
       }
 
-      // Salvare mesaj în baza de date
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Salvare mesaj în baza de date - fără a genera local messageId
       const timestamp = new Date().toISOString();
 
       await this.sessionService.saveMessage({
-        messageId,
         sessionId,
         businessId: data.businessId,
         userId: data.userId,
@@ -155,9 +154,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         sessionId
       });
 
-      // Salvare răspuns în baza de date
+      // Salvare răspuns în baza de date - fără a genera local messageId
       await this.sessionService.saveMessage({
-        messageId: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         sessionId: response.sessionId,
         businessId: data.businessId,
         userId: 'agent',
@@ -171,63 +169,34 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         view: data.view || {}
       });
 
-      // Trimitere răspuns către client în format Phoenix
-      client.send(JSON.stringify({
-        event: 'new_message',
-        topic: `messages:${data.businessId}`,
-        payload: response
-      }));
+      // Nu mai trimitem direct către client; Elixir va face broadcast către frontend
 
-      // Broadcast către toți coordonatorii business-ului
-      this.broadcastToBusiness(data.businessId, 'message_processed', {
-        userId: data.userId,
-        message: data.message,
-        responseId: response.responseId,
-        timestamp: response.timestamp
-      });
+      // Eliminat broadcast-ul la nivel de business
 
-      // Notifică Elixir despre conversația AI pentru sincronizare
+      // Notifică Elixir despre conversația AI pentru sincronizare (Elixir va broadcasta către frontend)
       await this.forwardToElixir(data, response);
 
     } catch (error) {
       console.error('Error processing message:', error);
-      client.send(JSON.stringify({
-        event: 'error',
-        topic: `messages:${data.businessId}`,
-        payload: {
-          message: 'Eroare la procesarea mesajului',
-          error: error.message
-        }
-      }));
+      this.broadcastToUser(data.userId, 'error', {
+        message: 'Eroare la procesarea mesajului',
+        error: error.message
+      });
     }
   }
 
   // Metode pentru broadcasting
-  broadcastToBusiness(businessId: string, event: string, data: any) {
-    const message = JSON.stringify({
-      event: event,
-      topic: `messages:${businessId}`,
-      payload: data
-    });
-
-    // Găsirea tuturor conexiunilor pentru business-ul respectiv
-    for (const [key, socket] of this.connections.entries()) {
-      if (key.includes(`messages:${businessId}`)) {
-        socket.send(message);
-      }
-    }
-  }
 
   broadcastToUser(userId: string, event: string, data: any) {
     const message = JSON.stringify({
       event: event,
-      topic: `user:${userId}`,
+      topic: `messages:${userId}`,
       payload: data
     });
 
     // Găsirea tuturor conexiunilor pentru utilizatorul respectiv
     for (const [key, socket] of this.connections.entries()) {
-      if (key.includes(`user:${userId}`)) {
+      if (key.includes(`messages:${userId}`)) {
         socket.send(message);
       }
     }
@@ -237,7 +206,10 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   sendMessageToSession(businessId: string, sessionId: string, messageData: any, locationId?: string) {
     console.log(`Sending message to session: ${sessionId} in business: ${businessId}`);
     
-    this.broadcastToBusiness(businessId, messageData.event, messageData.data);
+    // Mesajele sunt trimise pe canalul utilizatorului
+    if (messageData?.data?.userId) {
+      this.broadcastToUser(messageData.data.userId, messageData.event, messageData.data);
+    }
   }
 
   // Notifică Elixir despre conversația AI pentru sincronizare
@@ -283,9 +255,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       } catch (httpError) {
         console.error('Failed to send AI response to Elixir via HTTP:', httpError);
         
-        // Fallback: încercăm să trimitem prin WebSocket broadcast
-        // Elixir va intercepta acest mesaj și îl va trimite către clientul WebSocket
-        this.broadcastToBusiness(data.businessId, 'new_message', {
+        // Fallback: trimitem prin WebSocket pe canalul utilizatorului
+        this.broadcastToUser(data.userId, 'new_message', {
           responseId: response.responseId,
           message: response.message,
           timestamp: response.timestamp,
@@ -303,11 +274,4 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
-  private generateResponseId(): string {
-    return `resp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private generateSessionId(data: MessageDto): string {
-    return `${data.businessId}:${data.userId}:${Date.now()}`;
-  }
 }

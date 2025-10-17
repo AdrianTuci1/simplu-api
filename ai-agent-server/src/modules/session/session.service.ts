@@ -3,6 +3,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, ScanComma
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { Session, Message } from '@/shared/interfaces/session.interface';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class SessionService {
@@ -16,14 +17,8 @@ export class SessionService {
   ): Promise<Session> {
     console.log(`🔧 SessionService: Creating session for businessId=${businessId}, userId=${userId}`);
     
-    // Încearcă să folosească crypto.randomUUID dacă este disponibil
-    let sessionId: string;
-    if (typeof global !== 'undefined' && global.crypto?.randomUUID) {
-      sessionId = global.crypto.randomUUID();
-    } else {
-      // Fallback la implementarea existentă
-      sessionId = `${businessId}:${userId}:${Date.now()}`;
-    }
+    // Generăm ID-ul sesiuni în layer-ul de servicii (DB layer)
+    const sessionId: string = uuidv4();
     
     const session: Session = {
       sessionId,
@@ -258,14 +253,20 @@ export class SessionService {
     }
   }
 
-  async saveMessage(message: Message): Promise<void> {
+  async saveMessage(message: Omit<Message, 'messageId'> & { messageId?: string }): Promise<void> {
     try {
       console.log(`🔧 SessionService: Saving message to DynamoDB table: ${tableNames.messages}`);
       console.log(`🔧 SessionService: Message details - sessionId: ${message.sessionId}, userId: ${message.userId}`);
       
+      const assignedMessageId = message.messageId || uuidv4();
+      const messageToSave: Message = {
+        ...message,
+        messageId: assignedMessageId,
+      } as Message;
+
       await this.dynamoClient.send(new PutItemCommand({
         TableName: tableNames.messages,
-        Item: marshall(message)
+        Item: marshall(messageToSave)
       }));
 
       // Actualizare timestamp ultimului mesaj în sesiune
