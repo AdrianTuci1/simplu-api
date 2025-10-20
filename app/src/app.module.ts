@@ -10,6 +10,7 @@ import { HealthModule } from './modules/health/health.module';
 import { KinesisService } from './kinesis.service';
 import { PatientBookingModule } from './modules/patient-booking/patient-booking.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
+import { FileUploadModule } from './modules/file-upload/file-upload.module';
 
 class CustomNamingStrategy extends DefaultNamingStrategy {
   tableName(targetName: string, userSpecifiedName: string | undefined): string {
@@ -56,6 +57,7 @@ class CustomNamingStrategy extends DefaultNamingStrategy {
     HealthModule,
     PatientBookingModule,
     InvitationsModule,
+    FileUploadModule,
   ],
   providers: [KinesisService],
   exports: [KinesisService],

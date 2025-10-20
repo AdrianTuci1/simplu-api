@@ -3,8 +3,9 @@ import { KinesisClient, PutRecordCommand } from '@aws-sdk/client-kinesis';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface AgentLogAction {
-  // Resource type for agent-log
-  resourceType: 'agent-log';
+  // Resource type for agent-logs (compatible with BaseResource)
+  resourceType: 'agent-logs';
+  resourceId: string; // Unique ID for this log entry (UUID)
   operation: 'create'; // Întotdeauna create pentru logs
   
   // Multi-tenant context
@@ -14,11 +15,11 @@ export interface AgentLogAction {
   // Agent log specific data
   data: {
     actionType: 'sms' | 'email' | 'voice_call' | 'meta_message';
-    subAction: 'send' | 'receive' | 'failed';
+    subAction: 'send' | 'receive' | 'failed' | 'call_ended';
     
     // Agent context
     agentSessionId: string;
-    triggeredBy: 'bedrock_agent';
+    triggeredBy: 'bedrock_agent' | 'elevenlabs';
     
     // Recipient info (sanitized)
     recipient?: {
@@ -42,6 +43,10 @@ export interface AgentLogAction {
       callDuration?: number;
       conversationId?: string;
       transcriptAvailable?: boolean;
+      cost?: number;
+      status?: string;
+      startTime?: number;
+      transcriptLength?: number;
       
       // SMS/Email
       templateId?: string;
@@ -52,11 +57,10 @@ export interface AgentLogAction {
       deliveryStatus?: 'pending' | 'sent' | 'delivered' | 'failed';
       errorMessage?: string;
     };
-
-  timestamp: string;
-  requestId: string;
   };
   
+  timestamp: string;
+  requestId: string;
 }
 
 @Injectable()
@@ -97,7 +101,8 @@ export class KinesisLoggerService {
     locationId: string;
     agentSessionId: string;
     actionType: 'sms' | 'email' | 'voice_call' | 'meta_message';
-    subAction: 'send' | 'receive' | 'failed';
+    subAction: 'send' | 'receive' | 'failed' | 'call_ended';
+    triggeredBy?: 'bedrock_agent' | 'elevenlabs'; // Optional, default: 'bedrock_agent'
     recipient?: {
       phone?: string;
       email?: string;
@@ -120,8 +125,12 @@ export class KinesisLoggerService {
     };
   }): Promise<void> {
     try {
+      const resourceId = `log-${uuidv4()}`; // Generate unique log ID
+      const requestId = uuidv4();
+      
       const action: AgentLogAction = {
-        resourceType: 'agent-log',
+        resourceType: 'agent-logs',
+        resourceId,
         operation: 'create',
         businessId: params.businessId,
         locationId: params.locationId,
@@ -129,16 +138,16 @@ export class KinesisLoggerService {
           actionType: params.actionType,
           subAction: params.subAction,
           agentSessionId: params.agentSessionId,
-          triggeredBy: 'bedrock_agent',
+          triggeredBy: params.triggeredBy || 'bedrock_agent',
           recipient: params.recipient,
           provider: params.provider,
           externalId: params.externalId,
           relatedResourceType: params.relatedResourceType,
           relatedResourceId: params.relatedResourceId,
           metadata: params.metadata,
-          timestamp: new Date().toISOString(),
-          requestId: uuidv4(),
         },
+        timestamp: new Date().toISOString(),
+        requestId,
       };
 
       await this.sendToKinesis(action);
@@ -265,12 +274,13 @@ export class KinesisLoggerService {
     businessId: string;
     locationId: string;
     agentSessionId: string;
-    subAction: 'receive' | 'send' | 'failed';
+    subAction: 'receive' | 'send' | 'failed' | 'call_ended';
     recipient?: { phone?: string; userId?: string; name?: string };
     conversationId: string;
     callDuration?: number;
     transcriptAvailable?: boolean;
     errorMessage?: string;
+    metadata?: any; // Additional metadata (for call_ended: cost, status, etc.)
   }): Promise<void> {
     await this.logAgentAction({
       businessId: params.businessId,
@@ -278,6 +288,7 @@ export class KinesisLoggerService {
       agentSessionId: params.agentSessionId,
       actionType: 'voice_call',
       subAction: params.subAction,
+      triggeredBy: 'elevenlabs', // Voice calls are triggered by Eleven Labs
       recipient: params.recipient,
       provider: 'elevenlabs',
       externalId: params.conversationId,
@@ -287,6 +298,7 @@ export class KinesisLoggerService {
         transcriptAvailable: params.transcriptAvailable,
         deliveryStatus: params.subAction === 'failed' ? 'failed' : 'delivered',
         errorMessage: params.errorMessage,
+        ...params.metadata, // Merge additional metadata
       },
     });
   }

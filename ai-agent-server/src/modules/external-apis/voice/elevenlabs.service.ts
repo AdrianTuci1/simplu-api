@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { KinesisLoggerService } from '@/shared/services/kinesis-logger.service';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamoDBClient, tableNames } from '@/config/dynamodb.config';
 import { BusinessInfoService } from '@/modules/business-info/business-info.service';
 
@@ -91,6 +91,46 @@ export class ElevenLabsService {
     } catch (error) {
       this.logger.error(`❌ Failed to get agents for business ${businessId}:`, error);
       return [];
+    }
+  }
+
+  /**
+   * Găsește tenant (businessId + locationId) pe baza agentId de la Eleven Labs
+   * 
+   * NOTĂ: Această metodă face un scan prin DynamoDB. Pentru producție, ar trebui:
+   * 1. Să adăugăm un GSI (Global Secondary Index) pe agentId
+   * 2. Sau să păstrăm un cache în memorie cu mapping-ul agentId -> businessId:locationId
+   * 3. Sau Eleven Labs să trimită businessId/locationId în metadata webhook-ului
+   */
+  async findTenantByAgentId(agentId: string): Promise<{ businessId: string; locationId: string } | null> {
+    try {
+      this.logger.log(`🔍 Looking up tenant for agentId: ${agentId}`);
+
+      // Scan prin DynamoDB (nu e ideal, dar funcționează pentru număr limitat de agenți)
+      // TODO: Adaugă GSI pe agentId pentru lookup mai rapid
+      const result = await this.dynamoClient.send(new ScanCommand({
+        TableName: tableNames.elevenLabsAgents,
+        FilterExpression: 'agentId = :agentId',
+        ExpressionAttributeValues: {
+          ':agentId': agentId,
+        },
+      }));
+
+      if (!result.Items || result.Items.length === 0) {
+        this.logger.warn(`⚠️ No tenant found for agentId: ${agentId}`);
+        return null;
+      }
+
+      const config = result.Items[0] as ElevenLabsAgentConfig;
+      this.logger.log(`✅ Found tenant: ${config.businessId}:${config.locationId} for agentId: ${agentId}`);
+
+      return {
+        businessId: config.businessId,
+        locationId: config.locationId,
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to find tenant by agentId:`, error);
+      return null;
     }
   }
 

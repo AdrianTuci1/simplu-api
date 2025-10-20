@@ -315,4 +315,134 @@ export class ElevenLabsController {
       };
     }
   }
+
+  /**
+   * Webhook handler pentru evenimente de la Eleven Labs
+   * POST /api/elevenlabs/webhook
+   * 
+   * Evenimente suportate:
+   * - post_call_transcription: Apel finalizat cu transcrierea și datele apelului
+   * 
+   * Payload example:
+   * {
+   *   "type": "post_call_transcription",
+   *   "event_timestamp": 1739537297,
+   *   "data": {
+   *     "agent_id": "xyz",
+   *     "conversation_id": "abc",
+   *     "status": "done",
+   *     "transcript": [...],
+   *     "metadata": {
+   *       "start_time_unix_secs": 1739537297,
+   *       "call_duration_secs": 22,
+   *       "cost": 296
+   *     }
+   *   }
+   * }
+   */
+  @Post('webhook')
+  async handleWebhook(@Body() payload: any) {
+    try {
+      const eventType = payload?.type;
+      
+      this.logger.log(`📞 Received Eleven Labs webhook: ${eventType}`);
+      this.logger.debug(`Webhook payload: ${JSON.stringify(payload)}`);
+
+      // Handle post_call_transcription event
+      if (eventType === 'post_call_transcription') {
+        return await this.handleCallEnded(payload);
+      }
+
+      // Unknown event type - just acknowledge
+      this.logger.warn(`⚠️ Unknown webhook event type: ${eventType}`);
+      return { success: true, message: 'Event received but not processed' };
+    } catch (error) {
+      this.logger.error(`❌ Webhook handler error:`, error);
+      
+      // Return 200 anyway to avoid Eleven Labs retrying
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Procesează evenimentul de apel finalizat
+   */
+  private async handleCallEnded(payload: any) {
+    const data = payload?.data;
+    if (!data) {
+      this.logger.warn(`⚠️ No data in webhook payload`);
+      return { success: false, message: 'No data in payload' };
+    }
+
+    const {
+      agent_id: agentId,
+      conversation_id: conversationId,
+      status,
+      transcript,
+      metadata,
+    } = data;
+
+    const {
+      start_time_unix_secs: startTime,
+      call_duration_secs: duration,
+      cost,
+    } = metadata || {};
+
+    this.logger.log(
+      `📞 Call ended: ${conversationId} | Duration: ${duration}s | Cost: ${cost} | Status: ${status}`
+    );
+
+    // Extract businessId and locationId from agent configuration
+    // We need to find which tenant this agent belongs to
+    const { businessId, locationId } = await this.findTenantByAgentId(agentId);
+
+    if (!businessId || !locationId) {
+      this.logger.error(
+        `❌ Could not find tenant for agentId: ${agentId}. Cannot log call data.`
+      );
+      return { success: false, message: 'Agent not found' };
+    }
+
+    // Log call completion to Kinesis
+    await this.kinesisLogger.logAgentVoiceCall({
+      businessId,
+      locationId,
+      agentSessionId: conversationId,
+      subAction: 'call_ended',
+      conversationId,
+      transcriptAvailable: !!transcript,
+      metadata: {
+        callDuration: duration,
+        cost,
+        startTime,
+        status,
+        transcriptLength: transcript?.length || 0,
+        // Store full transcript if needed (careful with size)
+        // transcript: transcript, 
+      },
+    });
+
+    this.logger.log(`✅ Call data logged for ${businessId}:${locationId}`);
+
+    return {
+      success: true,
+      message: 'Call data logged successfully',
+    };
+  }
+
+  /**
+   * Găsește tenant-ul (businessId + locationId) pentru un agentId
+   * Caută în toate configurațiile din DynamoDB
+   */
+  private async findTenantByAgentId(
+    agentId: string
+  ): Promise<{ businessId: string; locationId: string }> {
+    const result = await this.elevenLabsService.findTenantByAgentId(agentId);
+    
+    if (!result) {
+      return { businessId: '', locationId: '' };
+    }
+    
+    return result;
+  }
 }

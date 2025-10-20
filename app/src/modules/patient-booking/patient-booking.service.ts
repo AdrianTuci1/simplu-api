@@ -37,7 +37,6 @@ export class PatientBookingService {
       .createQueryBuilder('resource')
       .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
       .andWhere('resource.resourceType = :type', { type: 'treatment' })
-      .andWhere("(resource.data->>'isPublic')::boolean = true")
       .orderBy('resource.startDate', 'DESC')
       .addOrderBy('resource.createdAt', 'DESC')
       .limit(limit)
@@ -66,7 +65,7 @@ export class PatientBookingService {
       .createQueryBuilder('resource')
       .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
       .andWhere('resource.resourceType = :type', { type: 'medic' })
-      .andWhere('resource.data->>canTakeAppointments = :canTakeAppointments', { canTakeAppointments: true });
+      .andWhere("(resource.data->>'canTakeAppointments')::boolean = true");
     
     // Filter by specific medic if provided
     if (medicId) {
@@ -218,9 +217,9 @@ export class PatientBookingService {
       medicId = await this.autoAssignMedic(businessLocationId, date, time, duration || 0);
     }
     
-    // Get service details for price
+    // Get service details
     const service = await this.getServiceDetails(businessLocationId, serviceId);
-    const servicePrice = service?.data?.price || 0;
+    const serviceData = service?.data || {};
     
     // Get medic details for name
     const medic = await this.resourceRepo
@@ -294,9 +293,10 @@ export class PatientBookingService {
         time,
         serviceId,
         service: { 
-          id: serviceId, 
-          duration: duration,
-          price: servicePrice
+          id: serviceId,
+          name: serviceData.name || 'Service',
+          duration: duration || serviceData.duration || 0,
+          price: serviceData.price || 0
         },
         medic: { 
           id: medicId,
@@ -326,7 +326,7 @@ export class PatientBookingService {
       appointmentTime: time,
       businessName: '', // Will be populated from business info
       locationName: '', // Will be populated from location info
-      serviceName: service?.data?.name || 'Service',
+      serviceName: serviceData.name || 'Service',
       doctorName: medicName,
       phoneNumber: '' // Will be populated from business info
     });
@@ -420,9 +420,9 @@ export class PatientBookingService {
     const newDuration = payload.duration ?? (existing.data as any)?.service?.duration ?? 0;
     const newMedicId = payload.medicId ?? (existing.data as any)?.medic?.id;
     
-    // Get service details for price
+    // Get service details
     const service = await this.getServiceDetails(businessLocationId, newServiceId);
-    const servicePrice = service?.data?.price || 0;
+    const serviceData = service?.data || {};
     
     // Get medic details for name
     const medic = newMedicId ? await this.resourceRepo
@@ -502,9 +502,10 @@ export class PatientBookingService {
         time: newTime,
         serviceId: newServiceId,
         service: { 
-          id: newServiceId, 
-          duration: newDuration,
-          price: servicePrice
+          id: newServiceId,
+          name: serviceData.name || 'Service',
+          duration: newDuration || serviceData.duration || 0,
+          price: serviceData.price || 0
         },
         medic: newMedicId ? { 
           id: newMedicId,
