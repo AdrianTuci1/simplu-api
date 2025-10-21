@@ -7,6 +7,7 @@ import { google } from 'googleapis';
 export interface MetaCredentials {
   accessToken: string;
   phoneNumberId: string;
+  pageId?: string;
   businessAccountId?: string;
   appSecret: string;
   phoneNumber: string;
@@ -43,13 +44,14 @@ export class ExternalApisService {
   async sendMetaMessage(
     to: string,
     message: string,
-    businessId: string
+    businessId: string,
+    locationId: string = 'L0100001' // Default location for backwards compatibility
   ): Promise<any> {
     let metaClient;
     try {
-      metaClient = await this.getMetaClient(businessId);
+      metaClient = await this.getMetaClient(businessId, locationId);
     } catch (credentialsError) {
-      console.warn(`⚠️ Meta credentials not found for business ${businessId}:`, credentialsError.message);
+      console.warn(`⚠️ Meta credentials not found for business ${businessId}, location ${locationId}:`, credentialsError.message);
       return {
         success: false,
         error: 'Meta credentials not configured',
@@ -98,9 +100,10 @@ export class ExternalApisService {
     to: string,
     templateName: string,
     parameters: any[],
-    businessId: string
+    businessId: string,
+    locationId: string = 'L0100001' // Default location for backwards compatibility
   ): Promise<any> {
-    const metaClient = await this.getMetaClient(businessId);
+    const metaClient = await this.getMetaClient(businessId, locationId);
     
     try {
       const response = await metaClient.post('/messages', {
@@ -295,17 +298,34 @@ export class ExternalApisService {
   // Credentials Management
   async saveMetaCredentials(
     businessId: string,
-    credentials: MetaCredentials
+    locationId: string = 'L0100001', // Default location for backwards compatibility
+    credentials?: MetaCredentials // Make optional for backwards compatibility
   ): Promise<ExternalCredentials> {
+    // If credentials is passed as second parameter (old API), shift parameters
+    if (typeof locationId === 'object' && !credentials) {
+      credentials = locationId as any;
+      locationId = 'L0100001';
+    }
+    
+    if (!credentials) {
+      throw new Error('Credentials are required');
+    }
+    console.log(`Saving Meta credentials for businessId: ${businessId}, locationId: ${locationId}`);
+    console.log('Meta credentials:', credentials);
+    
     const externalCredentials: ExternalCredentials = {
       businessId,
-      serviceType: 'meta',
+      serviceType: `meta#${locationId}`, // Similar cu Gmail: meta#L0100001
       credentials,
       isActive: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      metadata: {}
+      metadata: {
+        permissions: ['pages_messaging', 'pages_manage_metadata', 'pages_show_list'],
+      },
     };
+    
+    console.log('External credentials to save:', externalCredentials);
 
     await this.dynamoClient.send(new PutCommand({
       TableName: tableNames.externalCredentials,
@@ -349,21 +369,34 @@ export class ExternalApisService {
     return externalCredentials;
   }
 
-  async getMetaCredentials(businessId: string): Promise<MetaCredentials | null> {
+  async getMetaCredentials(
+    businessId: string,
+    locationId: string = 'L0100001' // Default location for backwards compatibility
+  ): Promise<MetaCredentials | null> {
     try {
+      console.log(`Getting Meta credentials for businessId: ${businessId}, locationId: ${locationId}`);
+      const key = {
+        businessId,
+        serviceType: `meta#${locationId}`,
+      };
+      console.log('DynamoDB key:', key);
+      
       const result = await this.dynamoClient.send(new GetCommand({
         TableName: tableNames.externalCredentials,
-        Key: {
-          businessId,
-          serviceType: 'meta'
-        }
+        Key: key,
       }));
 
+      console.log('DynamoDB result:', result);
+
       if (!result.Item) {
+        console.log('No item found in DynamoDB');
         return null;
       }
 
       const credentials = result.Item as ExternalCredentials;
+      console.log('Found credentials:', credentials);
+      console.log('isActive:', credentials.isActive);
+      
       return credentials.isActive ? credentials.credentials as MetaCredentials : null;
     } catch (error) {
       console.error('Error getting Meta credentials:', error);
@@ -413,10 +446,10 @@ export class ExternalApisService {
   }
 
   // Private methods for client creation (ephemeral per call)
-  private async getMetaClient(businessId: string): Promise<any> {
-    const credentials = await this.getMetaCredentials(businessId);
+  private async getMetaClient(businessId: string, locationId: string): Promise<any> {
+    const credentials = await this.getMetaCredentials(businessId, locationId);
     if (!credentials) {
-      throw new Error(`No Meta credentials found for business ${businessId}`);
+      throw new Error(`No Meta credentials found for business ${businessId}, location ${locationId}`);
     }
     const { default: axios } = await import('axios');
     // Use default Node agents (no keep-alive pooling) for ephemeral requests

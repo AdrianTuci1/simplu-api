@@ -27,6 +27,9 @@ export interface BusinessStatistics {
     percentage: number;
   };
   occupancyRate: number;
+  aiUsage: {
+    minutes: number;
+  };
   doctorProgress: DoctorProgress[];
   popularTreatments: TreatmentCount[];
 }
@@ -118,6 +121,7 @@ export class StatisticsService {
         clinicRating,
         smsStats,
         occupancyRate,
+        aiUsage,
         doctorProgress,
         popularTreatments,
       ] = await Promise.all([
@@ -127,9 +131,10 @@ export class StatisticsService {
         this.getAppointmentsToday(businessLocationId, today),
         this.getMonthlyRevenue(businessLocationId, thisMonth),
         this.getWebsiteBookings(businessLocationId, thisMonth),
-        this.getClinicRating(businessLocationId),
+        this.getClinicRating(businessLocationId, thisMonth),
         this.getSmsStats(businessLocationId, thisMonth),
         this.getOccupancyRate(businessLocationId, thisMonth),
+        this.getAiUsage(businessLocationId, thisMonth),
         this.getDoctorProgress(businessLocationId, thisMonth),
         this.getPopularTreatments(businessLocationId, thisMonth),
       ]);
@@ -144,6 +149,7 @@ export class StatisticsService {
         clinicRating,
         smsStats,
         occupancyRate,
+        aiUsage,
         doctorProgress,
         popularTreatments,
       };
@@ -425,7 +431,7 @@ export class StatisticsService {
   }
 
   /**
-   * Get website bookings count
+   * Get website bookings count (appointments created via patient-booking)
    */
   private async getWebsiteBookings(
     businessLocationId: string,
@@ -446,7 +452,10 @@ export class StatisticsService {
         .andWhere('resource.startDate <= :endDate', {
           endDate: dateRange.endDate,
         })
-        .andWhere("resource.data->>'source' = :source", { source: 'website' })
+        .andWhere(
+          "(resource.data->>'createdByPatient' = :createdByPatient OR resource.data->>'source' = :source)",
+          { createdByPatient: 'true', source: 'website' }
+        )
         .getCount();
 
       return count;
@@ -461,10 +470,9 @@ export class StatisticsService {
    */
   private async getClinicRating(
     businessLocationId: string,
+    dateRange: DateRange,
   ): Promise<BusinessStatistics['clinicRating']> {
     try {
-      const { thisMonth } = this.getMonthRanges();
-      
       // Get all rating resources that have been submitted (tokenUsed = true)
       const ratings = await this.resourceRepository
         .createQueryBuilder('resource')
@@ -477,10 +485,10 @@ export class StatisticsService {
         .andWhere("resource.data->>'tokenUsed' = :used", { used: 'true' })
         .andWhere("(resource.data->>'score')::int > :minScore", { minScore: 0 })
         .andWhere('resource.createdAt >= :startDate', {
-          startDate: thisMonth.startDate,
+          startDate: dateRange.startDate,
         })
         .andWhere('resource.createdAt <= :endDate', {
-          endDate: thisMonth.endDate,
+          endDate: dateRange.endDate,
         })
         .getMany();
 
@@ -541,6 +549,54 @@ export class StatisticsService {
     } catch (error) {
       this.logger.error(`Error getting SMS stats: ${error.message}`);
       return { sent: 0, limit: 300, percentage: 0 };
+    }
+  }
+
+  /**
+   * Get AI usage statistics from ElevenLabs agent logs
+   */
+  private async getAiUsage(
+    businessLocationId: string,
+    dateRange: DateRange,
+  ): Promise<BusinessStatistics['aiUsage']> {
+    try {
+      // Get all agent-logs for voice calls that have ended in the current month
+      const agentLogs = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', {
+          businessLocationId,
+        })
+        .andWhere('resource.resourceType = :resourceType', {
+          resourceType: 'agent-logs',
+        })
+        .andWhere("resource.data->>'actionType' = :actionType", {
+          actionType: 'voice_call',
+        })
+        .andWhere("resource.data->>'subAction' = :subAction", {
+          subAction: 'call_ended',
+        })
+        .andWhere('resource.createdAt >= :startDate', {
+          startDate: dateRange.startDate,
+        })
+        .andWhere('resource.createdAt <= :endDate', {
+          endDate: dateRange.endDate,
+        })
+        .getMany();
+
+      // Sum up all call durations (in seconds) and convert to minutes
+      const totalSeconds = agentLogs.reduce((sum, log) => {
+        const callDuration = log.data.metadata?.callDuration || 0;
+        return sum + Number(callDuration);
+      }, 0);
+
+      const totalMinutes = Math.round(totalSeconds / 60);
+
+      return {
+        minutes: totalMinutes,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting AI usage stats: ${error.message}`);
+      return { minutes: 0 };
     }
   }
 

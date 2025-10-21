@@ -71,7 +71,7 @@ export class PatientBookingController {
       properties: {
         date: { type: 'string', description: 'YYYY-MM-DD' },
         time: { type: 'string', description: 'HH:mm' },
-        serviceId: { type: 'string' },
+        service: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, duration: { type: 'number' }, price: { type: 'number' } } },
         duration: { type: 'number', description: 'Duration in minutes' },
         medicId: { type: 'string', description: 'Optional medic ID for specific medic booking (auto-assigned if not provided)' },
         customer: {
@@ -93,9 +93,15 @@ export class PatientBookingController {
     payload: {
       date: string; // YYYY-MM-DD
       time: string; // HH:mm
-      serviceId: string;
+      service: {
+        id: string;
+        name: string;
+        duration: number;
+        price: number;
+      };
       duration?: number; // minutes
       medicId?: string; // medic ID for specific medic booking
+      description?: string; // description of the appointment
       customer: {
         name?: string;
         email?: string;

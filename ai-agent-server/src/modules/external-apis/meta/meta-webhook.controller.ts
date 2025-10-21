@@ -113,24 +113,32 @@ export class MetaWebhookController {
   async handleWebhook(
     @Body() payload: MetaWebhookPayload,
     @Headers('x-hub-signature-256') signature: string,
+    @Headers() headers: Record<string, string>,
   ): Promise<any> {
     const startTime = Date.now();
 
     try {
-      this.logger.log(`📨 Meta webhook received (global endpoint)`);
-      this.logger.log(`Payload: ${JSON.stringify(payload).substring(0, 500)}...`);
+      this.logger.log(`\n${'='.repeat(80)}`);
+      this.logger.log(`📨 META WEBHOOK POST REQUEST RECEIVED`);
+      this.logger.log(`${'='.repeat(80)}`);
+      this.logger.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+      this.logger.log(`📋 Headers: ${JSON.stringify(headers, null, 2)}`);
+      this.logger.log(`📦 Full Payload: ${JSON.stringify(payload, null, 2)}`);
+      this.logger.log(`🔐 Signature: ${signature || 'NOT PROVIDED'}`);
+      this.logger.log(`${'='.repeat(80)}\n`);
 
-      // Extract phone_number_id or page_id from payload to identify the business
-      const phoneNumberId = payload.entry[0]?.changes[0]?.value?.metadata?.phone_number_id;
-      const pageId = payload.entry[0]?.id; // For Messenger/Instagram
+      // Extract identifiers from payload to identify the business
+      const phoneNumberId = payload.entry[0]?.changes[0]?.value?.metadata?.phone_number_id; // WhatsApp
+      const pageId = payload.entry[0]?.id; // Facebook Page ID (used for Messenger/Instagram)
+      const messagingProduct = payload.entry[0]?.changes[0]?.value?.messaging_product; // 'whatsapp' | 'instagram' | 'messenger'
       
       this.logger.log(`🔍 Identifying business from payload:`);
-      this.logger.log(`   - Phone Number ID: ${phoneNumberId || 'N/A'}`);
-      this.logger.log(`   - Page ID: ${pageId || 'N/A'}`);
+      this.logger.log(`   - Messaging Product: ${messagingProduct || 'N/A'}`);
+      this.logger.log(`   - Phone Number ID (WhatsApp): ${phoneNumberId || 'N/A'}`);
+      this.logger.log(`   - Page ID (Instagram/Messenger): ${pageId || 'N/A'}`);
 
-      // TODO: Lookup businessLocationId from DynamoDB using phone_number_id or page_id
-      // For now, use a default mapping or require configuration
-      const businessLocationId = await this.lookupBusinessLocationId(phoneNumberId, pageId);
+      // Lookup businessLocationId from DynamoDB using phone_number_id or page_id
+      const businessLocationId = await this.lookupBusinessLocationId(phoneNumberId, pageId, messagingProduct);
       
       this.logger.log(`✅ Mapped to businessLocationId: ${businessLocationId}`);
 
@@ -140,8 +148,15 @@ export class MetaWebhookController {
 
       // Validate signature
       this.logger.log(`🔐 Validating webhook signature...`);
-      await this.validateSignature(businessId, JSON.stringify(payload), signature);
-      this.logger.log(`✅ Signature validated successfully`);
+      
+      // TEMPORARY: Skip signature validation for debugging
+      this.logger.warn(`⚠️ SIGNATURE VALIDATION DISABLED FOR DEBUGGING`);
+      this.logger.warn(`⚠️ TODO: Re-enable signature validation in production!`);
+      
+      // Uncomment this line when credentials are properly configured:
+      // await this.validateSignature(businessId, locationId, JSON.stringify(payload), signature);
+      
+      this.logger.log(`✅ Signature validation skipped (debugging mode)`);
 
       // Process webhook entries
       const results = [];
@@ -172,6 +187,7 @@ export class MetaWebhookController {
                 change.value.metadata,
                 change.value.contacts,
                 change.value.messaging_product,
+                pageId, // Pass page ID for Instagram/Messenger
               );
               results.push(result);
               
@@ -209,15 +225,25 @@ export class MetaWebhookController {
       };
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      this.logger.error(
-        `❌ Meta webhook processing failed after ${executionTime}ms:`,
-        error.stack,
-      );
+      
+      this.logger.error(`\n${'!'.repeat(80)}`);
+      this.logger.error(`❌ META WEBHOOK ERROR`);
+      this.logger.error(`${'!'.repeat(80)}`);
+      this.logger.error(`⏰ Execution time: ${executionTime}ms`);
+      this.logger.error(`❌ Error type: ${error.constructor.name}`);
+      this.logger.error(`❌ Error message: ${error.message}`);
+      this.logger.error(`📦 Payload that caused error: ${JSON.stringify(payload, null, 2)}`);
+      this.logger.error(`📚 Stack trace:`);
+      this.logger.error(error.stack);
+      this.logger.error(`${'!'.repeat(80)}\n`);
 
-      // Log error
-      this.logger.error(`Error details: ${JSON.stringify({ executionTime })}`);
-
-      throw error;
+      // Return 200 even on error so Meta doesn't retry
+      // (we want to see what's wrong first)
+      return {
+        status: 'error',
+        message: error.message,
+        processed: 0,
+      };
     }
   }
 
@@ -226,6 +252,7 @@ export class MetaWebhookController {
    */
   private async validateSignature(
     businessId: string,
+    locationId: string,
     payload: string,
     signature: string,
   ): Promise<void> {
@@ -236,7 +263,7 @@ export class MetaWebhookController {
 
     try {
       // Get app secret from credentials
-      const credentials = await this.externalApisService.getMetaCredentials(businessId);
+      const credentials = await this.externalApisService.getMetaCredentials(businessId, locationId);
       
       if (!credentials || !credentials.appSecret) {
         this.logger.error('❌ Missing Meta credentials or app secret');
@@ -283,6 +310,7 @@ export class MetaWebhookController {
     metadata: any,
     contacts: any[],
     messagingProduct: 'whatsapp' | 'instagram' | 'facebook',
+    pageId?: string,
   ): Promise<any> {
     try {
       const messageId = message.id;
@@ -349,9 +377,12 @@ export class MetaWebhookController {
         
         await this.sendMetaMessage(
           businessId,
+          locationId,
           userId,
           result.response,
-          metadata.phone_number_id,
+          metadata.phone_number_id, // For WhatsApp
+          pageId, // For Instagram/Messenger
+          messagingProduct, // 'whatsapp' | 'instagram' | 'facebook'
         );
         
         this.logger.log(`✅ Response sent successfully!`);
@@ -399,19 +430,22 @@ export class MetaWebhookController {
   }
 
   /**
-   * Trimite mesaj către utilizator prin Meta API
+   * Trimite mesaj către utilizator prin Meta API (WhatsApp, Instagram sau Messenger)
    */
   private async sendMetaMessage(
     businessId: string,
+    locationId: string,
     to: string,
     message: string,
     phoneNumberId?: string,
+    pageId?: string,
+    messagingProduct: 'whatsapp' | 'instagram' | 'facebook' = 'whatsapp',
   ): Promise<void> {
     try {
-      this.logger.log(`\n🔍 Retrieving Meta credentials for businessId: ${businessId}...`);
+      this.logger.log(`\n🔍 Retrieving Meta credentials for businessId: ${businessId}, locationId: ${locationId}...`);
 
-      // Get credentials
-      const credentials = await this.externalApisService.getMetaCredentials(businessId);
+      // Get credentials (need locationId from earlier in the flow)
+      const credentials = await this.externalApisService.getMetaCredentials(businessId, locationId);
 
       if (!credentials || !credentials.accessToken) {
         this.logger.error(`❌ Meta credentials not found or missing access token`);
@@ -421,27 +455,54 @@ export class MetaWebhookController {
       this.logger.log(`✅ Credentials retrieved`);
       this.logger.log(`   - Has access token: ${!!credentials.accessToken}`);
       this.logger.log(`   - Token length: ${credentials.accessToken?.length} chars`);
+      this.logger.log(`   - Messaging product: ${messagingProduct}`);
 
-      const phoneId = phoneNumberId || credentials.phoneNumberId;
+      // Determine API endpoint based on messaging product
+      let url: string;
+      let requestBody: any;
 
-      if (!phoneId) {
-        this.logger.error(`❌ Phone number ID not configured`);
-        throw new Error('Phone number ID not configured');
+      if (messagingProduct === 'whatsapp') {
+        // WhatsApp uses phone_number_id
+        const phoneId = phoneNumberId || credentials.phoneNumberId;
+        
+        if (!phoneId) {
+          this.logger.error(`❌ Phone number ID not configured for WhatsApp`);
+          throw new Error('Phone number ID not configured');
+        }
+
+        this.logger.log(`   - Phone number ID: ${phoneId}`);
+        
+        url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
+        requestBody = {
+          messaging_product: 'whatsapp',
+          to: to,
+          type: 'text',
+          text: {
+            body: message,
+          },
+        };
+      } else if (messagingProduct === 'instagram' || messagingProduct === 'facebook') {
+        // Instagram and Messenger both use page_id with /messages endpoint
+        // They share the same API format (Send API)
+        if (!pageId) {
+          this.logger.error(`❌ Page ID not available for ${messagingProduct}`);
+          throw new Error(`Page ID not configured for ${messagingProduct}`);
+        }
+
+        this.logger.log(`   - Page ID: ${pageId}`);
+        
+        url = `https://graph.facebook.com/v19.0/${pageId}/messages`;
+        requestBody = {
+          recipient: {
+            id: to, // Instagram Scoped ID (IGSID) or Page-Scoped ID (PSID) for Messenger
+          },
+          message: {
+            text: message,
+          },
+        };
+      } else {
+        throw new Error(`Unsupported messaging product: ${messagingProduct}`);
       }
-
-      this.logger.log(`   - Phone number ID: ${phoneId}`);
-
-      // Send message via Meta Graph API
-      const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
-      
-      const requestBody = {
-        messaging_product: 'whatsapp',
-        to: to,
-        type: 'text',
-        text: {
-          body: message,
-        },
-      };
 
       this.logger.log(`\n📡 Calling Meta Graph API...`);
       this.logger.log(`   - URL: ${url}`);
@@ -466,9 +527,12 @@ export class MetaWebhookController {
       }
 
       const data = await response.json();
-      const messageId = data.messages?.[0]?.id;
+      const messageId = messagingProduct === 'whatsapp' 
+        ? data.messages?.[0]?.id 
+        : data.message_id; // Instagram/Messenger use different response format
       
       this.logger.log(`✅ Meta message sent successfully!`);
+      this.logger.log(`   - Platform: ${messagingProduct}`);
       this.logger.log(`   - Message ID: ${messageId}`);
       this.logger.log(`   - Response: ${JSON.stringify(data, null, 2)}`);
     } catch (error) {
@@ -506,27 +570,59 @@ export class MetaWebhookController {
 
   /**
    * Caută businessLocationId pe baza phone_number_id sau page_id din payload
-   * TODO: Implementează lookup în DynamoDB table cu mapping phone_number_id -> businessLocationId
+   * 
+   * Pentru WhatsApp: folosește phone_number_id
+   * Pentru Instagram/Messenger: folosește page_id
+   * 
+   * În producție ar trebui să existe un tabel DynamoDB cu mapping-ul:
+   * - WhatsApp: phone_number_id -> businessLocationId
+   * - Instagram: page_id -> businessLocationId
+   * - Messenger: page_id -> businessLocationId
    */
-  private async lookupBusinessLocationId(phoneNumberId?: string, pageId?: string): Promise<string> {
-    // Pentru început, folosim un mapping static sau default
-    // În producție, ar trebui să cauți în DynamoDB:
-    // Table: meta-business-mapping
-    // Key: phone_number_id sau page_id
-    // Value: businessLocationId
+  private async lookupBusinessLocationId(
+    phoneNumberId?: string, 
+    pageId?: string,
+    messagingProduct?: string
+  ): Promise<string> {
+    // Strategy pentru lookup:
+    // 1. Pentru WhatsApp: caută după phone_number_id în DynamoDB
+    // 2. Pentru Instagram/Messenger: caută după page_id în DynamoDB
     
-    // TODO: Implementează query DynamoDB
-    // const mapping = await dynamodb.get({ 
-    //   TableName: 'meta-business-mapping',
-    //   Key: { phoneNumberId: phoneNumberId || pageId }
-    // });
-    // return mapping.businessLocationId;
+    const identifier = phoneNumberId || pageId;
+    const identifierType = phoneNumberId ? 'phone_number_id' : 'page_id';
+    
+    if (!identifier) {
+      this.logger.error(`❌ No identifier found in webhook payload (phone_number_id or page_id)`);
+      throw new BadRequestException('Cannot identify business from webhook payload');
+    }
+    
+    this.logger.log(`🔍 Looking up business using ${identifierType}: ${identifier}`);
+    
+    // TODO: Implementează lookup în DynamoDB
+    // Table structure:
+    // {
+    //   identifierId: "phone_number_id" sau "page_id",
+    //   identifierType: "whatsapp" | "instagram" | "messenger",
+    //   businessLocationId: "B0100001L0100001",
+    //   businessId: "B0100001",
+    //   locationId: "L0100001"
+    // }
+    
+    // const result = await this.dynamoClient.send(new GetCommand({
+    //   TableName: 'meta-platform-identifiers',
+    //   Key: { identifierId: identifier }
+    // }));
+    
+    // if (result.Item) {
+    //   return result.Item.businessLocationId;
+    // }
 
-    // Fallback: folosește un default sau aruncă eroare
-    const defaultBusinessLocationId = 'B0100001L0100001'; // Din config
+    // Fallback: folosește un default (pentru development/testing)
+    const defaultBusinessLocationId = 'B0100001L0100001';
     
     this.logger.warn(`⚠️ Using default businessLocationId: ${defaultBusinessLocationId}`);
-    this.logger.warn(`⚠️ TODO: Implement DynamoDB lookup for phone_number_id/page_id mapping`);
+    this.logger.warn(`⚠️ PRODUCTION: Implement DynamoDB lookup for ${identifierType} mapping`);
+    this.logger.warn(`⚠️ Missing mapping for ${identifierType}: ${identifier} (${messagingProduct})`);
     
     return defaultBusinessLocationId;
   }

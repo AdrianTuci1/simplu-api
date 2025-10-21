@@ -199,14 +199,19 @@ export class PatientBookingService {
     payload: {
       date: string;
       time: string;
-      serviceId: string;
+      service: {
+        id: string;
+        name: string;
+        duration: number;
+        price: number;
+      };
       duration?: number;
       medicId?: string;
       customer: { name?: string; email?: string; phone?: string };
     },
   ) {
-    const { date, time, serviceId, duration, customer } = payload;
-    if (!date || !time || !serviceId) throw new BadRequestException('date, time, serviceId required');
+    const { date, time, service, duration, customer } = payload;
+    if (!date || !time || !service?.id) throw new BadRequestException('date, time, service.id required');
     if (!customer || !customer.email) throw new BadRequestException('customer email is required');
 
     const businessLocationId = `${businessId}-${locationId}`;
@@ -214,12 +219,8 @@ export class PatientBookingService {
     // Auto-assign medic if not provided
     let medicId = payload.medicId;
     if (!medicId) {
-      medicId = await this.autoAssignMedic(businessLocationId, date, time, duration || 0);
+      medicId = await this.autoAssignMedic(businessLocationId, date, time, duration || service.duration || 0);
     }
-    
-    // Get service details
-    const service = await this.getServiceDetails(businessLocationId, serviceId);
-    const serviceData = service?.data || {};
     
     // Get medic details for name
     const medic = await this.resourceRepo
@@ -291,12 +292,12 @@ export class PatientBookingService {
       data: {
         date,
         time,
-        serviceId,
+        serviceId: service.id,
         service: { 
-          id: serviceId,
-          name: serviceData.name || 'Service',
-          duration: duration || serviceData.duration || 0,
-          price: serviceData.price || 0
+          id: service.id,
+          name: service.name,
+          duration: duration || service.duration || 0,
+          price: service.price || 0
         },
         medic: { 
           id: medicId,
@@ -326,7 +327,7 @@ export class PatientBookingService {
       appointmentTime: time,
       businessName: '', // Will be populated from business info
       locationName: '', // Will be populated from location info
-      serviceName: serviceData.name || 'Service',
+      serviceName: service.name,
       doctorName: medicName,
       phoneNumber: '' // Will be populated from business info
     });

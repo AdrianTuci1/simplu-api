@@ -71,7 +71,13 @@ export default () => ({
     appId: process.env.META_APP_ID,
     appSecret: process.env.META_APP_SECRET,
     redirectUri: process.env.META_REDIRECT_URI || 'http://localhost:3003/external/meta/callback',
-    scopes: process.env.META_OAUTH_SCOPES || 'pages_show_list, business_management, pages_messaging, pages_manage_metadata, public_profile, pages_read_engagement',
+    // Scopes pentru WhatsApp + Instagram Messaging
+    // IMPORTANT: instagram_basic și instagram_manage_messages necesită:
+    // 1. Business Verification (dacă nu ai făcut-o deja)
+    // 2. App Review de la Meta pentru producție
+    // 3. Instagram Business Account conectat la o Facebook Page
+    // Pentru development/testing poți folosi doar pages_messaging
+    scopes: process.env.META_OAUTH_SCOPES || 'pages_show_list,pages_messaging,pages_manage_metadata',
     accessToken: process.env.META_ACCESS_TOKEN,
     phoneNumberId: process.env.META_PHONE_NUMBER_ID,
     webhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN,

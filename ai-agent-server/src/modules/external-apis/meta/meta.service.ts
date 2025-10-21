@@ -102,15 +102,80 @@ export class MetaService {
         this.logger.warn(`Failed to exchange for long-lived token for businessId: ${businessId}, using short-lived token`);
       }
 
+      // Get user's pages and phone numbers
+      this.logger.log(`Fetching user's Facebook Pages and WhatsApp phone numbers...`);
+      
+      let pageId = '';
+      let pageAccessToken = longLived;
+      let phoneNumberId = '';
+      let phoneNumber = '';
+      
+      try {
+        // Get user's Pages
+        const pagesResp = await axiosInstance.get('https://graph.facebook.com/v19.0/me/accounts', {
+          params: { access_token: longLived }
+        });
+        
+        if (pagesResp.data?.data && pagesResp.data.data.length > 0) {
+          const page = pagesResp.data.data[0]; // Use first page
+          pageId = page.id;
+          pageAccessToken = page.access_token; // Page access token!
+          
+          this.logger.log(`Found Facebook Page: ${page.name} (ID: ${pageId})`);
+          
+          // Check for WhatsApp Business Account
+          try {
+            const waResp = await axiosInstance.get(
+              `https://graph.facebook.com/v19.0/${pageId}`,
+              {
+                params: {
+                  fields: 'whatsapp_business_account',
+                  access_token: pageAccessToken
+                }
+              }
+            );
+            
+            if (waResp.data?.whatsapp_business_account) {
+              const wabaId = waResp.data.whatsapp_business_account.id;
+              this.logger.log(`Found WhatsApp Business Account: ${wabaId}`);
+              
+              // Get phone numbers
+              const phoneResp = await axiosInstance.get(
+                `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`,
+                {
+                  params: { access_token: pageAccessToken }
+                }
+              );
+              
+              if (phoneResp.data?.data && phoneResp.data.data.length > 0) {
+                const phone = phoneResp.data.data[0];
+                phoneNumberId = phone.id;
+                phoneNumber = phone.display_phone_number;
+                this.logger.log(`Found WhatsApp phone: ${phoneNumber} (ID: ${phoneNumberId})`);
+              }
+            }
+          } catch (waError) {
+            this.logger.warn(`No WhatsApp Business Account found for page ${pageId}`);
+          }
+        }
+      } catch (pagesError) {
+        this.logger.warn(`Could not fetch Pages: ${pagesError.message}`);
+      }
+
       // Store per-location Meta token under serviceType meta#locationId
-      await this.externalApis.saveMetaCredentials(businessId, {
-        accessToken: longLived,
-        phoneNumberId: '',
+      await this.externalApis.saveMetaCredentials(businessId, locationId, {
+        accessToken: pageAccessToken, // Use Page access token, not user token!
+        phoneNumberId: phoneNumberId,
         appSecret: clientSecret,
-        phoneNumber: '',
+        phoneNumber: phoneNumber,
+        pageId: pageId,
+        businessAccountId: '',
       } as any);
 
-      this.logger.log(`Meta credentials saved successfully for businessId: ${businessId}`);
+      this.logger.log(`Meta credentials saved successfully for businessId: ${businessId}, locationId: ${locationId}`);
+      this.logger.log(`  - Page ID: ${pageId || 'N/A'}`);
+      this.logger.log(`  - Phone Number ID: ${phoneNumberId || 'N/A'}`);
+      this.logger.log(`  - Phone Number: ${phoneNumber || 'N/A'}`);
 
       return { success: true };
     } catch (error) {
@@ -130,15 +195,16 @@ export class MetaService {
   async getCredentialsStatus(businessId: string, locationId: string): Promise<any> {
     try {
       this.logger.log(`Checking Meta credentials status for businessId: ${businessId}, locationId: ${locationId}`);
-      const credentials = await this.externalApis.getMetaCredentials(businessId);
+      const credentials = await this.externalApis.getMetaCredentials(businessId, locationId);
       const status = {
         connected: !!credentials,
         hasAccessToken: !!credentials?.accessToken,
         hasPhoneNumberId: !!credentials?.phoneNumberId,
         hasPhoneNumber: !!credentials?.phoneNumber,
         phoneNumber: credentials?.phoneNumber || null,
+        pageId: credentials?.pageId || null,
       };
-      this.logger.log(`Meta credentials status for businessId ${businessId}: connected=${status.connected}`);
+      this.logger.log(`Meta credentials status for businessId ${businessId}, locationId ${locationId}: connected=${status.connected}`);
       return status;
     } catch (error) {
       this.logger.error(`Error getting Meta credentials status for businessId: ${businessId}`, error.stack);

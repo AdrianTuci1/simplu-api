@@ -8,26 +8,28 @@ export class CredentialsService {
 
   async saveMetaCredentials(
     businessId: string,
+    locationId: string,
     credentials: MetaCredentialsDto
   ): Promise<any> {
     await this.validateMetaCredentials(credentials);
-    return this.externalApisService.saveMetaCredentials(businessId, credentials);
+    return this.externalApisService.saveMetaCredentials(businessId, locationId, credentials);
   }
 
 
 
-  async getMetaCredentials(businessId: string): Promise<any> {
-    return this.externalApisService.getMetaCredentials(businessId);
+  async getMetaCredentials(businessId: string, locationId: string = 'L0100001'): Promise<any> {
+    return this.externalApisService.getMetaCredentials(businessId, locationId);
   }
 
 
 
-  async testMetaCredentials(businessId: string): Promise<any> {
+  async testMetaCredentials(businessId: string, locationId: string = 'L0100001'): Promise<any> {
     try {
       const result = await this.externalApisService.sendMetaMessage(
         'test',
         'Test message from AI Agent',
-        businessId
+        businessId,
+        locationId
       );
       
       return {
@@ -46,9 +48,10 @@ export class CredentialsService {
 
   async updateMetaCredentials(
     businessId: string,
+    locationId: string,
     updates: Partial<MetaCredentialsDto>
   ): Promise<any> {
-    const existing = await this.getMetaCredentials(businessId);
+    const existing = await this.getMetaCredentials(businessId, locationId);
     if (!existing) {
       throw new BadRequestException('No existing Meta credentials found');
     }
@@ -56,7 +59,7 @@ export class CredentialsService {
     const updatedCredentials = { ...existing, ...updates };
     await this.validateMetaCredentials(updatedCredentials);
     
-    return this.externalApisService.saveMetaCredentials(businessId, updatedCredentials);
+    return this.externalApisService.saveMetaCredentials(businessId, locationId, updatedCredentials);
   }
 
 
