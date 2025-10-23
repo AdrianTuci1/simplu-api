@@ -1,0 +1,176 @@
+{
+  "type": "webhook",
+  "name": "query_resources",
+  "description": "Query medical resources: patients, treatments, medics. Use this to search for patients by name, list treatments by type, or find available doctors.",
+  "disable_interruptions": false,
+  "force_pre_tool_speech": "auto",
+  "assignments": [],
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "api_schema": {
+    "url": "https://api.simplu.io/api/elevenlabs/tools/execute",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "id": "body",
+      "type": "object",
+      "description": "Query medical resources using existing /resources endpoint",
+      "properties": [
+        {
+          "id": "toolName",
+          "type": "string",
+          "value_type": "constant",
+          "description": "Tool name",
+          "dynamic_variable": "",
+          "constant_value": "query_resources",
+          "enum": null,
+          "required": true
+        },
+        {
+          "id": "parameters",
+          "type": "object",
+          "description": "Tool parameters",
+          "properties": [
+            {
+              "id": "businessId",
+              "type": "string",
+              "value_type": "dynamic_variable",
+              "description": "Business identifier",
+              "dynamic_variable": "businessId",
+              "constant_value": "",
+              "enum": null,
+              "required": true
+            },
+            {
+              "id": "locationId",
+              "type": "string",
+              "value_type": "dynamic_variable",
+              "description": "Location identifier",
+              "dynamic_variable": "locationId",
+              "constant_value": "",
+              "enum": null,
+              "required": true
+            },
+            {
+              "id": "resourceType",
+              "type": "string",
+              "value_type": "llm_prompt",
+              "description": "Type of resource to query",
+              "dynamic_variable": "",
+              "constant_value": "",
+              "enum": [
+                "patient",
+                "treatment",
+                "medic"
+              ],
+              "required": true
+            },
+            {
+              "id": "action",
+              "type": "string",
+              "value_type": "constant",
+              "description": "Action to perform",
+              "dynamic_variable": "",
+              "constant_value": "list",
+              "enum": null,
+              "required": true
+            },
+            {
+              "id": "params",
+              "type": "object",
+              "description": "Search parameters",
+              "properties": [
+                {
+                  "id": "data.patientName",
+                  "type": "string",
+                  "value_type": "llm_prompt",
+                  "description": "Patient name to search for (use when resourceType is 'patient')",
+                  "dynamic_variable": "",
+                  "constant_value": "",
+                  "enum": null,
+                  "required": false
+                },
+                {
+                  "id": "data.treatmentType",
+                  "type": "string",
+                  "value_type": "llm_prompt",
+                  "description": "Treatment name to filter by (use when resourceType is 'treatment')",
+                  "dynamic_variable": "",
+                  "constant_value": "",
+                  "enum": null,
+                  "required": false
+                },
+                {
+                  "id": "data.medicName",
+                  "type": "string",
+                  "value_type": "llm_prompt",
+                  "description": "Doctor name to search for (use when resourceType is 'medic')",
+                  "dynamic_variable": "",
+                  "constant_value": "",
+                  "enum": null,
+                  "required": false
+                },
+                {
+                  "id": "limit",
+                  "type": "string",
+                  "value_type": "llm_prompt",
+                  "description": "Maximum number of results (default: 60)",
+                  "dynamic_variable": "",
+                  "constant_value": "",
+                  "enum": null,
+                  "required": false
+                }
+              ],
+              "required": true,
+              "value_type": "llm_prompt"
+            }
+          ],
+          "required": true,
+          "value_type": "llm_prompt"
+        },
+        {
+          "id": "metadata",
+          "type": "object",
+          "description": "Metadata for tenant identification",
+          "properties": [
+            {
+              "id": "businessId",
+              "type": "string",
+              "value_type": "dynamic_variable",
+              "description": "Business identifier",
+              "dynamic_variable": "businessId",
+              "constant_value": "",
+              "enum": null,
+              "required": true
+            },
+            {
+              "id": "locationId",
+              "type": "string",
+              "value_type": "dynamic_variable",
+              "description": "Location identifier",
+              "dynamic_variable": "locationId",
+              "constant_value": "",
+              "enum": null,
+              "required": true
+            }
+          ],
+          "required": true,
+          "value_type": "llm_prompt"
+        }
+      ],
+      "required": true,
+      "value_type": "llm_prompt"
+    },
+    "request_headers": [],
+    "auth_connection": null
+  },
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {
+      "businessId": "Business identifier from session",
+      "locationId": "Location identifier from session"
+    }
+  }
+}

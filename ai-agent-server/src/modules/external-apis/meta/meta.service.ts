@@ -34,14 +34,14 @@ export class MetaService {
     }
     
     // Get scopes from config (comma-separated string)
-    // Default scopes for Meta API v19.0+ (Facebook Pages)
+    // Default scopes for Meta API v24.0+ (Facebook Pages)
     // Note: Ensure these permissions are enabled in your Meta App Dashboard
     const scopesString = this.configService.get<string>('meta.scopes');
     const scopes = scopesString.split(',').map(s => s.trim()).filter(s => s.length > 0);
     
     // Store redirect_uri in state so we can use the same one during token exchange
     const state = Buffer.from(JSON.stringify({ businessId, locationId, redirectUri })).toString('base64url');
-    const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
+    const url = new URL('https://www.facebook.com/v24.0/dialog/oauth');
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('scope', scopes.join(','));
@@ -79,7 +79,7 @@ export class MetaService {
     // NOTE: redirect_uri MUST match the one used in authorization request
     try {
       this.logger.log(`Exchanging code for token with params: clientId=${clientId}, redirectUri=${redirectUri}`);
-      const tokenResp = await axiosInstance.get('https://graph.facebook.com/v19.0/oauth/access_token', {
+      const tokenResp = await axiosInstance.get('https://graph.facebook.com/v24.0/oauth/access_token', {
         params: { 
           client_id: clientId, 
           client_secret: clientSecret, 
@@ -93,7 +93,7 @@ export class MetaService {
       // Optional: exchange for long-lived token
       let longLived = accessToken;
       try {
-        const ll = await axiosInstance.get('https://graph.facebook.com/v19.0/oauth/access_token', {
+        const ll = await axiosInstance.get('https://graph.facebook.com/v24.0/oauth/access_token', {
           params: { grant_type: 'fb_exchange_token', client_id: clientId, client_secret: clientSecret, fb_exchange_token: accessToken },
         });
         longLived = ll.data?.access_token || accessToken;
@@ -112,7 +112,7 @@ export class MetaService {
       
       try {
         // Get user's Pages
-        const pagesResp = await axiosInstance.get('https://graph.facebook.com/v19.0/me/accounts', {
+        const pagesResp = await axiosInstance.get('https://graph.facebook.com/v24.0/me/accounts', {
           params: { access_token: longLived }
         });
         
@@ -126,7 +126,7 @@ export class MetaService {
           // Check for WhatsApp Business Account
           try {
             const waResp = await axiosInstance.get(
-              `https://graph.facebook.com/v19.0/${pageId}`,
+              `https://graph.facebook.com/v24.0/${pageId}`,
               {
                 params: {
                   fields: 'whatsapp_business_account',
@@ -141,7 +141,7 @@ export class MetaService {
               
               // Get phone numbers
               const phoneResp = await axiosInstance.get(
-                `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`,
+                `https://graph.facebook.com/v24.0/${wabaId}/phone_numbers`,
                 {
                   params: { access_token: pageAccessToken }
                 }

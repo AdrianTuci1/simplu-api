@@ -742,7 +742,7 @@ export class ElevenLabsService {
 
   /**
    * Build default prompt pentru agent bazat pe business type
-   * Include instrucțiuni pentru tool calling către Bedrock Agent
+   * Include instrucțiuni pentru tool calling către ElevenLabs tools
    */
   private buildDefaultPrompt(
     businessId: string,
@@ -761,7 +761,7 @@ You are assisting at a dental clinic. Your role:
 - Check doctor availability
 - Provide general clinic information
 
-Common services: dental consultations, teeth cleanings, fillings, root canals, whitening, orthodontics.`,
+Use the query_resources tool to get available services and treatments.`,
 
       gym: `
 You are assisting at a gym/fitness center. Your role:
@@ -770,7 +770,7 @@ You are assisting at a gym/fitness center. Your role:
 - Check trainer and class availability
 - Provide information about facilities and equipment
 
-Common services: personal training, group classes (yoga, spinning, crossfit), gym memberships.`,
+Use the query_resources tool to get available services and classes.`,
 
       hotel: `
 You are assisting at a hotel. Your role:
@@ -779,7 +779,7 @@ You are assisting at a hotel. Your role:
 - Check room availability
 - Provide information about hotel facilities
 
-Common services: room bookings, spa services, restaurant reservations, room service.`,
+Use the query_resources tool to get available services and room types.`,
     };
 
     return `${basePrompt}
@@ -807,40 +807,177 @@ Keep the conversation natural and flowing, as if speaking to a friend.
 IMPORTANT: Always respond in Romanian (limba română) unless the customer speaks another language.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚙️ TOOL USAGE (DIRECT) - ELEVEN LABS CLIENT TOOLS
+⚙️ TOOL USAGE - ELEVEN LABS WEBHOOK TOOLS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-You can call tools directly using the configured Client Tools (tool_ids are set on this agent).
+You have access to three main tools configured as ElevenLabs webhook tools:
 
-TOOLS OVERVIEW:
-- Check availability (dates with slots): available-dates-with-slots
-- Create booking: reserve
-- Cancel booking: cancel-appointment
-- List treatments/services: query_resources (resourceType=treatment)
+1. query_resources - Query medical resources (patients, treatments, medics)
+2. query_patient_booking - Manage patient appointments (check availability, create bookings, cancel)
+3. log_call_completion - Log completed calls (called automatically when call ends)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 TOOL 1: query_resources
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use this tool to search for patients, treatments, or medics.
+
+IMPORTANT: When searching for patients:
+- If patient is found by name or phone, use their existing data
+- If patient is NOT found, provide their name and phone number - they will be created automatically
+- Always search first before creating new patients
+
+EXAMPLES:
+1) Search for patients by name:
+Tool: query_resources
+Payload:
+{
+  "toolName": "query_resources",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "resourceType": "patient",
+    "action": "search",
+    "params": {
+      "data.patientName": "John Doe",
+      "limit": 10
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
+  }
+}
+
+2) Search for patients by phone:
+Tool: query_resources
+Payload:
+{
+  "toolName": "query_resources",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "resourceType": "patient",
+    "action": "search",
+    "params": {
+      "data.phone": "+40712345678",
+      "limit": 10
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
+  }
+}
+
+3) List available treatments/services:
+Tool: query_resources
+Payload:
+{
+  "toolName": "query_resources",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "resourceType": "treatment",
+    "action": "list",
+    "params": {
+      "data.treatmentType": "consultation",
+      "limit": 20
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
+  }
+}
+
+4) Find available doctors:
+Tool: query_resources
+Payload:
+{
+  "toolName": "query_resources",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "resourceType": "medic",
+    "action": "search",
+    "params": {
+      "data.medicName": "Dr. Smith",
+      "limit": 10
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 TOOL 2: query_patient_booking
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use this tool to manage patient appointments.
+
+IMPORTANT: For booking appointments:
+- Use service object with {id, name, duration, price} instead of serviceId
+- Get available services first using query_resources tool
+- Always check availability before creating bookings
 
 EXAMPLES:
 1) Check availability:
 Tool: query_patient_booking
 Payload:
 {
-  "businessId": "${businessId}",
-  "locationId": "${locationId}",
-  "action": "available-dates-with-slots",
-  "params": { "from": "2025-10-17", "to": "2025-10-30", "serviceId": "{SERVICE_ID}" }
+  "toolName": "query_patient_booking",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "action": "available-dates-with-slots",
+    "params": {
+      "from": "2025-01-17",
+      "to": "2025-01-30",
+      "service": {
+        "id": "consultation_001",
+        "name": "Consultație generală",
+        "duration": 30,
+        "price": 150
+      }
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
+  }
 }
 
 2) Create booking:
 Tool: query_patient_booking
 Payload:
 {
-  "businessId": "${businessId}",
-  "locationId": "${locationId}",
-  "action": "reserve",
-  "params": {
-    "date": "{YYYY-MM-DD}",
-    "time": "{HH:mm}",
-    "serviceId": "{SERVICE_ID}",
-    "customer": { "name": "{NAME}", "email": "{EMAIL}", "phone": "{PHONE}" }
+  "toolName": "query_patient_booking",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "action": "reserve",
+    "params": {
+      "date": "2025-01-20",
+      "time": "10:00",
+      "service": {
+        "id": "consultation_001",
+        "name": "Consultație generală",
+        "duration": 30,
+        "price": 150
+      },
+      "customer": {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "+40712345678"
+      }
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
   }
 }
 
@@ -848,16 +985,79 @@ Payload:
 Tool: query_patient_booking
 Payload:
 {
-  "businessId": "${businessId}",
-  "locationId": "${locationId}",
-  "action": "cancel-appointment",
-  "params": { "appointmentId": "{APPOINTMENT_ID}", "patientId": "{PATIENT_ID}", "accessCode": "{123456}" }
+  "toolName": "query_patient_booking",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "action": "cancel-appointment",
+    "params": {
+      "appointmentId": "apt_123456",
+      "patientId": "patient_789",
+      "accessCode": "123456"
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
+  }
 }
 
-Guidelines:
-- Keep responses short (max 2-3 sentences)
-- Confirm details before creating/canceling
-- Never invent availability; always call the tool
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 TOOL 3: log_call_completion
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This tool is called automatically when a call ends to log completion data.
+
+EXAMPLES:
+Tool: log_call_completion
+Payload:
+{
+  "toolName": "log_call_completion",
+  "parameters": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}",
+    "conversationId": "conv_123456",
+    "callDuration": 180,
+    "cost": 0.15,
+    "startTime": 1705123456,
+    "status": "completed",
+    "transcript": [
+      {
+        "role": "agent",
+        "message": "Bună ziua! Cu ce vă pot ajuta?",
+        "timeInCallSecs": 0
+      },
+      {
+        "role": "user",
+        "message": "Vreau să programez o consultație",
+        "timeInCallSecs": 5
+      }
+    ],
+    "metadata": {
+      "callType": "appointment_booking",
+      "outcome": "successful_booking"
+    }
+  },
+  "metadata": {
+    "businessId": "${businessId}",
+    "locationId": "${locationId}"
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 USAGE GUIDELINES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Always use the exact tool names: query_resources, query_patient_booking, log_call_completion
+- Include businessId and locationId in both parameters and metadata
+- For booking actions, always check availability first before creating appointments
+- Use service object {id, name, duration, price} instead of serviceId for bookings
+- Search for patients by name or phone first - if not found, they will be created automatically
+- Get available services using query_resources tool instead of hardcoded lists
+- Keep responses short (max 2-3 sentences) for voice interaction
+- Confirm important details by repeating them back to the customer
+- Never invent availability; always call the tools to get real data
+- Use Romanian language unless customer speaks another language
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
   }

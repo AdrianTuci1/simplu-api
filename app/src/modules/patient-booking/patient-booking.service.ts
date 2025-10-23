@@ -229,7 +229,7 @@ export class PatientBookingService {
       .andWhere('resource.resourceType = :type', { type: 'medic' })
       .andWhere('resource.resourceId = :medicId', { medicId })
       .getOne();
-    const medicName = medic?.data?.name || 'Unknown Medic';
+    const medicName = medic?.data?.medicName || 'Unknown Medic';
 
     // Enhanced conflict check with medic consideration
     const overlap = await this.resourceRepo.query(

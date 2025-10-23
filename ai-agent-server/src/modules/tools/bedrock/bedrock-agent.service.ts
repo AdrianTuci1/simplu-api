@@ -230,7 +230,8 @@ IMPORTANT RULES:
               outputText += text;
               
               // Trimite chunk-ul în timp real prin Elixir când streaming-ul este activat
-              if (options.streamChunks) {
+              // NU trimite către Elixir pentru mesajele Meta (webhook) - acestea sunt procesate local
+              if (options.streamChunks && context.source !== 'webhook') {
                 try {
                   hasStreamedChunks = true;
                   await this.elixirNotificationTool.execute({
@@ -372,7 +373,8 @@ IMPORTANT RULES:
     }
 
     // Trimite notificare finală că mesajul este complet dacă este activat
-    if (options.sendCompletion) {
+    // NU trimite către Elixir pentru mesajele Meta (webhook) - acestea sunt procesate local
+    if (options.sendCompletion && context.source !== 'webhook') {
       try {
         await this.elixirNotificationTool.execute({
           toolName: 'send_elixir_notification',
@@ -396,6 +398,8 @@ IMPORTANT RULES:
       } catch (error) {
         this.logger.warn(`⚠️ Failed to send completion notification to Elixir: ${error.message}`);
       }
+    } else if (context.source === 'webhook') {
+      this.logger.log(`⏭️ Skipping Elixir notification for webhook message (Meta processing)`);
     } else {
       this.logger.log(`⏭️ Skipping Elixir completion notification per options`);
     }

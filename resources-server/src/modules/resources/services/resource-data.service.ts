@@ -31,31 +31,41 @@ export class ResourceDataService {
   ): Promise<string> {
     const businessLocationId = `${businessId}-${locationId}`;
 
-    // First, try to find existing patient by email
+    // Try to find existing patient by email using raw query for JSON field
     if (customer.email) {
-      const existingPatientByEmail = await this.resourceRepository.findOne({
-        where: { 
-          businessLocationId,
-          resourceType: 'patient',
-          data: { email: customer.email } as any
-        }
-      });
+      const existingPatientByEmail = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType: 'patient' })
+        .andWhere("resource.data->>'email' = :email", { email: customer.email })
+        .getOne();
 
       if (existingPatientByEmail) {
         this.logger.debug(`Found existing patient by email: ${existingPatientByEmail.resourceId}`);
+        
+        // Update patient with new phone if provided and different
+        if (customer.phone && customer.phone !== (existingPatientByEmail.data as any)?.phone) {
+          existingPatientByEmail.data = {
+            ...existingPatientByEmail.data,
+            phone: customer.phone,
+            updatedAt: new Date().toISOString()
+          };
+          await this.resourceRepository.save(existingPatientByEmail);
+          this.logger.debug(`Updated patient ${existingPatientByEmail.resourceId} with new phone: ${customer.phone}`);
+        }
+        
         return existingPatientByEmail.resourceId;
       }
     }
 
-    // If not found by email, try to find by phone
+    // If not found by email, try to find by phone using raw query for JSON field
     if (customer.phone) {
-      const existingPatientByPhone = await this.resourceRepository.findOne({
-        where: { 
-          businessLocationId,
-          resourceType: 'patient',
-          data: { phone: customer.phone } as any
-        }
-      });
+      const existingPatientByPhone = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType: 'patient' })
+        .andWhere("resource.data->>'phone' = :phone", { phone: customer.phone })
+        .getOne();
 
       if (existingPatientByPhone) {
         this.logger.debug(`Found existing patient by phone: ${existingPatientByPhone.resourceId}`);
@@ -72,6 +82,45 @@ export class ResourceDataService {
         }
         
         return existingPatientByPhone.resourceId;
+      }
+    }
+
+    // If not found by email or phone, try to find by name (case-insensitive)
+    if (customer.name && customer.name.trim() !== '') {
+      const existingPatientByName = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.businessLocationId = :businessLocationId', { businessLocationId })
+        .andWhere('resource.resourceType = :resourceType', { resourceType: 'patient' })
+        .andWhere("LOWER(resource.data->>'name') = LOWER(:name)", { name: customer.name.trim() })
+        .getOne();
+
+      if (existingPatientByName) {
+        this.logger.debug(`Found existing patient by name: ${existingPatientByName.resourceId}`);
+        
+        // Update patient with new email and phone if provided and different
+        const updatedData = { ...existingPatientByName.data };
+        let hasUpdates = false;
+
+        if (customer.email && customer.email !== updatedData.email) {
+          updatedData.email = customer.email;
+          hasUpdates = true;
+        }
+
+        if (customer.phone && customer.phone !== updatedData.phone) {
+          updatedData.phone = customer.phone;
+          hasUpdates = true;
+        }
+
+        if (hasUpdates) {
+          existingPatientByName.data = {
+            ...updatedData,
+            updatedAt: new Date().toISOString()
+          };
+          await this.resourceRepository.save(existingPatientByName);
+          this.logger.debug(`Updated patient ${existingPatientByName.resourceId} with new contact info`);
+        }
+        
+        return existingPatientByName.resourceId;
       }
     }
 
@@ -113,7 +162,7 @@ export class ResourceDataService {
     // Save patient
     await this.resourceRepository.save(patientEntity);
     
-    this.logger.log(`Created new patient: ${patientId} for customer: ${customer.email || customer.phone}`);
+    this.logger.log(`Created new patient: ${patientId} for customer: ${customer.email || customer.phone || customer.name}`);
     
     // Send notification to Elixir
     await this.notificationService.notifyResourceCreated({

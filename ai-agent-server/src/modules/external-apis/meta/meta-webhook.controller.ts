@@ -55,6 +55,21 @@ interface MetaWebhookEntry {
         timestamp: string;
         recipient_id: string;
       }>;
+      // v24 format support
+      sender?: {
+        id: string;
+      };
+      recipient?: {
+        id: string;
+      };
+      timestamp?: string;
+      message?: {
+        mid: string;
+        text?: string;
+        commands?: Array<{
+          name: string;
+        }>;
+      };
     };
     field: string;
   }>;
@@ -129,8 +144,9 @@ export class MetaWebhookController {
 
       // Extract identifiers from payload to identify the business
       const phoneNumberId = payload.entry[0]?.changes[0]?.value?.metadata?.phone_number_id; // WhatsApp
-      const pageId = payload.entry[0]?.id; // Facebook Page ID (used for Messenger/Instagram)
-      const messagingProduct = payload.entry[0]?.changes[0]?.value?.messaging_product; // 'whatsapp' | 'instagram' | 'messenger'
+      const pageId = payload.entry[0]?.id || payload.entry[0]?.changes[0]?.value?.recipient?.id; // Facebook Page ID (used for Messenger/Instagram) - support both v19 and v24 formats
+      // Determine messaging product - for v24 format, if no messaging_product field, assume Facebook Messenger
+      const messagingProduct = payload.entry[0]?.changes[0]?.value?.messaging_product || 'facebook'; // 'whatsapp' | 'instagram' | 'facebook'
       
       this.logger.log(`🔍 Identifying business from payload:`);
       this.logger.log(`   - Messaging Product: ${messagingProduct || 'N/A'}`);
@@ -170,14 +186,14 @@ export class MetaWebhookController {
         
         for (const change of entry.changes) {
           if (change.field === 'messages' && change.value.messages) {
-            // Process incoming messages
+            // Process incoming messages (v19 format)
             const messages = change.value.messages;
             this.logger.log(`💬 Found ${messages.length} incoming message(s) from ${change.value.messaging_product}`);
             
             for (const message of messages) {
               messageCount++;
               this.logger.log(`\n${'='.repeat(60)}`);
-              this.logger.log(`📨 MESSAGE #${messageCount}: Processing incoming message`);
+              this.logger.log(`📨 MESSAGE #${messageCount}: Processing incoming message (v19 format)`);
               this.logger.log(`${'='.repeat(60)}`);
               
               const result = await this.processIncomingMessage(
@@ -193,6 +209,23 @@ export class MetaWebhookController {
               
               this.logger.log(`${'='.repeat(60)}\n`);
             }
+          } else if (change.field === 'messages' && change.value.sender && change.value.message) {
+            // Process incoming messages (v24 format)
+            messageCount++;
+            this.logger.log(`\n${'='.repeat(60)}`);
+            this.logger.log(`📨 MESSAGE #${messageCount}: Processing incoming message (v24 format)`);
+            this.logger.log(`${'='.repeat(60)}`);
+            
+            const result = await this.processIncomingMessageV24(
+              businessId,
+              locationId,
+              change.value,
+              pageId,
+              messagingProduct,
+            );
+            results.push(result);
+            
+            this.logger.log(`${'='.repeat(60)}\n`);
           } else if (change.field === 'messages' && change.value.statuses) {
             // Process message status updates
             for (const status of change.value.statuses) {
@@ -301,6 +334,130 @@ export class MetaWebhookController {
   }
 
   /**
+   * Procesează un mesaj primit de la Meta (format v24)
+   */
+  private async processIncomingMessageV24(
+    businessId: string,
+    locationId: string,
+    value: any,
+    pageId?: string,
+    messagingProduct: string = 'facebook',
+  ): Promise<any> {
+    try {
+      const messageId = value.message.mid;
+      const userId = value.sender.id;
+      const timestamp = value.timestamp;
+
+      // Extract message content
+      let messageContent = '';
+      if (value.message.text) {
+        messageContent = value.message.text;
+      } else if (value.message.commands) {
+        messageContent = `[Commands: ${value.message.commands.map(cmd => cmd.name).join(', ')}]`;
+      } else {
+        messageContent = `[${value.message.type || 'unknown'} message]`;
+        this.logger.log(`⚠️ Non-text message type: ${value.message.type || 'unknown'}`);
+      }
+
+      this.logger.log(`📱 Platform: v24 format`);
+      this.logger.log(`👤 From: ${userId}`);
+      this.logger.log(`💬 Content: "${messageContent}"`);
+      this.logger.log(`🕐 Timestamp: ${new Date(parseInt(timestamp) * 1000).toISOString()}`);
+
+      // Generate session ID (group messages by user per day)
+      const sessionId = this.generateSessionId(businessId, locationId, userId);
+      this.logger.log(`🔑 Session ID: ${sessionId}`);
+
+      // Process message through Bedrock Agent
+      this.logger.log(`\n🤖 Sending to Bedrock Agent for processing...`);
+      
+      const webhookData = {
+        businessId,
+        locationId,
+        userId,
+        sessionId,
+        message: messageContent,
+        source: 'meta' as const,
+        metadata: {
+          messagingProduct: messagingProduct as 'whatsapp' | 'instagram' | 'facebook', // Use determined messaging product
+          messageId,
+          timestamp,
+          contactName: 'Unknown', // v24 format doesn't include contact name
+          phoneNumberId: undefined, // v24 uses pageId instead
+        },
+      };
+
+      const result = await this.agentService.processWebhookMessage(webhookData);
+
+      this.logger.log(`\n✅ Bedrock Agent processed message`);
+      this.logger.log(`   - Should respond: ${result.shouldRespond}`);
+      this.logger.log(`   - Has response: ${!!result.response}`);
+      
+      if (result.response) {
+        this.logger.log(`   - Response preview: "${result.response.substring(0, 100)}${result.response.length > 100 ? '...' : ''}"`);
+      }
+
+      // Send response back to user via Meta if agent generated a response
+      if (result.shouldRespond && result.response) {
+        this.logger.log(`\n📤 Sending response back to user via Meta API...`);
+        
+        await this.sendMetaMessage(
+          businessId,
+          locationId,
+          userId,
+          result.response,
+          undefined, // No phoneNumberId for v24 format
+          pageId, // Use pageId for v24 format
+          messagingProduct as 'whatsapp' | 'instagram' | 'facebook', // Use determined messaging product
+        );
+        
+        this.logger.log(`✅ Response sent successfully!`);
+      } else {
+        this.logger.log(`ℹ️ No response needed (agent decided not to respond)`);
+      }
+
+      // Log to Kinesis if response was sent
+      if (result.shouldRespond && result.response) {
+        await this.kinesisLogger.logAgentMetaMessage({
+          businessId,
+          locationId,
+          agentSessionId: sessionId,
+          recipient: {
+            phone: userId,
+            userId: userId,
+            name: 'Unknown',
+          },
+          success: true,
+          externalId: messageId,
+          messageLength: result.response.length,
+        });
+        
+        this.logger.log(`📊 Meta conversation (v24) logged to Kinesis stream`);
+      }
+
+      return {
+        messageId,
+        userId,
+        processed: true,
+        autonomousAction: result.shouldRespond,
+        response: result.shouldRespond,
+      };
+    } catch (error) {
+      this.logger.error(
+        `❌ Error processing v24 message ${value.message?.mid}:`,
+        error.stack,
+      );
+
+      return {
+        messageId: value.message?.mid,
+        userId: value.sender?.id,
+        processed: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
    * Procesează un mesaj primit de la Meta
    */
   private async processIncomingMessage(
@@ -405,6 +562,8 @@ export class MetaWebhookController {
           externalId: messageId,
           messageLength: result.response.length,
         });
+        
+        this.logger.log(`📊 Meta conversation logged to Kinesis stream`);
       }
 
       return {
@@ -472,7 +631,7 @@ export class MetaWebhookController {
 
         this.logger.log(`   - Phone number ID: ${phoneId}`);
         
-        url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
+        url = `https://graph.facebook.com/v24.0/${phoneId}/messages`;
         requestBody = {
           messaging_product: 'whatsapp',
           to: to,
@@ -491,7 +650,7 @@ export class MetaWebhookController {
 
         this.logger.log(`   - Page ID: ${pageId}`);
         
-        url = `https://graph.facebook.com/v19.0/${pageId}/messages`;
+        url = `https://graph.facebook.com/v24.0/${pageId}/messages`;
         requestBody = {
           recipient: {
             id: to, // Instagram Scoped ID (IGSID) or Page-Scoped ID (PSID) for Messenger
